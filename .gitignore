@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+.env
+.DS_Store
+
+# Project
+.agent/
+data/
+browser_data/
+log.txt
