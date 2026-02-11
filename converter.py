@@ -162,16 +162,32 @@ class ZhihuConverter:
         # 清理行尾空白
         md = "\n".join(line.rstrip() for line in md.splitlines())
 
-        # 还原公式
+        # 还原公式 (并做 KaTeX 兼容性处理)
         for key, formula in self._math_store.items():
+            fixed_formula = self._fix_katex_array(formula)
             if key.startswith(self._BLOCK_PH):
-                md = md.replace(key, f"\n\n$$\n{formula}\n$$\n\n")
+                md = md.replace(key, f"\n\n$$\n{fixed_formula}\n$$\n\n")
             elif key.startswith(self._INLINE_PH):
-                md = md.replace(key, f"${formula}$")
+                md = md.replace(key, f"${fixed_formula}$")
 
         # 再次压缩
         md = re.sub(r"\n{3,}", "\n\n", md)
         return md.strip() + "\n"
+
+    @staticmethod
+    def _fix_katex_array(formula: str) -> str:
+        """
+        修复 KaTeX 不支持的 array 列定义语法。
+        GitHub 的 KaTeX 不识别 {*{N}{X}} 这种重复语法，需要展开。
+        例如: {*{20}{c}} → {cccccccccccccccccccc}
+        """
+        def expand_repeat(match):
+            count = int(match.group(1))
+            char = match.group(2)
+            return char * count
+
+        # 匹配 *{数字}{单字符} 并展开
+        return re.sub(r'\*\{(\d+)\}\{(.)\}', expand_repeat, formula)
 
 
 # ── markdownify 内部桥接类（不对外暴露）─────────────────────
