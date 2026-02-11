@@ -65,7 +65,22 @@ python3 main.py
 *提示：看到 `🔗 请粘贴知乎链接:` 时，直接粘贴即可，回车开始执行。*
 
 ### 方式二：批量模式
-打开 `main.py`，修改顶部的 `BATCH_URLS` 列表：
+打开 `main.py`，修改顶部的 `BATCH_URLS` 列表。
+
+---
+
+## 4. 代理配置 (自动检测)
+
+无需手动修改代码！程序启动时会自动检测 macOS 的系统代理设置（支持 Shadowrocket / ClashX 等）。
+
+- **自动模式**：如果有代理（如 `127.0.0.1:1082`），程序会自动使用。
+- **直连模式**：如果未检测到代理，则自动直连。
+- **手动覆盖**：如果需要强制指定，可以在 `scraper.py` 中修改 `PROXY_SERVER`。
+
+```python
+# scraper.py 默认逻辑
+PROXY_SERVER = get_auto_proxy()
+```
 ```python
 BATCH_URLS = [
     "https://zhuanlan.zhihu.com/p/475751340",

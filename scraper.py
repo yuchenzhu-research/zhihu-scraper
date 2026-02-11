@@ -14,11 +14,31 @@ import httpx
 # 需 pip install PyExecJS
 import execjs
 from playwright.async_api import async_playwright, Playwright
+import subprocess
 
+def get_auto_proxy() -> str | None:
+    """
+    自动获取 macOS 系统代理设置 (Shadowrocket/ClashX)。
+    解析 `scutil --proxy` 的输出。
+    """
+    try:
+        output = subprocess.check_output("scutil --proxy", shell=True).decode("utf-8")
+        if "HTTPEnable : 1" in output:
+            # 提取端口
+            match = re.search(r"HTTPPort : (\d+)", output)
+            if match:
+                port = match.group(1)
+                print(f"✅ 已自动检测到系统代理: http://127.0.0.1:{port}")
+                return f"http://127.0.0.1:{port}"
+    except Exception:
+        pass
+    
+    print("⚠️  未检测到系统代理，尝试直连...")
+    return None
 # 全局配置
-# 如果本地 Shadowrocket/Clash 开启了 1087 端口，请使用下面的配置；否则设为 None
-# 如果本地 Shadowrocket/Clash 开启了 1087 端口，请使用 "http://127.0.0.1:1087"；否则设为 None
-PROXY_SERVER = "http://127.0.0.1:1082"
+# 全局配置
+# 自动检测本地代理 (127.0.0.1:xxxx)
+PROXY_SERVER = get_auto_proxy()
 USER_DATA_DIR = Path(__file__).parent / "browser_data"
 STEALTH_JS_PATH = Path(__file__).parent / "stealth.min.js"
 ZHIHU_JS_PATH = Path(__file__).parent / "zhihu.js"
