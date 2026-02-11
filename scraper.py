@@ -1,5 +1,11 @@
 """
 scraper.py — 知乎页面抓取 & 图片下载模块
+
+免责声明：
+本项目仅供学术研究和学习交流使用，请勿用于任何商业用途。
+使用者应遵守知乎的相关服务协议和 robots.txt 协议。
+因使用本项目代码而产生的任何法律纠纷或后果，由使用者自行承担。
+
 集成 MediaCrawler 的反爬策略：Persistent Context, Stealth JS, WebGL Mock, Proxy.
 """
 
@@ -36,12 +42,11 @@ def get_auto_proxy() -> str | None:
     print("⚠️  未检测到系统代理，尝试直连...")
     return None
 # 全局配置
-# 全局配置
 # 自动检测本地代理 (127.0.0.1:xxxx)
 PROXY_SERVER = get_auto_proxy()
 USER_DATA_DIR = Path(__file__).parent / "browser_data"
 STEALTH_JS_PATH = Path(__file__).parent / "stealth.min.js"
-ZHIHU_JS_PATH = Path(__file__).parent / "zhihu.js"
+ZHIHU_JS_PATH = Path(__file__).parent / "libs" / "z_core.js"
 
 
 class ZhihuDownloader:
