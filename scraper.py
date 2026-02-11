@@ -17,7 +17,8 @@ from playwright.async_api import async_playwright, Playwright
 
 # 全局配置
 # 如果本地 Shadowrocket/Clash 开启了 1087 端口，请使用下面的配置；否则设为 None
-PROXY_SERVER = "http://127.0.0.1:1087"
+# 如果本地 Shadowrocket/Clash 开启了 1087 端口，请使用 "http://127.0.0.1:1087"；否则设为 None
+PROXY_SERVER = "http://127.0.0.1:1082"
 USER_DATA_DIR = Path(__file__).parent / "browser_data"
 STEALTH_JS_PATH = Path(__file__).parent / "stealth.min.js"
 ZHIHU_JS_PATH = Path(__file__).parent / "zhihu.js"
