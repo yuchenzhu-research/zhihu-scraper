@@ -61,6 +61,21 @@ class ZhihuDownloader:
                 print(f"⚠️  JS 环境加载失败: {e}")
         return None
 
+    def _get_signature(self, url: str) -> dict:
+        """生成 x-zse-96 签名。"""
+        if not self._js_ctx:
+            return {}
+        try:
+            # 提取 path, e.g. /question/xxx
+            path = urlparse(url).path
+            # 前面判空了 self._js_ctx，这里显式类型断言或直接调用
+            from typing import cast, Any
+            ctx = cast(Any, self._js_ctx)
+            return ctx.call("get_sign", path, "d_c0=SEARCH_ME") # d_c0 is simplified
+        except Exception as e:
+            # print(f"⚠️  签名生成失败: {e}")
+            return {}
+
     # ── 页面抓取 Core ──────────────────────────────────────────
 
     async def fetch_page(self) -> dict:
@@ -112,6 +127,12 @@ class ZhihuDownloader:
                         return getParameter(parameter);
                     };
                 """)
+
+                # 注入签名 (如果是 API 请求，这里主要演示思路，实际页面访问不需要手动加 Header，浏览器会自动处理)
+                # 但为了保险，我们可以把签名加到 extraHTTPHeaders
+                sig = self._get_signature(self.url)
+                if sig:
+                   await page.set_extra_http_headers(sig)
 
                 # 3. 设置默认 Timeout
                 page.set_default_timeout(30000)

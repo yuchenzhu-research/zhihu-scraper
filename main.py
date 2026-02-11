@@ -96,7 +96,7 @@ async def main() -> None:
         # 优先处理 BATCH_URLS
         if BATCH_URLS:
             print(f"📋 检测到 BATCH_URLS 中有 {len(BATCH_URLS)} 个链接，开始自动处理...")
-            target_urls = BATCH_URLS
+            target_urls = list(BATCH_URLS)
             # 处理完批次链接后清空，避免重复处理，并退出循环
             BATCH_URLS.clear()
         else:
@@ -132,10 +132,15 @@ async def main() -> None:
                 err_msg = str(e)
                 if "ERR_PROXY_CONNECTION_FAILED" in err_msg or "Connection refused" in err_msg:
                     print(f"\n❌ 代理连接失败: {e}")
-                    print("💡 提示: 请检查本地代理 (127.0.0.1:1087) 是否开启。")
+                    print("💡 提示: 请检查本地代理 (127.0.0.1:1082) 是否开启。")
                     print("   或者在 scraper.py 中将 PROXY_SERVER 设置为 None。")
                 else:
                     print(f"❌ 处理失败 [{url}]: {e}")
+                
+                # 批量处理时不因为单个失败而中断
+                if BATCH_URLS:
+                    print("🔄 跳过当前链接，继续处理下一个...")
+                    continue
 
         print(f"\n✨ 本批次处理完成！文件保存在 {DATA_DIR.resolve()}")
 

@@ -137,7 +137,47 @@ def _postprocess_md(md: str) -> str:
     md = re.sub(r"\s*\$\s+", " $", md)
     md = re.sub(r"\s+\$\s*", "$ ", md)
 
+    md = re.sub(r"\s+\$\s*", "$ ", md)
+
+    # 4) 修复 LaTeX 语法 (NEW)
+    md = _fix_latex_syntax(md)
+
     return md.strip() + "\n"
+
+def _fix_latex_syntax(text: str) -> str:
+    """
+    修复 Markdown 中的 LaTeX 语法问题，使其兼容 GitHub Math (MathJax)。
+    1. \[ ... \] -> $$ ... $$
+    2. 移除公式内被转义的 _ 和 * (e.g. A\_1 -> A_1)
+    """
+    # 1. 替换块级公式定界符 \[ \] 为 $$
+    # 注意：有时候 \[ 会被 markdownify 转义为 \\[
+    text = re.sub(r"(\\)?\[", "\n\n$$", text)
+    text = re.sub(r"(\\)?\]", "$$\n\n", text)
+
+    # 2. 修复行内公式 $...$ 中的转义符
+    def _fix_inline(match):
+        content = match.group(1)
+        # 还原被转义的 _ 和 *
+        content = content.replace(r"\_", "_").replace(r"\*", "*")
+        return f"${content}$"
+
+    text = re.sub(r"(?<!\$)\$(?!\$)(.*?)(?<!\$)\$(?!\$)", _fix_inline, text, flags=re.DOTALL)
+
+    # 3. 修复块级公式 $$...$$ 中的转义符
+    def _fix_block(match):
+        content = match.group(1)
+        content = content.replace(r"\_", "_").replace(r"\*", "*")
+        # 移除可能存在的非法 HTML 换行
+        content = content.replace("<br>", "\n").replace("<br/>", "\n")
+        return f"\n\n$${content}$$\n\n"
+
+    text = re.sub(r"\$\$(.*?)\$\$", _fix_block, text, flags=re.DOTALL)
+
+    # 4. 去除多余的空行
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    
+    return text
 
 
 # ── 对外接口 ─────────────────────────────────────────────────
