@@ -1,26 +1,53 @@
 import asyncio
 import re
 import sys
+import time
+import functools
 from datetime import datetime
 from pathlib import Path
-
 from typing import Optional
-import functools
 from concurrent.futures import ThreadPoolExecutor
+
 import questionary
+from questionary import Style
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.align import Align
 from rich.text import Text
-from rich.progress import track
-from rich import print as rprint
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskProgressColumn
+from rich import box
+from rich.live import Live
 
 from core.converter import ZhihuConverter
 from core.scraper import ZhihuDownloader, PROXY_SERVER
 
+# ==========================================
+# 核心配色系统 (Theme Tokens)
+# ==========================================
+THEME = {
+    "accent": "#00C8FF",    # 霓虹蓝
+    "secondary": "#FF1493", # 亮桃红
+    "warn": "#EBFF3B",      # 亮黄
+    "text": "#FFFFFF",      # 纯白
+    "dim": "#666666",       # 暗灰
+    "success": "#00FF55"    # 荧光绿
+}
+
 # 初始化 Rich Console
 console = Console()
+executor = ThreadPoolExecutor(max_workers=1)
+
+# Questionary 样式
+q_style = Style([
+    ('question', f'fg:{THEME["accent"]} bold'),
+    ('answer', f'fg:{THEME["success"]}'),
+    ('pointer', f'fg:{THEME["secondary"]} bold'),
+    ('highlighted', f'fg:{THEME["accent"]} bold'),
+    ('selected', f'fg:{THEME["success"]}'),
+    ('separator', f'fg:{THEME["dim"]}'),
+    ('instruction', f'fg:{THEME["dim"]}'),
+])
 executor = ThreadPoolExecutor(max_workers=1)
 
 # ==========================================
@@ -30,10 +57,15 @@ BATCH_URLS = []
 
 DATA_DIR = Path(__file__).parent / "data"
 
-async def _async_input(prompt: str) -> str:
-    """封装 rich 的 console.input 为异步模式，比 questionary.text 稳定。"""
+async def _async_input(prompt_text: str) -> str:
+    """封装 rich 的 console.input 为异步模式，带有现代感的 Prompt。"""
+    full_prompt = Text.assemble(
+        (f" ❯ ", f"bold {THEME['secondary']}"),
+        (prompt_text, f"bold {THEME['accent']}")
+    )
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, console.input, prompt)
+    # 使用 ThreadPoolExecutor 运行同步的 console.input
+    return await loop.run_in_executor(executor, console.input, full_prompt)
 
 
 # ── 工具函数 ─────────────────────────────────────────────────
@@ -61,50 +93,58 @@ def extract_urls(text: str) -> list[str]:
 
 
 def _print_banner():
-    """打印真正酷炫的、完美对齐的 Banner。"""
-
-    # 1. 准备 Banner 内容
-    zh_text = Text("知    乎    爬    虫", style="bold cyan")
-    
-    # 更加紧凑且清晰的 ASCII 字体
-    en_banner_raw = r"""
-  ____  _   _ ___ _   _ _   _      ____   ____ ____      _    ____  _____ ____  
- |_  / | | | |_ _| | | | | | |    / ___| / ___|  _ \    / \  |  _ \| ____|  _ \ 
-  / /  | |_| || || |_| | | | |    \___ \| |   | |_) |  / _ \ | |_) |  _| | |_) |
- / /_  |  _  || ||  _  | |_| |     ___) | |___|  _ <  / ___ \|  __/| |___|  _ < 
-/____| |_| |_|___|_| |_|\___/     |____/ \____|_| \_\/_/   \_\_|   |_____|_| \_\
+    """打印符合 Americana Fusion 风格的 Dashboard Header。"""
+    # ASCII Art (Slant 风格)
+    logo = r"""
+   ________  ______  ____  __  __
+  /_  / / / / / / / / / / / / / /
+   / / / /_/ / / / / / / / / / / 
+  / / / __  / / / / /_/ / /_/ /  
+ /___/_/ /_/_/_/\____/\____/   
+   _____ __________  ___    ____  __________ 
+  / ___// ____/ __ \/   |  / __ \/ ____/ __ \
+  \__ \/ /   / /_/ / /| | / /_/ / __/ / /_/ /
+ ___/ / /___/ _, _/ ___ |/ ____/ /___/ _, _/ 
+/____/\____/_/ |_/_/  |_/_/   /_____/_/ |_|  
     """
-    en_text = Text(en_banner_raw, style="bold dodger_blue1")
-
-    # 2. 准备状态表格
-    proxy = "未检测到"
-    if PROXY_SERVER:
-        proxy = PROXY_SERVER
-        
-    cookie_status = "[green]已配置[/green]" if (Path("cookies.json").exists()) else "[red]未配置[/red]"
     
-    info_table = Table.grid(padding=(0, 2))
-    info_table.add_column(style="bold magenta", justify="right")
-    info_table.add_column()
-    info_table.add_row("Version:", "2.1.0")
-    info_table.add_row("Proxy:", proxy)
-    info_table.add_row("Cookie:", cookie_status)
-    info_table.add_row("Output:", str(DATA_DIR))
-
-    # 3. 组合并居中打印
-    banner_group = Group(
-        Align.center(zh_text),
-        Align.center(en_text),
-        Align.center(Panel(
-            info_table, 
-            title="[bold yellow]System Status[/bold yellow]", 
-            border_style="bright_blue",
-            expand=False,
-            padding=(1, 4)
-        ))
+    logo_text = Text(logo, style=f"bold {THEME['secondary']}")
+    
+    # 元数据
+    metadata = Text(f"Version: 2.1.0 | Author: Yuchen", style=f"dim italic")
+    
+    # 组合 Banner
+    header_content = Group(
+        Align.center(logo_text),
+        Align.right(metadata)
     )
     
-    console.print(banner_group)
+    header_panel = Panel.fit(
+        header_content,
+        border_style=THEME["accent"],
+        padding=(1, 2)
+    )
+
+    # Status Panel (横向单行)
+    proxy_status = f"[{THEME['success']}]ON[/]" if PROXY_SERVER else f"[{THEME['dim']}]OFF[/]"
+    cookie_status = f"[{THEME['success']}]Active[/]" if Path("cookies.json").exists() else f"[{THEME['warn']}]Missing[/]"
+    
+    status_line = Text.assemble(
+        " ⚡ ", ("Proxy: ", THEME["text"]), (proxy_status, ""),
+        "  |  ",
+        " 🍪 ", ("Cookie: ", THEME["text"]), (cookie_status, ""),
+        "  |  ",
+        " 📂 ", ("Output: ", THEME["text"]), (str(DATA_DIR), THEME["warn"])
+    )
+    
+    status_panel = Panel(
+        Align.center(status_line),
+        border_style=THEME["dim"],
+        padding=(0, 1)
+    )
+
+    console.print(Align.center(header_panel))
+    console.print(Align.center(status_panel))
     console.print("\n")
 
 
@@ -124,7 +164,8 @@ async def parse_question_options(url: str) -> dict:
             "1. 按数量抓取 (Top N)",
             "2. 按范围抓取 (Start -> End)",
             "3. 返回默认 (Top 3)"
-        ]
+        ],
+        style=q_style
     ).ask_async()
     
     if not choice: # Ctrl+C
@@ -134,14 +175,15 @@ async def parse_question_options(url: str) -> dict:
         limit = await questionary.text(
             "请输入抓取数量:",
             default="20",
-            validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数"
+            validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数",
+            style=q_style
         ).ask_async()
         return {"start": 0, "limit": int(limit) if limit else 3}
         
     elif choice.startswith("2"):
-        console.print("[dim]提示: 支持输入 '答主名字' 或 '回答链接/ID'[/dim]")
-        start = await questionary.text("起始锚点 (Start):").ask_async()
-        end = await questionary.text("结束锚点 (End):").ask_async()
+        console.print(f"[{THEME['dim']}]提示: 支持输入 '答主名字' 或 '回答链接/ID'[/]")
+        start = await questionary.text("起始锚点 (Start):", style=q_style).ask_async()
+        end = await questionary.text("结束锚点 (End):", style=q_style).ask_async()
         
         s_anchor = _parse_anchor(start)
         e_anchor = _parse_anchor(end)
@@ -178,20 +220,33 @@ class Pipeline:
     async def run(self) -> list:
         downloader = ZhihuDownloader(self.url)
         
-        # 使用 Status Spinner 代替刷屏日志
-        with console.status(f"[bold green]正在请求页面...[/bold green] {self.url}", spinner="dots"):
-            data = await downloader.fetch_page(**self.scrape_config)
+        # 使用自定义的 Progress
+        progress = Progress(
+            SpinnerColumn(style=THEME["secondary"]),
+            TextColumn("[bold white]{task.description}"),
+            BarColumn(complete_style=THEME["accent"], finished_style=THEME["success"]),
+            TaskProgressColumn(),
+            expand=True
+        )
 
-        if isinstance(data, list):
-            console.print(f"📦 抓取到 [bold cyan]{len(data)}[/bold cyan] 个内容，开始处理...")
-            # 批量处理进度条? 这里简单起见还是逐个处理，为了 Vibe 效果，可以用 track
-            
-            for item in track(data, description="正在转换文档..."):
-                res = await self._process_one(item, downloader.page_type)
+        with Live(progress, console=console, refresh_per_second=10):
+            task_id = progress.add_task("🚀 Extracting knowledge...", total=None)
+            data = await downloader.fetch_page(**self.scrape_config)
+            progress.update(task_id, description="📦 Data received, starting conversion...")
+
+            if isinstance(data, list):
+                progress.update(task_id, total=len(data))
+                for item in data:
+                    progress.update(task_id, description=f"📝 Converting: {item['title'][:20]}...")
+                    res = await self._process_one(item, downloader.page_type)
+                    self.summary.append(res)
+                    progress.advance(task_id)
+            else:
+                res = await self._process_one(data, downloader.page_type)
                 self.summary.append(res)
-        else:
-            res = await self._process_one(data, downloader.page_type)
-            self.summary.append(res)
+                progress.update(task_id, completed=1, total=1)
+            
+            progress.update(task_id, description="✨ Task completed!")
             
         return self.summary
 
@@ -259,7 +314,7 @@ class Pipeline:
                 result["path"] = str(out_path)
                 
         except Exception as e:
-            result["status"] = f"❌ 失败: {e}"
+            result["status"] = f"✘ Failed: {str(e)[:20]}"
         
         return result
 
@@ -277,10 +332,11 @@ async def main() -> None:
             BATCH_URLS.clear()
         else:
             # 使用 rich 原生 input 的封装版，彻底解决 ghost prompt 冲突问题
-            answer = await _async_input("🔗 [bold cyan]输入知乎链接 (或 'q' 退出): [/]")
+            answer = await _async_input("请输入知乎链接 (或 'q' 退出): ")
             
             if not answer or answer.strip().lower() == 'q':
-                console.print("[bold cyan]👋 See you next time![/bold cyan]")
+                console.print(f"[{THEME['dim']}]Shutting down...[/]")
+                time.sleep(0.3)
                 break
             
             answer = answer.strip()
@@ -294,14 +350,14 @@ async def main() -> None:
             continue
             
         # 处理链接
-        console.rule(f"[bold]开始处理 {len(urls)} 个任务[/bold]")
+        console.rule(f"[bold {THEME['accent']}]Processing {len(urls)} Task(s)[/]")
         
         all_results = []
         
         for url in urls:
             scrape_config = {}
             if "/question/" in url and "/answer/" not in url:
-                console.print(f"\n[bold cyan]⚙️  检测到问题链接:[/bold cyan] {url}")
+                console.print(f"\n[{THEME['accent']}]⚙️  Question detected:[/][dim] {url}[/]")
                 scrape_config = await parse_question_options(url)
             
             try:
@@ -309,27 +365,35 @@ async def main() -> None:
                 results = await pipeline.run()
                 all_results.extend(results)
             except Exception as e:
-                console.print(f"[bold red]❌ 严重错误:[/bold red] {e}")
+                console.print(f"[bold {THEME['secondary']}]✘ Critical Error:[/][red] {e}[/]")
         
         # 打印汇总表格
         if all_results:
-            table = Table(title="✅ 任务执行汇总", show_header=True, header_style="bold magenta")
-            table.add_column("作者/标题", style="dim")
-            table.add_column("状态", justify="center")
-            table.add_column("保存路径", style="green")
+            table = Table(
+                title=f"[{THEME['success']}]✔ Task Execution Summary[/]", 
+                box=box.ROUNDED,
+                header_style=f"bold {THEME['accent']}"
+            )
+            table.add_column("Author/Title", style="dim")
+            table.add_column("Status", justify="center")
+            table.add_column("Path", style=THEME["success"])
             
             for res in all_results:
+                status_color = THEME["success"] if "✔" in res['status'] else THEME["secondary"]
                 table.add_row(
-                    f"{res['author']}\n[dim]{res['title'][:20]}[/dim]",
-                    res['status'],
+                    f"{res['author']}\n[dim]{res['title'][:25]}...[/dim]",
+                    f"[{status_color}]{res['status']}[/]",
                     res['path']
                 )
             
-            console.print(table)
+            console.print(Align.center(table))
             console.print("\n")
 
 if __name__ == "__main__":
     try:
+        with console.status("⚡ [bold]System Initializing...[/bold]", spinner="aesthetic"):
+            time.sleep(0.5)
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass
+        console.print(f"\n[{THEME['dim']}]Operation cancelled by user. Shutting down...[/]")
+        time.sleep(0.3)
