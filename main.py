@@ -48,9 +48,16 @@ def sanitize_filename(name: str) -> str:
 
 
 def extract_urls(text: str) -> list[str]:
-    """从文本中提取知乎链接。"""
-    pattern = r"https?://(?:www\.|zhuanlan\.)?zhihu\.com/(?:p/\d+|question/\d+(?:/answer/\d+)?)"
-    return list(dict.fromkeys(re.findall(pattern, text)))
+    """从文本中提取知乎链接，支持不带 https:// 的输入。"""
+    # 允许协议头可选
+    pattern = r"(?:https?://)?(?:www\.|zhuanlan\.)?zhihu\.com/(?:p/\d+|question/\d+(?:/answer/\d+)?)"
+    matches = re.findall(pattern, text)
+    results = []
+    for m in matches:
+        if not m.startswith("http"):
+            m = "https://" + m
+        results.append(m)
+    return list(dict.fromkeys(results))
 
 
 def _print_banner():
@@ -106,7 +113,7 @@ async def parse_question_options(url: str) -> dict:
     
     # 1. 检查 Cookie (复用 downloader 的逻辑)
     downloader = ZhihuDownloader(url)
-    if not await downloader.has_valid_cookies():
+    if not downloader.has_valid_cookies():
         console.print("[yellow]⚠️  未检测到有效登录信息 (z_c0)，强制使用游客模式 (Top 3)[/yellow]")
         return {"start": 0, "limit": 3}
 
