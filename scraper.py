@@ -73,6 +73,8 @@ class ZhihuDownloader:
             return "article"
         if "/answer/" in self.url:
             return "answer"
+        if "/question/" in self.url:
+            return "question"
         return "article"
 
     def _init_js_context(self):
@@ -103,9 +105,21 @@ class ZhihuDownloader:
 
     # ── 页面抓取 Core ──────────────────────────────────────────
 
-    async def fetch_page(self) -> dict:
+    def _load_cookies(self) -> list[dict]:
+        """从 cookies.json 加载 Cookie。"""
+        cookie_path = Path(__file__).parent / "cookies.json"
+        if cookie_path.exists():
+            try:
+                with open(cookie_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"⚠️  加载 cookies.json 失败: {e}")
+        return []
+
+    async def fetch_page(self, **kwargs) -> dict | list[dict]:
         """
         使用 Persistent Context + Stealth + Proxy 抓取页面。
+        支持传入 kwargs (如 start, limit) 传递给 _extract_question。
         """
         async with async_playwright() as pw:
             # 准备启动参数
@@ -137,6 +151,12 @@ class ZhihuDownloader:
                     await context.add_init_script(path=STEALTH_JS_PATH)
                 else:
                     print("⚠️  未找到 stealth.min.js，反爬能力可能下降")
+
+                # 1.5 注入 Cookies
+                cookies = self._load_cookies()
+                if cookies:
+                    await context.add_cookies(cookies)
+                    print(f"🍪 已加载 {len(cookies)} 个 Cookie")
 
                 # 2. 注入额外的 WebGL / Navigator 伪造 (参考 MediaCrawler CDP)
                 await context.add_init_script("""
@@ -176,8 +196,11 @@ class ZhihuDownloader:
                 await self._dismiss_popup(page)
 
                 # 6. 提取内容
+                # 6. 提取内容
                 if self.page_type == "article":
                     result = await self._extract_article(page)
+                elif self.page_type == "question":
+                    result = await self._extract_question(page, **kwargs)
                 else:
                     result = await self._extract_answer(page)
 
@@ -236,8 +259,150 @@ class ZhihuDownloader:
 
         return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
 
+    async def _extract_question(self, page, start: int = 0, limit: int = 20, smart_stop: bool = False) -> list[dict]:
+        """
+        提取问题下的多个回答。
+        :param start: 从第几个回答开始抓 (0-indexed)
+        :param limit: 抓取多少个
+        :param smart_stop: 开启后按照赞数智能停止 (5% 阈值, <100 阈值, 最多 10 条)
+        """
+        text = await page.locator("body").inner_text()
+        if "40362" in text or "请求存在异常" in text:
+            raise Exception("触发知乎反爬 (40362)")
+
+        # 等待问题标题加载
+        try:
+            await page.wait_for_selector(".QuestionHeader-title", timeout=5000)
+        except:
+            pass
+        
+        # 尝试点击 "查看全部" 按钮
+        await self._click_view_all(page)
+
+        # 等待至少一个回答项加载
+        try:
+            await page.wait_for_selector(".ContentItem.AnswerItem", timeout=5000)
+        except:
+            print("⚠️ 未检测到回答列表，可能需要登录或无回答")
+
+        # 智能滚动逻辑
+        target_count = start + limit
+        if smart_stop:
+            print("🧠 开启智能抓取模式 (赞数比例/阈值/数量限制)")
+        else:
+            print(f"🎯 目标: 抓取第 {start+1} ~ {target_count} 个回答")
+
+        max_upvotes = 0
+        prev_count = 0
+        max_scroll_attempts = 50 
+        no_change_count = 0
+
+        while True:
+            answers = page.locator(".ContentItem.AnswerItem")
+            count = await answers.count()
+            print(f"🔄 当前加载了 {count} 个回答...")
+
+            if count > 0:
+                # 获取最大赞同数 (用于智能停止)
+                if max_upvotes == 0:
+                    first_item = answers.nth(0)
+                    up_text = await self._safe_text(first_item, "button.VoteButton--up", "0")
+                    max_upvotes = self._parse_upvotes(up_text)
+
+                if smart_stop:
+                    # 检查最后一个已加载回答的赞同数
+                    last_item = answers.nth(count - 1)
+                    last_up_text = await self._safe_text(last_item, "button.VoteButton--up", "0")
+                    last_up = self._parse_upvotes(last_up_text)
+                    
+                    # 智能停止条件 (Or 逻辑)
+                    if count >= 10:
+                        print("🛑 智能停止：已抓取 10 条内容")
+                        target_count = count
+                        break
+                    if last_up < 100:
+                        print(f"🛑 智能停止：赞同数 ({last_up}) 低于 100")
+                        target_count = count
+                        break
+                    if max_upvotes > 0 and last_up < max_upvotes * 0.05:
+                        print(f"🛑 智能停止：赞同数 ({last_up}) 低于最大值 ({max_upvotes}) 的 5%")
+                        target_count = count
+                        break
+
+            if not smart_stop and count >= target_count:
+                break
+            
+            if count == prev_count:
+                no_change_count += 1
+                if no_change_count >= 5:
+                    print("⚠️  已滚动到底部或无法加载更多")
+                    break
+            else:
+                no_change_count = 0
+            
+            prev_count = count
+            
+            # 滚动
+            await page.mouse.wheel(0, 15000)
+            await asyncio.sleep(0.5)
+            await page.keyboard.press("End")
+            await asyncio.sleep(1.2) # 稍微加长等待，防止请求过快
+            
+            max_scroll_attempts -= 1
+            if max_scroll_attempts <= 0:
+                print("⚠️  达到最大滚动次数")
+                break
+        
+        # 获取所有回答卡片
+        answers = page.locator(".ContentItem.AnswerItem")
+        total_found = await answers.count()
+        print(f"📊 共发现 {total_found} 个回答，准备提取范围 [{start}:{target_count}]...")
+        
+        results = []
+        actual_limit = min(total_found, target_count)
+        
+        # 获取问题标题 (通用)
+        question_title = await self._safe_text(page, "h1.QuestionHeader-title", "未知问题")
+
+        for i in range(start, actual_limit):
+            item = answers.nth(i)
+            try:
+                data = await self._parse_answer_element(item, page, question_title)
+                results.append(data)
+            except Exception as e:
+                print(f"⚠️ 跳过第 {i+1} 个回答: {e}")
+        
+        return results
+
+    async def _click_view_all(self, page):
+        """点击‘查看全部’按钮的封装。"""
+        try:
+            view_all_btn = page.get_by_text("查看全部")
+            if await view_all_btn.count() > 0:
+                print("👆 发现 '查看全部' 按钮，尝试点击...")
+                await view_all_btn.first.click()
+                await asyncio.sleep(2)
+            else:
+                 view_all_btn_alt = page.locator(".QuestionMainAction")
+                 if await view_all_btn_alt.count() > 0:
+                     print("👆 发现 '.QuestionMainAction' 按钮，尝试点击...")
+                     await view_all_btn_alt.first.click()
+                     await asyncio.sleep(2)
+                 else:
+                    btns = page.locator("button")
+                    count = await btns.count()
+                    for i in range(count):
+                        txt = await btns.nth(i).inner_text()
+                        if "查看全部" in txt or "View All" in txt:
+                            print(f"👆 发现按钮 '{txt}'，尝试点击...")
+                            await btns.nth(i).click()
+                            await asyncio.sleep(2)
+                            break
+        except Exception as e:
+            print(f"⚠️  点击 '查看全部' 按钮失败或无需点击: {e}")
+
     async def _extract_answer(self, page) -> dict:
-        """提取回答。"""
+        """提取单个回答。"""
         text = await page.locator("body").inner_text()
         if "40362" in text:
             raise Exception("触发知乎反爬 (40362)")
@@ -251,9 +416,10 @@ class ZhihuDownloader:
             answer_id = match.group(1)
             
         # 确定内容容器
-        container = page
+        container = page.locator(".ContentItem.AnswerItem").first
+        
         if answer_id:
-            # 尝试精确定位: 查找 data-zop 中包含 answer_id 的回答项，或者 name="answer_id"
+            # 尝试精确定位
             specific_item = page.locator(f".ContentItem.AnswerItem[name='{answer_id}']")
             if await specific_item.count() > 0:
                 print(f"🎯 定位到指定回答: {answer_id}")
@@ -263,22 +429,56 @@ class ZhihuDownloader:
                 if await zop_item.count() > 0:
                     print(f"🎯 通过 data-zop 定位到指定回答: {answer_id}")
                     container = zop_item.first
+        
+        # 获取问题标题
+        question_title = await self._safe_text(page, "h1.QuestionHeader-title", "未知问题")
+        
+        return await self._parse_answer_element(container, page, question_title)
 
-        title = await self._safe_text(page, "h1.QuestionHeader-title", "未知问题")
-        
-        # 尝试多种作者选择器
-        author = await self._safe_text(container, ".AuthorInfo-name .UserLink-link", "未知作者")
+    async def _parse_answer_element(self, element, page, question_title) -> dict:
+        """解析单个回答元素"""
+        # 作者
+        author = await self._safe_text(element, ".AuthorInfo-name .UserLink-link", "未知作者")
         if author == "未知作者":
-            author = await self._safe_text(container, ".AuthorInfo span.UserLink-Name", "未知作者")
+            author = await self._safe_text(element, ".AuthorInfo span.UserLink-Name", "未知作者")
         
-        date = await self._extract_date(container)
+        # 赞同数
+        upvotes_text = await self._safe_text(element, "button.VoteButton--up", "0")
+        # 提取数字, e.g. "赞同 1.2 万" -> 12000
+        upvotes = self._parse_upvotes(upvotes_text)
+
+        # 发布时间
+        date = await self._extract_date(element)
         
-        if container != page:
-             html = await container.locator(".RichText").first.inner_html()
+        # 内容 HTML
+        rich = element.locator(".RichText").first
+        if await rich.count() > 0:
+            html = await rich.inner_html()
         else:
-             html = await page.locator(".QuestionAnswer-content .RichText").first.inner_html()
-        
-        return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
+             html = "<p>无法获取内容</p>"
+
+        return {
+            "title": question_title.strip(), 
+            "author": author.strip(), 
+            "html": html, 
+            "date": date,
+            "upvotes": upvotes
+        }
+
+    def _parse_upvotes(self, text: str) -> int:
+        """解析赞同数文本。"""
+        # e.g. "赞同 1,234", "1.2 万", "750"
+        m = re.search(r"([\d\.,]+)\s*([万kK]?)", text)
+        if not m: return 0
+        num_str = m.group(1).replace(",", "")
+        unit = m.group(2).lower()
+        try:
+            val = float(num_str)
+            if unit == "万": val *= 10000
+            elif unit in ("k", "K"): val *= 1000
+            return int(val)
+        except:
+            return 0
 
     async def _extract_date(self, element) -> str:
         from datetime import date as dt_date
