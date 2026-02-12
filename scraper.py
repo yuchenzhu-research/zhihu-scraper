@@ -134,6 +134,33 @@ class ZhihuDownloader:
             pass
         return False
 
+    async def debug_dump_page(self, output_path: str = "debug_page.html"):
+        """Debug purpose: dump page content to file."""
+        async with async_playwright() as pw:
+            browser = await pw.chromium.launch(headless=False)
+            context = await browser.new_context(
+                user_agent=self._UA
+            )
+            await context.add_init_script(path=STEALTH_JS_PATH)
+            
+            # Load cookies
+            cookies = self._load_cookies()
+            if cookies:
+                await context.add_cookies(cookies)
+            
+            page = await context.new_page()
+            try:
+                await page.goto(self.url, wait_until="domcontentloaded", timeout=30000)
+                await page.wait_for_timeout(5000)
+                content = await page.content()
+                with open(output_path, "w") as f:
+                    f.write(content)
+                print(f"Dumped page to {output_path}")
+            except Exception as e:
+                print(f"Dump failed: {e}")
+            finally:
+                await browser.close()
+
     async def fetch_page(self, **kwargs) -> Union[dict, List[dict]]:
         """
         使用 Persistent Context + Stealth + Proxy 抓取页面。
@@ -393,8 +420,35 @@ class ZhihuDownloader:
             
             if count == prev_count:
                 no_change_count += 1
-                if no_change_count >= 5:
+                
+                # 尝试再次点击 "查看全部"，防漏
+                if no_change_count % 2 == 0:
+                     await self._click_view_all(page)
+
+                # 如果卡住太久，尝试切换排序
+                if no_change_count == 4:
+                    print("🔄 尝试切换排序方式 (按时间排序)...")
+                    await self._switch_sort_order(page)
+                    no_change_count = 0 # 重置计数，给新排序一点机会
+                    continue
+
+                if no_change_count >= 8: # 增加尝试次数
                     print("⚠️  已滚动到底部或无法加载更多")
+                    # Debug: Dump HTML & Buttons
+                    try:
+                        with open("debug_failed_scroll.html", "w", encoding="utf-8") as f:
+                            f.write(await page.content())
+                        print("💾 已保存调试页面: debug_failed_scroll.html")
+                        
+                        btns = page.locator("button")
+                        cnt = await btns.count()
+                        print(f"🔎 页面剩余按钮 ({cnt}个):")
+                        for i in range(min(cnt, 20)):
+                            txt = await btns.nth(i).inner_text()
+                            if txt.strip():
+                                clean_txt = txt.strip().replace('\n', ' ')
+                                print(f"   [Btn] {clean_txt}")
+                    except: pass
                     break
             else:
                 no_change_count = 0
@@ -443,7 +497,19 @@ class ZhihuDownloader:
 
             if count == prev_count:
                 no_change_count += 1
-                if no_change_count >= 5:
+                
+                # 尝试再次点击 "查看全部"
+                if no_change_count % 2 == 0:
+                     await self._click_view_all(page)
+
+                # 尝试切换排序
+                if no_change_count == 4:
+                    print("🔄 尝试切换排序方式 (按时间排序)...")
+                    await self._switch_sort_order(page)
+                    no_change_count = 0 
+                    continue
+
+                if no_change_count >= 8:
                     print("⚠️  已滚动到底部")
                     break
             else:
@@ -474,11 +540,13 @@ class ZhihuDownloader:
 
     async def _scroll_step(self, page):
         """执行一次滚动动作。"""
-        await page.mouse.wheel(0, 10000)
-        await asyncio.sleep(0.5)
+        # 使用 JS 滚动到底部，通常比单纯鼠标滚轮更有效触发加载
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await asyncio.sleep(1)
+        # 配合 End 键
         await page.keyboard.press("End")
-        await asyncio.sleep(1.0)
-    
+        await asyncio.sleep(1)
+
     async def _get_card_info(self, item) -> dict:
         """获取回答卡片的元数据用于匹配。"""
         # 提取 answer_id
@@ -521,31 +589,59 @@ class ZhihuDownloader:
         return False
 
     async def _click_view_all(self, page):
-        """点击‘查看全部’按钮的封装。"""
+        """点击 '查看全部' 按钮的封装。"""
+        candidates = [
+            "button.QuestionMainAction-ViewAll",
+            "a.QuestionMainAction-ViewAll",
+            "div.Question-mainColumn button:has-text('查看全部')",
+            "div.Question-mainColumn button:has-text('更多回答')",
+            "div.Question-mainColumn button:has-text('展开阅读全文')",
+            "div.Question-mainColumn button:has-text('显示全部')",
+             # 兜底：查找所有包含特定文本的按钮
+            "button:has-text('View All')",
+            "button:has-text('More Answers')",
+            "button:has-text('显示全部')"
+        ]
+        
+        for sel in candidates:
+            try:
+                # 使用 first 避免多匹配报错
+                btn = page.locator(sel).first
+                if await btn.count() > 0 and await btn.is_visible():
+                    print(f"👆 尝试点击: {sel}")
+                    await btn.click()
+                    # 等待内容加载
+                    await asyncio.sleep(2)
+                    return True
+            except:
+                pass
+        return False
+
+    async def _switch_sort_order(self, page):
+        """切换排序方式（默认 -> 按时间），有时能解决加载卡顿问题。"""
         try:
-            view_all_btn = page.get_by_text("查看全部")
-            if await view_all_btn.count() > 0:
-                print("👆 发现 '查看全部' 按钮，尝试点击...")
-                await view_all_btn.first.click()
-                await asyncio.sleep(2)
+            # 1. 找到排序按钮 (通常是 '默认排序')
+            sort_btn = page.locator("button:has-text('默认排序')").first
+            if await sort_btn.count() == 0:
+                print("⚠️ 未找到 '默认排序' 按钮，跳过切换")
+                return
+
+            print("👆 点击 '默认排序'...")
+            await sort_btn.click()
+            await asyncio.sleep(1)
+
+            # 2. 点击 '按时间排序'
+            time_sort = page.locator("button:has-text('按时间排序')").first
+            if await time_sort.count() > 0:
+                print("👆 切换到 '按时间排序'...")
+                await time_sort.click()
+                await asyncio.sleep(3) # 等待刷新
             else:
-                 view_all_btn_alt = page.locator(".QuestionMainAction")
-                 if await view_all_btn_alt.count() > 0:
-                     print("👆 发现 '.QuestionMainAction' 按钮，尝试点击...")
-                     await view_all_btn_alt.first.click()
-                     await asyncio.sleep(2)
-                 else:
-                    btns = page.locator("button")
-                    count = await btns.count()
-                    for i in range(count):
-                        txt = await btns.nth(i).inner_text()
-                        if "查看全部" in txt or "View All" in txt:
-                            print(f"👆 发现按钮 '{txt}'，尝试点击...")
-                            await btns.nth(i).click()
-                            await asyncio.sleep(2)
-                            break
+                 print("⚠️ 未找到 '按时间排序' 选项")
+                 # 关闭菜单 (点别处)
+                 await page.mouse.click(0, 0)
         except Exception as e:
-            print(f"⚠️  点击 '查看全部' 按钮失败或无需点击: {e}")
+             print(f"⚠️ 切换排序失败: {e}")
 
     async def _extract_answer(self, page) -> dict:
         """提取单个回答。"""
