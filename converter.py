@@ -9,6 +9,8 @@ converter.py — HTML → Markdown 转换模块
 import re
 import uuid
 
+from urllib.parse import urljoin
+from typing import Optional, Dict
 from bs4 import BeautifulSoup, Tag
 from markdownify import MarkdownConverter
 
@@ -31,7 +33,7 @@ class ZhihuConverter:
     _INLINE_PH = f"IMATH{_PID}X"
     _BLOCK_PH = f"BMATH{_PID}X"
 
-    def __init__(self, img_map: dict[str, str] | None = None):
+    def __init__(self, img_map: Optional[Dict[str, str]] = None):
         self._img_map = img_map or {}
         self._math_store: dict[str, str] = {}
         self._math_counter = 0
@@ -196,7 +198,7 @@ class ZhihuConverter:
 class _MarkdownBridge(MarkdownConverter):
     """继承 markdownify，仅覆盖图片标签的转换逻辑。"""
 
-    def __init__(self, img_map: dict[str, str] | None = None, **kwargs):
+    def __init__(self, img_map: Optional[Dict[str, str]] = None, **kwargs):
         self.img_map = img_map or {}
         super().__init__(**kwargs)
 

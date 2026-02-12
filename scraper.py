@@ -15,6 +15,7 @@ import json
 import re
 from pathlib import Path
 from urllib.parse import urlparse
+from typing import Union, List, Optional
 
 import httpx
 # 需 pip install PyExecJS
@@ -22,7 +23,7 @@ import execjs
 from playwright.async_api import async_playwright, Playwright
 import subprocess
 
-def get_auto_proxy() -> str | None:
+def get_auto_proxy() -> Optional[str]:
     """
     自动获取 macOS 系统代理设置 (Shadowrocket/ClashX)。
     解析 `scutil --proxy` 的输出。
@@ -105,7 +106,7 @@ class ZhihuDownloader:
 
     # ── 页面抓取 Core ──────────────────────────────────────────
 
-    def _load_cookies(self) -> list[dict]:
+    def _load_cookies(self) -> List[dict]:
         """从 cookies.json 加载 Cookie。过滤掉占位符。"""
         cookie_path = Path(__file__).parent / "cookies.json"
         if cookie_path.exists():
@@ -122,7 +123,7 @@ class ZhihuDownloader:
                 print(f"⚠️  加载 cookies.json 失败: {e}")
         return []
 
-    async def fetch_page(self, **kwargs) -> dict | list[dict]:
+    async def fetch_page(self, **kwargs) -> Union[dict, List[dict]]:
         """
         使用 Persistent Context + Stealth + Proxy 抓取页面。
         支持传入 kwargs (如 start, limit) 传递给 _extract_question。
@@ -265,7 +266,7 @@ class ZhihuDownloader:
 
         return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
 
-    async def _extract_question(self, page, start: int = 0, limit: int = 3) -> list[dict]:
+    async def _extract_question(self, page, start: int = 0, limit: int = 3) -> List[dict]:
         """
         提取问题下的多个回答。
         :param start: 从第几个回答开始抓 (0-indexed)
@@ -486,7 +487,7 @@ class ZhihuDownloader:
     # ── 图片下载 ──────────────────────────────────────────────
 
     @classmethod
-    async def download_images(cls, img_urls: list[str], dest: Path) -> dict[str, str]:
+    async def download_images(cls, img_urls: List[str], dest: Path) -> dict[str, str]:
         dest.mkdir(parents=True, exist_ok=True)
         url_to_local: dict[str, str] = {}
 
