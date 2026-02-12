@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 
 from typing import Optional
+import functools
+from concurrent.futures import ThreadPoolExecutor
 import questionary
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -19,15 +21,19 @@ from core.scraper import ZhihuDownloader, PROXY_SERVER
 
 # 初始化 Rich Console
 console = Console()
+executor = ThreadPoolExecutor(max_workers=1)
 
 # ==========================================
 # 批量下载列表 (不想用命令行输入时，在这里填入链接)
 # ==========================================
-BATCH_URLS = [
-    # "https://zhuanlan.zhihu.com/p/xxxxx",
-]
+BATCH_URLS = []
 
 DATA_DIR = Path(__file__).parent / "data"
+
+async def _async_input(prompt: str) -> str:
+    """封装 rich 的 console.input 为异步模式，比 questionary.text 稳定。"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, console.input, prompt)
 
 
 # ── 工具函数 ─────────────────────────────────────────────────
@@ -263,24 +269,21 @@ async def main() -> None:
             urls = list(BATCH_URLS)
             BATCH_URLS.clear()
         else:
-            # 增加微小延迟，确保 Banner 输出完全刷新
-            await asyncio.sleep(0.1)
-            # 简化 Prompt 文本，确保在各种终端中渲染稳定
-            answer = await questionary.text("🔗 输入知乎链接 (或 'q' 退出):").ask_async()
+            # 使用 rich 原生 input 的封装版，彻底解决 ghost prompt 冲突问题
+            answer = await _async_input("🔗 [bold cyan]输入知乎链接 (或 'q' 退出): [/]")
             
-            # 如果用户直接按回车(empty)或者输入多余空格，不应退出，应重新提示
-            if answer is None or (answer.strip().lower() == 'q'):
+            if not answer or answer.strip().lower() == 'q':
                 console.print("[bold cyan]👋 See you next time![/bold cyan]")
                 break
             
-            if not answer.strip():
-                continue
-                
+            answer = answer.strip()
             urls = extract_urls(answer)
             
         if not urls:
-            if answer and answer.strip().lower() != 'q':
-                console.print("[red]❌ 未识别到有效链接，请重试[/red]")
+            if answer and answer.lower() != 'q':
+                # 批量任务无需报错，正常循环
+                if not BATCH_URLS:
+                    console.print("[red]❌ 未识别到有效链接，请重试[/red]")
             continue
             
         # 处理链接
