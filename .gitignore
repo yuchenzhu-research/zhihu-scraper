@@ -11,8 +11,8 @@ __pycache__/
 data/
 browser_data/
 log.txt
-cookies copy.json
-cookies.json.bak
+cookies.json
+
 *.bak
 debug_page.html
 debug_scroll.py
