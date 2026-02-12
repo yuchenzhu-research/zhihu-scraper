@@ -94,53 +94,60 @@ def extract_urls(text: str) -> list[str]:
 
 def _print_banner():
     """打印符合 Americana Fusion 风格的 Dashboard Header。"""
-    # ASCII Art (Slant 风格)
-    logo = r"""
-   ________  ______  ____  __  __
-  /_  / / / / / / / / / / / / / /
-   / / / /_/ / / / / / / / / / / 
-  / / / __  / / / / /_/ / /_/ /  
- /___/_/ /_/_/_/\____/\____/   
+    # 顶部装饰器
+    top_deco = Text("⚡ MODULE: DATA_EXTRACTION_UNIT ⚡", style=f"bold {THEME['accent']}")
+    
+    # 知乎 (Neon Branding)
+    zhihu_header = Text("█ 知 乎 █", style=f"bold {THEME['secondary']}")
+    
+    # SCRAPER (Refined Slant Art)
+    scraper_art = r"""
    _____ __________  ___    ____  __________ 
   / ___// ____/ __ \/   |  / __ \/ ____/ __ \
   \__ \/ /   / /_/ / /| | / /_/ / __/ / /_/ /
  ___/ / /___/ _, _/ ___ |/ ____/ /___/ _, _/ 
 /____/\____/_/ |_/_/  |_/_/   /_____/_/ |_|  
-    """
-    
-    logo_text = Text(logo, style=f"bold {THEME['secondary']}")
-    
-    # 元数据
-    metadata = Text(f"Version: 2.1.0 | Author: Yuchen", style=f"dim italic")
+""".strip("\n")
+
+    # 底部元数据
+    bot_deco = Text("INTELLIGENT CRAWLER ENGINE", style=f"{THEME['dim']} italic")
     
     # 组合 Banner
     header_content = Group(
-        Align.center(logo_text),
-        Align.right(metadata)
+        Align.center(top_deco),
+        Align.center(zhihu_header),
+        Align.center(Text(scraper_art, style=f"bold {THEME['accent']}")),
+        Align.center(bot_deco)
     )
     
-    header_panel = Panel.fit(
+    header_panel = Panel(
         header_content,
         border_style=THEME["accent"],
-        padding=(1, 2)
+        box=box.ROUNDED,
+        padding=(1, 2),
+        width=70
     )
 
     # Status Panel (横向单行)
     proxy_status = f"[{THEME['success']}]ON[/]" if PROXY_SERVER else f"[{THEME['dim']}]OFF[/]"
-    cookie_status = f"[{THEME['success']}]Active[/]" if Path("cookies.json").exists() else f"[{THEME['warn']}]Missing[/]"
+    cookie_status = f"[{THEME['success']}]VALID[/]" if Path("cookies.json").exists() else f"[{THEME['warn']}]MISSING[/]"
     
     status_line = Text.assemble(
-        " ⚡ ", ("Proxy: ", THEME["text"]), (proxy_status, ""),
+        " 🔗 ", ("GATEWAY: ", THEME["accent"]), (proxy_status, ""),
         "  |  ",
-        " 🍪 ", ("Cookie: ", THEME["text"]), (cookie_status, ""),
+        " 🔑 ", ("SEAL: ", THEME["accent"]), (cookie_status, ""),
         "  |  ",
-        " 📂 ", ("Output: ", THEME["text"]), (str(DATA_DIR), THEME["warn"])
+        " 📂 ", ("ARCHIVE: ", THEME["accent"]), (str(DATA_DIR), THEME["text"]),
+        "  |  ",
+        " 🕸️ ", ("CORE: ", THEME["accent"]), (f"[{THEME['secondary']}]LINKED[/]", "")
     )
     
     status_panel = Panel(
         Align.center(status_line),
         border_style=THEME["dim"],
-        padding=(0, 1)
+        box=box.HORIZONTALS,
+        padding=(0, 1),
+        width=70
     )
 
     console.print(Align.center(header_panel))
