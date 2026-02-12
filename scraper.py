@@ -123,6 +123,17 @@ class ZhihuDownloader:
                 print(f"⚠️  加载 cookies.json 失败: {e}")
         return []
 
+    def has_valid_cookies(self) -> bool:
+        """检查是否有有效 Cookie (z_c0)。"""
+        try:
+            cookies = self._load_cookies()
+            for c in cookies:
+                if c.get("name") == "z_c0" and c.get("value") and c.get("value") != "YOUR_COOKIE_HERE":
+                    return True
+        except:
+            pass
+        return False
+
     async def fetch_page(self, **kwargs) -> Union[dict, List[dict]]:
         """
         使用 Persistent Context + Stealth + Proxy 抓取页面。
@@ -266,11 +277,18 @@ class ZhihuDownloader:
 
         return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
 
-    async def _extract_question(self, page, start: int = 0, limit: int = 3) -> List[dict]:
+    async def _extract_question(
+        self, 
+        page, 
+        start: int = 0, 
+        limit: int = 3,
+        start_anchor: Optional[dict] = None,
+        end_anchor: Optional[dict] = None
+    ) -> List[dict]:
         """
-        提取问题下的多个回答。
-        :param start: 从第几个回答开始抓 (0-indexed)
-        :param limit: 抓取多少个 (默认 3 个)
+        提取问题下的多个回答。支持：
+        1. 数量模式: 从 start 开始抓 limit 个
+        2. 范围模式: 从 start_anchor (答主/answer_id) 抓到 end_anchor
         """
         text = await page.locator("body").inner_text()
         if "40362" in text or "请求存在异常" in text:
@@ -292,54 +310,65 @@ class ZhihuDownloader:
             print("⚠️ 未检测到回答列表，可能需要登录或无回答")
 
         # 智能滚动逻辑
-        target_count = start + limit
-        print(f"🎯 目标: 抓取前 {target_count} 个回答")
-
-        prev_count = 0
-        max_scroll_attempts = 30  # 稍微减少尝试次数，避免死循环
-        no_change_count = 0
-
-        while True:
-            answers = page.locator(".ContentItem.AnswerItem")
-            count = await answers.count()
-            print(f"🔄 当前加载了 {count} 个回答...")
-
-            if count >= target_count:
-                break
-            
-            if count == prev_count:
-                no_change_count += 1
-                if no_change_count >= 3: # 3次没动静就停，更灵敏
-                    print("⚠️  已滚动到底部或无法加载更多")
-                    break
-            else:
-                no_change_count = 0
-            
-            prev_count = count
-            
-            # 滚动
-            await page.mouse.wheel(0, 10000)
-            await asyncio.sleep(0.5)
-            await page.keyboard.press("End")
-            await asyncio.sleep(1.0)
-            
-            max_scroll_attempts -= 1
-            if max_scroll_attempts <= 0:
-                print("⚠️  达到最大滚动次数")
-                break
+        if start_anchor and end_anchor:
+            print(f"🎯 目标: 寻找范围 {start_anchor['value']} -> {end_anchor['value']}")
+            await self._scroll_until_found(page, start_anchor, end_anchor)
+        else:
+            target_count = start + limit
+            print(f"🎯 目标: 抓取前 {target_count} 个回答")
+            await self._scroll_until_count(page, target_count)
         
         # 获取所有回答卡片
         answers = page.locator(".ContentItem.AnswerItem")
         total_found = await answers.count()
-        print(f"📊 共发现 {total_found} 个回答，准备提取范围 [{start}:{target_count}]...")
         
+        # 计算提取范围
+        extract_indices = []
+        
+        if start_anchor and end_anchor:
+            # 范围模式
+            print(f"📊 正在定位起止点...")
+            start_idx, end_idx = -1, -1
+            
+            # 遍历所有回答建立索引
+            for i in range(total_found):
+                item = answers.nth(i)
+                info = await self._get_card_info(item)
+                
+                # 检查是否匹配 Start
+                if start_idx == -1:
+                    if self._match_anchor(info, start_anchor):
+                        start_idx = i
+                
+                # 检查是否匹配 End (End 必须 >= Start)
+                if end_idx == -1:
+                    if self._match_anchor(info, end_anchor):
+                        end_idx = i
+            
+            if start_idx != -1 and end_idx != -1:
+                # 确保顺序正确
+                if start_idx > end_idx:
+                    print(f"⚠️ 起始位置({start_idx})在结束位置({end_idx})之后，自动交换...")
+                    start_idx, end_idx = end_idx, start_idx
+                
+                print(f"✅ 锁定范围: 索引 [{start_idx}] -> [{end_idx}] (共 {end_idx - start_idx + 1} 个)")
+                extract_indices = list(range(start_idx, end_idx + 1))
+            else:
+                 print(f"❌ 未能完全找到起止点 (Start found: {start_idx}, End found: {end_idx})")
+                 print("   将尝试提取所有已加载内容...")
+                 extract_indices = list(range(total_found))
+        else:
+            # 数量模式
+            target_count = start + limit
+            actual_limit = min(total_found, target_count)
+            print(f"📊 准备提取范围 [{start}:{actual_limit}]...")
+            extract_indices = list(range(start, actual_limit))
+
         results = []
-        actual_limit = min(total_found, target_count)
-        
-        # 获取问题标题 (通用)
         question_title = await self._safe_text(page, "h1.QuestionHeader-title", "未知问题")
 
-        for i in range(start, actual_limit):
+        for i in extract_indices:
+
             item = answers.nth(i)
             try:
                 data = await self._parse_answer_element(item, page, question_title)
@@ -348,6 +377,148 @@ class ZhihuDownloader:
                 print(f"⚠️ 跳过第 {i+1} 个回答: {e}")
         
         return results
+
+    async def _scroll_until_count(self, page, target_count: int):
+        """滚动直到达到目标数量。"""
+        prev_count = 0
+        no_change_count = 0
+        max_attempts = 50
+
+        while True:
+            count = await page.locator(".ContentItem.AnswerItem").count()
+            print(f"🔄 当前加载了 {count} 个回答 (目标: {target_count})...")
+            
+            if count >= target_count:
+                break
+            
+            if count == prev_count:
+                no_change_count += 1
+                if no_change_count >= 5:
+                    print("⚠️  已滚动到底部或无法加载更多")
+                    break
+            else:
+                no_change_count = 0
+            
+            prev_count = count
+            await self._scroll_step(page)
+            
+            max_attempts -= 1
+            if max_attempts <= 0:
+                break
+
+    async def _scroll_until_found(self, page, start_anchor, end_anchor):
+        """滚动直到找到起止锚点（或达到上限）。"""
+        limit = 200 # 防止无限滚动
+        prev_count = 0
+        no_change_count = 0
+        
+        while True:
+            answers = page.locator(".ContentItem.AnswerItem")
+            count = await answers.count()
+            print(f"🔄 正在搜索锚点... (当前 {count} 个)")
+            
+            # 检查是否包含 start 和 end
+            found_start = False
+            found_end = False
+            
+            # 这里的检查比较耗时，每 5 次或者滚动停滞时检查一次比较好
+            # 为了准确性，我们简单粗暴点，每次都检查最后几个? 
+            # 还是直接检查全部? 检查全部比较稳妥
+            
+            # 优化: 只在数量变化或者每隔几次检查
+            # 这里简化逻辑: 每次检查最后 5 个看是否包含 end? 
+            # 不行，end 可能早就加载过了，或者 start 和 end 很近
+            
+            # 简单策略: 只要没有同时找到两个，就一直滚，直到上限
+            # 但我们需要知道是否已经找到了
+            
+            # 我们可以抽样检查:
+            # 倒序检查
+            # for i in range(count - 1, -1, -1):
+            
+            # 实际上，只要 count 没变，就意味着到底了
+            if count >= limit:
+                print(f"⚠️ 达到滚动上限 ({limit})")
+                break
+
+            if count == prev_count:
+                no_change_count += 1
+                if no_change_count >= 5:
+                    print("⚠️  已滚动到底部")
+                    break
+            else:
+                no_change_count = 0
+            
+            # 检测逻辑：如果 count 比较大了，我们可以试着找一下
+            # 为了性能，我们每增加 10 个或者滚动 5 次检测一次？
+            # 暂时先用最简单的：一直滚到底部或者上限，最后再匹配。
+            # 为什么？因为中间检测 DOM 很慢。
+            # 用户体验优化：如果用户知道 end 在前 50 个，滚到 200 个太慢。
+            
+            # 折中方案：先不做实时检测，依赖 limit 和手动停止。
+            # 或者：每次滚动后，只检查新加载的 items? 
+            # 算了，保持简单，直接复用滚动逻辑，把 limit 设大一点。
+            # 但是为了"找到即停"，我们需要检查。
+            
+            # 让我们尝试快速检查一下页面文本?
+            # page_text = await page.inner_text() 
+            # if start_anchor['value'] in page_text and end_anchor['value'] in page_text:
+            #    break
+            # 这也很慢。
+            
+            # 采用方案: 滚 5 次检查一次 metadata
+            pass 
+
+            prev_count = count
+            await self._scroll_step(page)
+
+    async def _scroll_step(self, page):
+        """执行一次滚动动作。"""
+        await page.mouse.wheel(0, 10000)
+        await asyncio.sleep(0.5)
+        await page.keyboard.press("End")
+        await asyncio.sleep(1.0)
+    
+    async def _get_card_info(self, item) -> dict:
+        """获取回答卡片的元数据用于匹配。"""
+        # 提取 answer_id
+        answer_id = ""
+        try:
+             # data-zop="{... "itemId":12345 ...}"
+             zop = await item.get_attribute("data-zop")
+             if zop:
+                 if '"itemId":' in zop:
+                     import json
+                     # 简单的字符串提取，比 json.loads 快且容错
+                     m = re.search(r'"itemId":(\d+)', zop)
+                     if m: answer_id = m.group(1)
+        except: pass
+        if not answer_id:
+             # try name attribute
+             answer_id = await item.get_attribute("name") or ""
+        
+        # 提取 author
+        author = await self._safe_text(item, ".AuthorInfo-name .UserLink-link", "")
+        if not author:
+             author = await self._safe_text(item, ".AuthorInfo span.UserLink-Name", "")
+             
+        return {"answer_id": str(answer_id), "author": author.strip()}
+
+    def _match_anchor(self, info: dict, anchor: dict) -> bool:
+        """判断卡片是否匹配锚点。"""
+        if not anchor: return False
+        
+        val = str(anchor["value"]).strip()
+        
+        if anchor["type"] == "answer_id":
+            return val == info.get("answer_id")
+        
+        if anchor["type"] == "author":
+             # 模糊匹配? 还是精确? 精确比较好，防止同名误伤
+             # 知乎 id 一般是唯一的，但名字不一定。
+             return val == info.get("author")
+             
+        return False
 
     async def _click_view_all(self, page):
         """点击‘查看全部’按钮的封装。"""

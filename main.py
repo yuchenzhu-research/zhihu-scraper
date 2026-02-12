@@ -13,6 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from typing import Optional
 from converter import ZhihuConverter
 from scraper import ZhihuDownloader
 
@@ -52,19 +53,76 @@ def parse_question_options(user_input: str) -> dict:
     """
     user_input = user_input.lower().strip()
     
-    # 1. 默认 (Auto Mode)
-    if not user_input:
+    # -------------------------------------------------------------
+    # 模式 A: 游客模式 (无 Cookie) -> 强制默认 Top 3
+    # -------------------------------------------------------------
+    if not ZhihuDownloader(url="").has_valid_cookies():
         return {"start": 0, "limit": 3}
+
+    # -------------------------------------------------------------
+    # 模式 B: 登录模式 (有 Cookie) -> 显示子菜单
+    # -------------------------------------------------------------
+    print("\n   [1] 按数量: 抓取前 N 个回答")
+    print("   [2] 按范围: 指定起止答主/链接 (闭区间)")
+    print("👉 请输入 (1/2): ", end="", flush=True)
     
-    # 2. 自定义数字 (Custom Mode)
-    try:
-        limit = int(user_input)
-        return {"start": 0, "limit": limit}
-    except:
-        pass
+    mode_choice = sys.stdin.readline().strip()
+    
+    # --- 模式 2.1: 按数量 ---
+    if mode_choice == "1":
+        print("👉 请输入要抓取的数量: ", end="", flush=True)
+        try:
+            limit = int(sys.stdin.readline().strip())
+            return {"start": 0, "limit": limit}
+        except:
+            print("⚠️输入无效，使用默认值 20")
+            return {"start": 0, "limit": 20}
+            
+    # --- 模式 2.2: 按范围 ---
+    elif mode_choice == "2":
+        print("👉 请输入起始 (答主名字或回答链接): ", end="", flush=True)
+        start_input = sys.stdin.readline().strip()
+        print("👉 请输入结束 (答主名字或回答链接): ", end="", flush=True)
+        end_input = sys.stdin.readline().strip()
         
-    print("⚠️  输入格式错误，使用默认设置 (Top 3)")
-    return {"start": 0, "limit": 3}
+        start_anchor = _parse_anchor(start_input)
+        end_anchor = _parse_anchor(end_input)
+        
+        if not start_anchor or not end_anchor:
+            print("⚠️ 输入无效，回退到默认 Top 3")
+            return {"start": 0, "limit": 3}
+            
+        return {
+            "start": 0, 
+            "limit": 3, # 占位
+            "start_anchor": start_anchor,
+            "end_anchor": end_anchor
+        }
+    
+    # --- 默认 fallback ---
+    else:
+        # 兼容旧习惯：如果直接输数字，当做模式 2.1
+        try:
+            limit = int(mode_choice)
+            print(f"💡 识别为抓取前 {limit} 个")
+            return {"start": 0, "limit": limit}
+        except:
+            print("⚠️ 选项无效，使用默认 Top 3")
+            return {"start": 0, "limit": 3}
+
+def _parse_anchor(val: str) -> Optional[dict]:
+    """解析锚点输入: 链接 -> answer_id, 名字 -> author"""
+    if not val: return None
+    
+    # 尝试提取 answer id
+    # https://www.zhihu.com/question/xxx/answer/12345
+    m = re.search(r"answer/(\d+)", val)
+    if m:
+        return {"type": "answer_id", "value": m.group(1)}
+    
+    # 纯数字也当做 answer id? 不，名字可能是纯数字。
+    # 默认当做名字
+    return {"type": "author", "value": val}
 
 
 # ── 流水线 ───────────────────────────────────────────────────
@@ -72,7 +130,7 @@ def parse_question_options(user_input: str) -> dict:
 class Pipeline:
     """单篇文章的处理流水线：抓取 → 下载图片 → 转换 → 保存。"""
 
-    def __init__(self, url: str, output_dir: Path = DATA_DIR, scrape_config: dict = None):
+    def __init__(self, url: str, output_dir: Path = DATA_DIR, scrape_config: Optional[dict] = None):
         self.url = url
         self.output_dir = output_dir
         self.scrape_config = scrape_config or {}
@@ -202,13 +260,25 @@ async def main() -> None:
             if "/question/" in url and "/answer/" not in url:
                 try:
                     print(f"⚙️  检测到问题链接: {url}")
-                    print("   请选择抓取模式:")
-                    print("   [Enter] 自动模式 (抓取前 3 个高赞回答，最稳定)")
-                    print("   [ N   ] 自定义模式 (抓取前 N 个，未登录可能失败)")
-                    print("👉 请输入: ", end="", flush=True)
-                    opt_input = sys.stdin.readline().strip()
-                    scrape_config = parse_question_options(opt_input)
-                    print(f"✅ 已设定: 抓取前 {scrape_config['limit']} 个回答")
+                    print(f"⚙️  检测到问题链接: {url}")
+                    
+                    is_login = ZhihuDownloader(url).has_valid_cookies()
+                    status = "✅ 已登录 (解锁全部功能)" if is_login else "❌ 游客模式 (仅限前 3 条)"
+                    print(f"   🍪 Cookie 状态: {status}")
+                    
+                    if not is_login:
+                        print("   (按 Enter 继续抓取前 3 条)")
+                        sys.stdin.readline()
+                        scrape_config = {"start": 0, "limit": 3}
+                    else:
+                        scrape_config = parse_question_options("") # 传入空串触发内部交互
+                        
+                    if "start_anchor" in scrape_config:
+                        s = scrape_config['start_anchor']['value']
+                        e = scrape_config['end_anchor']['value']
+                        print(f"✅ 已设定: 抓取范围 {s} -> {e}")
+                    else:
+                        print(f"✅ 已设定: 抓取前 {scrape_config['limit']} 个回答")
                 except (KeyboardInterrupt, EOFError):
                     print("\n🛑 取消操作")
                     continue
