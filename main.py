@@ -111,15 +111,20 @@ async def main() -> None:
     print("  - 问题回答: https://www.zhihu.com/question/xxx/answer/xxx")
     print("输入 q 退出\n")
 
+    should_prompt = True
     while True:
         # ── 获取待处理链接 ──
         if BATCH_URLS:
             print(f"📋 检测到 BATCH_URLS 中有 {len(BATCH_URLS)} 个链接，开始自动处理...")
             target_urls = list(BATCH_URLS)
             BATCH_URLS.clear()
+            should_prompt = True
         else:
             try:
-                print("\n🔗 请粘贴知乎链接 (可包含其它文字): ", end="", flush=True)
+                if should_prompt:
+                    print("\n🔗 请粘贴知乎链接 (可包含其它文字): ", end="", flush=True)
+                    should_prompt = False
+                
                 user_input = sys.stdin.readline().strip()
             except (EOFError, KeyboardInterrupt):
                 print("\n👋 再见!")
@@ -132,7 +137,9 @@ async def main() -> None:
             target_urls = extract_urls(user_input)
 
         if not target_urls:
-            print("⚠️ 未检测到有效链接，请重新输入")
+            # 只有当用户输入为空时才提示，避免因为复制了标题行导致报错刷屏
+            if not user_input:
+                 should_prompt = True
             continue
 
         # ── 逐个处理 ──
@@ -153,6 +160,7 @@ async def main() -> None:
                 print("🔄 跳过当前链接，继续处理下一个...")
 
         print(f"\n✨ 本批次处理完成！文件保存在 {DATA_DIR.resolve()}")
+        should_prompt = True
 
 
 if __name__ == "__main__":
