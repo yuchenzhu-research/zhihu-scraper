@@ -88,6 +88,7 @@ class ZhihuConverter:
             ".ContentItem-actions, .RichContent-actions",
             ".Post-SideActions, .BottomActions",
             ".css-1gomreu, .Voters",
+            "noscript", 
         ):
             for tag in soup.select(selector):
                 tag.decompose()

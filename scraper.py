@@ -244,25 +244,57 @@ class ZhihuDownloader:
 
         await page.wait_for_selector(".QuestionAnswer-content", timeout=10000)
         
+        # 尝试从 URL 提取 answer_id
+        answer_id = None
+        match = re.search(r"answer/(\d+)", self.url)
+        if match:
+            answer_id = match.group(1)
+            
+        # 确定内容容器
+        container = page
+        if answer_id:
+            # 尝试精确定位: 查找 data-zop 中包含 answer_id 的回答项，或者 name="answer_id"
+            specific_item = page.locator(f".ContentItem.AnswerItem[name='{answer_id}']")
+            if await specific_item.count() > 0:
+                print(f"🎯 定位到指定回答: {answer_id}")
+                container = specific_item.first
+            else:
+                zop_item = page.locator(f".ContentItem.AnswerItem[data-zop*='{answer_id}']")
+                if await zop_item.count() > 0:
+                    print(f"🎯 通过 data-zop 定位到指定回答: {answer_id}")
+                    container = zop_item.first
+
         title = await self._safe_text(page, "h1.QuestionHeader-title", "未知问题")
         
         # 尝试多种作者选择器
-        author = await self._safe_text(page, ".AuthorInfo-name .UserLink-link", "未知作者")
+        author = await self._safe_text(container, ".AuthorInfo-name .UserLink-link", "未知作者")
         if author == "未知作者":
-            author = await self._safe_text(page, ".AuthorInfo span.UserLink-Name", "未知作者")
+            author = await self._safe_text(container, ".AuthorInfo span.UserLink-Name", "未知作者")
         
-        date = await self._extract_date(page)
+        date = await self._extract_date(container)
         
-        html = await page.locator(".QuestionAnswer-content .RichText").first.inner_html()
+        if container != page:
+             html = await container.locator(".RichText").first.inner_html()
+        else:
+             html = await page.locator(".QuestionAnswer-content .RichText").first.inner_html()
         
         return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
 
-    async def _extract_date(self, page) -> str:
+    async def _extract_date(self, element) -> str:
         from datetime import date as dt_date
         try:
-            meta = await page.locator('meta[itemprop="datePublished"]').get_attribute("content", timeout=2000)
+            # 1. 尝试找 meta (适用于 Page 或包含 meta 的容器)
+            meta = await element.locator('meta[itemprop="datePublished"]').get_attribute("content", timeout=500)
             if meta: return meta[:10]
         except: pass
+        
+        try:
+            # 2. 尝试找 "发布于 ..." 文本 (适用于 AnswerItem)
+            text = await element.locator(".ContentItem-time").first.inner_text(timeout=500)
+            m = re.search(r"(\d{4}-\d{2}-\d{2})", text)
+            if m: return m.group(1)
+        except: pass
+
         return dt_date.today().isoformat()
 
     async def _safe_text(self, page, selector: str, default: str) -> str:
