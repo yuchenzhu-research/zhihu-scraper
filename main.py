@@ -263,15 +263,24 @@ async def main() -> None:
             urls = list(BATCH_URLS)
             BATCH_URLS.clear()
         else:
-            # 使用 Questionary 获取输入 (异步)
-            answer = await questionary.text("🔗 请输入知乎链接 (或 'q' 退出):").ask_async()
-            if not answer or answer.lower() == 'q':
+            # 增加微小延迟，确保 Banner 输出完全刷新
+            await asyncio.sleep(0.1)
+            # 简化 Prompt 文本，确保在各种终端中渲染稳定
+            answer = await questionary.text("🔗 输入知乎链接 (或 'q' 退出):").ask_async()
+            
+            # 如果用户直接按回车(empty)或者输入多余空格，不应退出，应重新提示
+            if answer is None or (answer.strip().lower() == 'q'):
                 console.print("[bold cyan]👋 See you next time![/bold cyan]")
                 break
+            
+            if not answer.strip():
+                continue
+                
             urls = extract_urls(answer)
             
         if not urls:
-            console.print("[red]❌ 未识别到有效链接，请重试[/red]")
+            if answer and answer.strip().lower() != 'q':
+                console.print("[red]❌ 未识别到有效链接，请重试[/red]")
             continue
             
         # 处理链接
