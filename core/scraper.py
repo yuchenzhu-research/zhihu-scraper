@@ -45,9 +45,9 @@ def get_auto_proxy() -> Optional[str]:
 # 全局配置
 # 自动检测本地代理 (127.0.0.1:xxxx)
 PROXY_SERVER = get_auto_proxy()
-USER_DATA_DIR = Path(__file__).parent / "browser_data"
-STEALTH_JS_PATH = Path(__file__).parent / "stealth.min.js"
-ZHIHU_JS_PATH = Path(__file__).parent / "libs" / "z_core.js"
+USER_DATA_DIR = Path(__file__).parent.parent / "browser_data"
+STEALTH_JS_PATH = Path(__file__).parent.parent / "static" / "stealth.min.js"
+ZHIHU_JS_PATH = Path(__file__).parent.parent / "static" / "z_core.js"
 
 
 class ZhihuDownloader:
@@ -108,7 +108,7 @@ class ZhihuDownloader:
 
     def _load_cookies(self) -> List[dict]:
         """从 cookies.json 加载 Cookie。过滤掉占位符。"""
-        cookie_path = Path(__file__).parent / "cookies.json"
+        cookie_path = Path(__file__).parent.parent / "cookies.json"
         if cookie_path.exists():
             try:
                 with open(cookie_path, "r", encoding="utf-8") as f:

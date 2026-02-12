@@ -14,8 +14,8 @@ from datetime import datetime
 from pathlib import Path
 
 from typing import Optional
-from converter import ZhihuConverter
-from scraper import ZhihuDownloader
+from core.converter import ZhihuConverter
+from core.scraper import ZhihuDownloader
 
 # ==========================================
 # 批量下载列表 (不想用命令行输入时，在这里填入链接)
