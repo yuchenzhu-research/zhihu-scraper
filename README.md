@@ -47,20 +47,10 @@ playwright install chromium
 ```
 
 ### 2. 配置权限 (推荐)
-虽然本工具支持游客模式，但建议配置 Cookie 以解锁完整功能（如抓取更多回答、查看完整内容）。
+虽然本工具支持游客模式，但建议配置 Cookie 以解锁完整功能。
 
-1. 在项目根目录创建 `cookies.json`。
-2. 填入你的知乎 Cookie（至少包含 `z_c0`）：
-   ```json
-   [
-     {
-       "name": "z_c0",
-       "value": "你的Cookie值(2.0|...)",
-       "domain": ".zhihu.com",
-       "path": "/"
-     }
-   ]
-   ```
+1. 在项目根目录，将 `cookies.example.json` 复制一份并重命名为 `cookies.json`。
+2. 在 `cookies.json` 中填入你的知乎 Cookie（至少包含 `z_c0` 和 `d_c0`）。
 > **提示**: 你可以使用 EditThisCookie 插件导出，或者按 F12 在网络请求头中找到 `cookie` 字段。
 
 ### 3. 运行爬虫
