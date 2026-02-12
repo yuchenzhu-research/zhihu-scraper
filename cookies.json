@@ -1,7 +1,13 @@
 [
     {
         "name": "z_c0",
-        "value": "YOUR_COOKIE_HERE",
+        "value": "YOUR_Z_C0_HERE",
+        "domain": ".zhihu.com",
+        "path": "/"
+    },
+    {
+        "name": "d_c0",
+        "value": "YOUR_D_C0_HERE",
         "domain": ".zhihu.com",
         "path": "/"
     }
