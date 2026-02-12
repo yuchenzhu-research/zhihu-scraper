@@ -11,7 +11,7 @@ __pycache__/
 data/
 browser_data/
 log.txt
-cookies.json
+cookies copy.json
 debug_page.html
 debug_scroll.py
 debug_user_data/
