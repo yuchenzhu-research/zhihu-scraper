@@ -11,7 +11,7 @@ __pycache__/
 data/
 browser_data/
 log.txt
-cookies.json
+# cookies.json (removed temporarily to push template)
 
 *.bak
 debug_page.html
