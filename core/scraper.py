@@ -504,13 +504,14 @@ class ZhihuDownloader:
 
                 # 尝试切换排序
                 if no_change_count == 4:
-                    print("🔄 尝试切换排序方式 (按时间排序)...")
+                    # 降低日志级别或修改为 rich print (如果引入了)
+                    # print("🔄 尝试切换排序方式 (按时间排序)...") 
                     await self._switch_sort_order(page)
                     no_change_count = 0 
                     continue
 
                 if no_change_count >= 8:
-                    print("⚠️  已滚动到底部")
+                    # print("⚠️  已滚动到底部")
                     break
             else:
                 no_change_count = 0
