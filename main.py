@@ -45,36 +45,26 @@ def extract_urls(text: str) -> list[str]:
     return list(dict.fromkeys(re.findall(pattern, text)))
 
 def parse_question_options(user_input: str) -> dict:
-    """解析用户对问题抓取的选项 (Top N 或 Range 或 智能模式)。"""
+    """
+    解析用户对问题抓取的选项。
+    - 空或回车: 默认抓取前 3 个 (稳定)
+    - 数字 N: 抓取前 N 个 (自定义)
+    """
     user_input = user_input.lower().strip()
     
-    # 1. 默认
+    # 1. 默认 (Auto Mode)
     if not user_input:
-        return {"start": 0, "limit": 20}
+        return {"start": 0, "limit": 3}
     
-    # 2. 智能模式 (Smart Stop)
-    if user_input == "s":
-        return {"start": 0, "limit": 10, "smart_stop": True}
-    
-    # 3. Range: 10-20
-    if "-" in user_input:
-        try:
-            parts = user_input.split("-")
-            start = max(0, int(parts[0]) - 1)  # 转为 0-indexed
-            end = int(parts[1])
-            return {"start": start, "limit": max(1, end - start)}
-        except:
-            pass
-            
-    # 4. Top N: 50
+    # 2. 自定义数字 (Custom Mode)
     try:
         limit = int(user_input)
         return {"start": 0, "limit": limit}
     except:
         pass
         
-    print("⚠️  输入格式错误，使用默认设置 (Top 20)")
-    return {"start": 0, "limit": 20}
+    print("⚠️  输入格式错误，使用默认设置 (Top 3)")
+    return {"start": 0, "limit": 3}
 
 
 # ── 流水线 ───────────────────────────────────────────────────
@@ -167,7 +157,7 @@ async def main() -> None:
     print("  - 专栏文章: https://zhuanlan.zhihu.com/p/xxxxxxx")
     print("  - 问题回答: https://www.zhihu.com/question/xxx/answer/xxx")
     print("  - 完整问题: https://www.zhihu.com/question/xxx")
-    print("\n💡 提示: 如果抓取回答不全，请在 cookies.json 中填入 Cookie (尤其是 z_c0)")
+    print("\n💡 提示: 默认抓取 3 条最稳定。如需大量抓取，请在 cookies.json 中填入 z_c0")
     print("输入 q 退出\n")
 
     should_prompt = True
@@ -213,17 +203,12 @@ async def main() -> None:
                 try:
                     print(f"⚙️  检测到问题链接: {url}")
                     print("   请选择抓取模式:")
-                    print("   [Enter] 默认 (前 20 个)")
-                    print("   [  s  ] 智能模式 (赞数比例停止，最多 10 条)")
-                    print("   [ 50  ] 抓取前 50 个")
-                    print("   [10-20] 抓取第 10 到 20 个")
+                    print("   [Enter] 自动模式 (抓取前 3 个高赞回答，最稳定)")
+                    print("   [ N   ] 自定义模式 (抓取前 N 个，未登录可能失败)")
                     print("👉 请输入: ", end="", flush=True)
                     opt_input = sys.stdin.readline().strip()
                     scrape_config = parse_question_options(opt_input)
-                    if scrape_config.get("smart_stop"):
-                        print(f"✅ 已设定: 智能抓取模式")
-                    else:
-                        print(f"✅ 已设定: Start={scrape_config['start']}, Limit={scrape_config['limit']}")
+                    print(f"✅ 已设定: 抓取前 {scrape_config['limit']} 个回答")
                 except (KeyboardInterrupt, EOFError):
                     print("\n🛑 取消操作")
                     continue

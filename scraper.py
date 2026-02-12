@@ -106,12 +106,18 @@ class ZhihuDownloader:
     # ── 页面抓取 Core ──────────────────────────────────────────
 
     def _load_cookies(self) -> list[dict]:
-        """从 cookies.json 加载 Cookie。"""
+        """从 cookies.json 加载 Cookie。过滤掉占位符。"""
         cookie_path = Path(__file__).parent / "cookies.json"
         if cookie_path.exists():
             try:
                 with open(cookie_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    cookies = json.load(f)
+                    # 过滤掉带有占位符的 Cookie
+                    valid_cookies = [
+                        c for c in cookies 
+                        if c.get("value") and c.get("value") != "YOUR_COOKIE_HERE"
+                    ]
+                    return valid_cookies
             except Exception as e:
                 print(f"⚠️  加载 cookies.json 失败: {e}")
         return []
@@ -259,12 +265,11 @@ class ZhihuDownloader:
 
         return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
 
-    async def _extract_question(self, page, start: int = 0, limit: int = 20, smart_stop: bool = False) -> list[dict]:
+    async def _extract_question(self, page, start: int = 0, limit: int = 3) -> list[dict]:
         """
         提取问题下的多个回答。
         :param start: 从第几个回答开始抓 (0-indexed)
-        :param limit: 抓取多少个
-        :param smart_stop: 开启后按照赞数智能停止 (5% 阈值, <100 阈值, 最多 10 条)
+        :param limit: 抓取多少个 (默认 3 个)
         """
         text = await page.locator("body").inner_text()
         if "40362" in text or "请求存在异常" in text:
@@ -276,7 +281,7 @@ class ZhihuDownloader:
         except:
             pass
         
-        # 尝试点击 "查看全部" 按钮
+        # 尝试点击 "查看全部" 按钮 (如果是 auto 模式且 limit 较小，其实可以不点，为了保险还是点一下)
         await self._click_view_all(page)
 
         # 等待至少一个回答项加载
@@ -287,14 +292,10 @@ class ZhihuDownloader:
 
         # 智能滚动逻辑
         target_count = start + limit
-        if smart_stop:
-            print("🧠 开启智能抓取模式 (赞数比例/阈值/数量限制)")
-        else:
-            print(f"🎯 目标: 抓取第 {start+1} ~ {target_count} 个回答")
+        print(f"🎯 目标: 抓取前 {target_count} 个回答")
 
-        max_upvotes = 0
         prev_count = 0
-        max_scroll_attempts = 50 
+        max_scroll_attempts = 30  # 稍微减少尝试次数，避免死循环
         no_change_count = 0
 
         while True:
@@ -302,39 +303,12 @@ class ZhihuDownloader:
             count = await answers.count()
             print(f"🔄 当前加载了 {count} 个回答...")
 
-            if count > 0:
-                # 获取最大赞同数 (用于智能停止)
-                if max_upvotes == 0:
-                    first_item = answers.nth(0)
-                    up_text = await self._safe_text(first_item, "button.VoteButton--up", "0")
-                    max_upvotes = self._parse_upvotes(up_text)
-
-                if smart_stop:
-                    # 检查最后一个已加载回答的赞同数
-                    last_item = answers.nth(count - 1)
-                    last_up_text = await self._safe_text(last_item, "button.VoteButton--up", "0")
-                    last_up = self._parse_upvotes(last_up_text)
-                    
-                    # 智能停止条件 (Or 逻辑)
-                    if count >= 10:
-                        print("🛑 智能停止：已抓取 10 条内容")
-                        target_count = count
-                        break
-                    if last_up < 100:
-                        print(f"🛑 智能停止：赞同数 ({last_up}) 低于 100")
-                        target_count = count
-                        break
-                    if max_upvotes > 0 and last_up < max_upvotes * 0.05:
-                        print(f"🛑 智能停止：赞同数 ({last_up}) 低于最大值 ({max_upvotes}) 的 5%")
-                        target_count = count
-                        break
-
-            if not smart_stop and count >= target_count:
+            if count >= target_count:
                 break
             
             if count == prev_count:
                 no_change_count += 1
-                if no_change_count >= 5:
+                if no_change_count >= 3: # 3次没动静就停，更灵敏
                     print("⚠️  已滚动到底部或无法加载更多")
                     break
             else:
@@ -343,10 +317,10 @@ class ZhihuDownloader:
             prev_count = count
             
             # 滚动
-            await page.mouse.wheel(0, 15000)
+            await page.mouse.wheel(0, 10000)
             await asyncio.sleep(0.5)
             await page.keyboard.press("End")
-            await asyncio.sleep(1.2) # 稍微加长等待，防止请求过快
+            await asyncio.sleep(1.0)
             
             max_scroll_attempts -= 1
             if max_scroll_attempts <= 0:
@@ -407,7 +381,12 @@ class ZhihuDownloader:
         if "40362" in text:
             raise Exception("触发知乎反爬 (40362)")
 
-        await page.wait_for_selector(".QuestionAnswer-content", timeout=10000)
+        # 增加等待时间，改用更宽泛的选择器，避免 strictly waiting for .QuestionAnswer-content
+        try:
+            # 优先等待回答主体，给 15s 超时
+            await page.wait_for_selector(".ContentItem.AnswerItem", timeout=15000)
+        except:
+            print("⚠️  等待回答内容超时，尝试直接解析...")
         
         # 尝试从 URL 提取 answer_id
         answer_id = None
