@@ -12,6 +12,8 @@ data/
 browser_data/
 log.txt
 cookies copy.json
+cookies.json.bak
+*.bak
 debug_page.html
 debug_scroll.py
 debug_user_data/
