@@ -756,29 +756,78 @@ class ZhihuDownloader:
     # ── 图片下载 ──────────────────────────────────────────────
 
     @classmethod
-    async def download_images(cls, img_urls: List[str], dest: Path) -> dict[str, str]:
+    async def download_images(
+        cls,
+        img_urls: List[str],
+        dest: Path,
+        *,
+        concurrency: int = 4,
+        timeout: float = 30.0,
+    ) -> dict[str, str]:
+        """
+        并发下载图片
+
+        Args:
+            img_urls: 图片 URL 列表
+            dest: 保存目录
+            concurrency: 并发数 (默认 4)
+            timeout: 超时时间 (秒)
+        """
+        if not img_urls:
+            return {}
+
         dest.mkdir(parents=True, exist_ok=True)
         url_to_local: dict[str, str] = {}
 
-        # 配置代理
-        limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        # 从配置读取并发数
+        try:
+            cfg = get_config()
+            concurrency = cfg.crawler.images.concurrency
+            timeout = cfg.crawler.images.timeout
+        except Exception:
+            pass  # 使用默认值
+
+        limits = httpx.Limits(
+            max_keepalive_connections=concurrency,
+            max_connections=concurrency * 2,
+        )
+
         async with httpx.AsyncClient(
             headers=cls._IMG_HEADERS,
-            timeout=30.0,
+            timeout=timeout,
             follow_redirects=True,
-            proxy=PROXY_SERVER,  # 图片下载也走代理
+            proxy=PROXY_SERVER,
             limits=limits,
         ) as client:
-            tasks = [cls._download_one(client, url, dest, url_to_local) for url in img_urls]
+            # 使用 Semaphore 限制并发
+            semaphore = asyncio.Semaphore(concurrency)
+
+            async def download_with_limit(url: str) -> None:
+                async with semaphore:
+                    await cls._download_one(client, url, dest, url_to_local)
+
+            tasks = [download_with_limit(url) for url in img_urls]
             await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 统计成功/失败数
+        success = sum(1 for v in url_to_local.values() if v)
+        log = get_logger()
+        log.info(
+            "images_downloaded",
+            total=len(img_urls),
+            success=success,
+            failed=len(img_urls) - success,
+        )
 
         return url_to_local
 
     @staticmethod
     async def _download_one(client, url, dest, mapping):
+        """下载单张图片"""
         try:
-            if url.startswith("//"): url = "https:" + url
-            
+            if url.startswith("//"):
+                url = "https:" + url
+
             # 过滤不需要的图片
             if "data:image" in url or "equation" in url:
                 return
@@ -787,13 +836,16 @@ class ZhihuDownloader:
             resp.raise_for_status()
 
             ext = Path(urlparse(url).path).suffix or ".jpg"
-            if len(ext) > 5: ext = ".jpg"
-            
+            if len(ext) > 5:
+                ext = ".jpg"
+
             fname = hashlib.md5(url.encode()).hexdigest()[:12] + ext
             fpath = dest / fname
 
             fpath.write_bytes(resp.content)
             # 必须用 / 分隔，要在 Markdown 里用
             mapping[url] = f"images/{fname}"
-        except Exception:
-            pass
+        except Exception as e:
+            # 静默失败，记录到日志
+            logger = get_logger()
+            logger.warning("image_download_failed", url=url[:50], error=str(e)[:50])
