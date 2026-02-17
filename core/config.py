@@ -67,8 +67,21 @@ class ScrollConfig:
 class HumanizeConfig:
     """人类行为模拟配置"""
     enabled: bool = True
-    min_delay: float = 0.5
-    max_delay: float = 2.0
+    min_delay: float = 1.0      # 最小请求间隔 (秒)
+    max_delay: float = 3.0      # 最大请求间隔 (秒)
+    scroll_delay: float = 0.5   # 滚动后等待 (秒)
+    page_load_delay: float = 2.0  # 页面加载后等待 (秒)
+
+    @classmethod
+    def from_dict(cls, raw: Dict[str, Any]) -> "HumanizeConfig":
+        """从字典构建，支持向后兼容"""
+        return cls(
+            enabled=raw.get("enabled", True),
+            min_delay=raw.get("min_delay", 1.0),
+            max_delay=raw.get("max_delay", 3.0),
+            scroll_delay=raw.get("scroll_delay", 0.5),
+            page_load_delay=raw.get("page_load_delay", 2.0),
+        )
 
 @dataclass
 class ImagesConfig:
@@ -127,7 +140,7 @@ class Config:
         crawler = CrawlerConfig(
             retry=RetryConfig(**crawler_raw.get("retry", {})),
             scroll=ScrollConfig(**crawler_raw.get("scroll", {})),
-            humanize=HumanizeConfig(**crawler_raw.get("humanize", {})),
+            humanize=HumanizeConfig.from_dict(crawler_raw.get("humanize", {})),
             images=ImagesConfig(**crawler_raw.get("images", {})),
         )
 
@@ -305,3 +318,121 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
 def get_logger(name: str = "zhihu-scraper") -> structlog.BoundLoggerBase:
     """获取结构化日志记录器"""
     return structlog.get_logger(name)
+
+
+# ============================================================
+# 人类行为模拟 (Humanize)
+# ============================================================
+
+import asyncio
+from random import uniform
+from contextlib import asynccontextmanager
+
+
+class Humanizer:
+    """
+    人类行为模拟器 - 随机延迟以模拟真人操作
+
+    用法:
+        await humanize.random_delay()      # 随机请求间隔
+        await humanize.page_load()         # 页面加载等待
+        await humanize.scroll()            # 滚动后等待
+    """
+
+    def __init__(self, config: Optional[HumanizeConfig] = None):
+        self._config = config
+
+    @property
+    def config(self) -> HumanizeConfig:
+        """获取配置，单例模式避免重复加载"""
+        if self._config is None:
+            try:
+                cfg = get_config()
+                self._config = cfg.crawler.humanize
+            except Exception:
+                # 如果配置加载失败，使用安全默认值
+                self._config = HumanizeConfig()
+        return self._config
+
+    def random_delay(self, min_delay: Optional[float] = None, max_delay: Optional[float] = None) -> asyncio.sleep:
+        """
+        随机延迟，模拟人类请求间隔
+
+        Args:
+            min_delay: 最小延迟（秒），默认从配置读取
+            max_delay: 最大延迟（秒），默认从配置读取
+        """
+        if not self.config.enabled:
+            return  # 禁用时不做延迟
+
+        min_d = min_delay if min_delay is not None else self.config.min_delay
+        max_d = max_delay if max_delay is not None else self.config.max_delay
+
+        delay = uniform(min_d, max_d)
+        return asyncio.sleep(delay)
+
+    async def page_load(self) -> None:
+        """页面加载后等待，模拟阅读/渲染时间"""
+        if not self.config.enabled:
+            return
+
+        delay = self.config.page_load_delay
+        await asyncio.sleep(delay)
+
+    async def scroll(self) -> None:
+        """滚动后等待，模拟内容加载"""
+        if not self.config.enabled:
+            return
+
+        delay = self.config.scroll_delay
+        await asyncio.sleep(delay)
+
+    async def before_action(self, action: str = "request") -> None:
+        """
+        操作前等待
+
+        Args:
+            action: 操作类型 (request, click, scroll, type)
+        """
+        if not self.config.enabled:
+            return
+
+        delays = {
+            "request": (self.config.min_delay, self.config.max_delay),
+            "click": (0.2, 0.5),
+            "scroll": (self.config.scroll_delay, self.config.scroll_delay + 0.3),
+            "type": (0.05, 0.15),
+        }
+
+        min_d, max_d = delays.get(action, delays["request"])
+        await asyncio.sleep(uniform(min_d, max_d))
+
+
+# 全局 Humanizer 实例
+_humanizer: Optional[Humanizer] = None
+
+
+def get_humanizer() -> Humanizer:
+    """获取全局 Humanizer 实例"""
+    global _humanizer
+    if _humanizer is None:
+        try:
+            cfg = get_config()
+            _humanizer = Humanizer(cfg.crawler.humanize)
+        except Exception:
+            _humanizer = Humanizer()
+    return _humanizer
+
+
+@asynccontextmanager
+async def humanize(action: str = "request"):
+    """
+    上下文管理器形式的延迟
+
+    用法:
+        async with humanize("request"):
+            await page.goto(url)
+    """
+    h = get_humanizer()
+    await h.before_action(action)
+    yield

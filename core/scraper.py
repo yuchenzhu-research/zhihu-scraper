@@ -22,7 +22,7 @@ import httpx
 import execjs
 from playwright.async_api import async_playwright, Playwright
 
-from .config import get_config, get_logger
+from .config import get_config, get_logger, get_humanizer, HumanizeConfig
 
 def get_auto_proxy() -> Optional[str]:
     """
@@ -229,16 +229,20 @@ class ZhihuDownloader:
                 page.set_default_timeout(30000)
 
                 # 4. 访问页面
+                # 获取人类行为模拟器
+                humanizer = get_humanizer()
+
                 print(f"🌍 访问: {self.url}")
-                # 随机延迟，模拟真人
-                await asyncio.sleep(1)
-                
+                # 随机延迟，模拟真人访问行为
+                await humanizer.before_action("request")
+
                 await page.goto(self.url, wait_until="domcontentloaded")
-                
-                # 等待 JS 执行和反爬检测通过
-                await page.wait_for_timeout(3000)
+
+                # 等待 JS 执行和反爬检测通过 (使用配置的页面加载延迟)
+                await humanizer.page_load()
 
                 # 5. 处理弹窗
+                await humanizer.before_action("click")
                 await self._dismiss_popup(page)
 
                 # 6. 提取内容
@@ -542,12 +546,14 @@ class ZhihuDownloader:
 
     async def _scroll_step(self, page):
         """执行一次滚动动作。"""
+        humanizer = get_humanizer()
+
         # 使用 JS 滚动到底部，通常比单纯鼠标滚轮更有效触发加载
         await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        await asyncio.sleep(1)
+        await humanizer.scroll()
         # 配合 End 键
         await page.keyboard.press("End")
-        await asyncio.sleep(1)
+        await humanizer.scroll()
 
     async def _get_card_info(self, item) -> dict:
         """获取回答卡片的元数据用于匹配。"""
@@ -592,6 +598,7 @@ class ZhihuDownloader:
 
     async def _click_view_all(self, page):
         """点击 '查看全部' 按钮的封装。"""
+        humanizer = get_humanizer()
         candidates = [
             "button.QuestionMainAction-ViewAll",
             "a.QuestionMainAction-ViewAll",
@@ -599,21 +606,22 @@ class ZhihuDownloader:
             "div.Question-mainColumn button:has-text('更多回答')",
             "div.Question-mainColumn button:has-text('展开阅读全文')",
             "div.Question-mainColumn button:has-text('显示全部')",
-             # 兜底：查找所有包含特定文本的按钮
+            # 兜底：查找所有包含特定文本的按钮
             "button:has-text('View All')",
             "button:has-text('More Answers')",
             "button:has-text('显示全部')"
         ]
-        
+
         for sel in candidates:
             try:
                 # 使用 first 避免多匹配报错
                 btn = page.locator(sel).first
                 if await btn.count() > 0 and await btn.is_visible():
                     print(f"👆 尝试点击: {sel}")
+                    await humanizer.before_action("click")
                     await btn.click()
-                    # 等待内容加载
-                    await asyncio.sleep(2)
+                    # 使用配置的页面加载延迟
+                    await humanizer.page_load()
                     return True
             except:
                 pass
@@ -621,6 +629,7 @@ class ZhihuDownloader:
 
     async def _switch_sort_order(self, page):
         """切换排序方式（默认 -> 按时间），有时能解决加载卡顿问题。"""
+        humanizer = get_humanizer()
         try:
             # 1. 找到排序按钮 (通常是 '默认排序')
             sort_btn = page.locator("button:has-text('默认排序')").first
@@ -629,18 +638,21 @@ class ZhihuDownloader:
                 return
 
             print("👆 点击 '默认排序'...")
+            await humanizer.before_action("click")
             await sort_btn.click()
-            await asyncio.sleep(1)
+            await humanizer.page_load()
 
             # 2. 点击 '按时间排序'
             time_sort = page.locator("button:has-text('按时间排序')").first
             if await time_sort.count() > 0:
                 print("👆 切换到 '按时间排序'...")
+                await humanizer.before_action("click")
                 await time_sort.click()
-                await asyncio.sleep(3) # 等待刷新
+                await humanizer.page_load()
             else:
                  print("⚠️ 未找到 '按时间排序' 选项")
                  # 关闭菜单 (点别处)
+                 await humanizer.before_action("click")
                  await page.mouse.click(0, 0)
         except Exception as e:
              print(f"⚠️ 切换排序失败: {e}")

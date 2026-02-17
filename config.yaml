@@ -49,11 +49,14 @@ crawler:
     pause: 1000              # 每次滚动后等待 (ms)
     viewport_height: 800     # 视口高度（用于渐进加载）
 
-  # 智能延迟 (模拟真人)
+  # 智能延迟 (模拟真人行为)
+  # 重要: 不要设置太快，避免触发反爬
   humanize:
     enabled: true
-    min_delay: 0.5           # 最小请求间隔 (秒)
-    max_delay: 2.0           # 最大请求间隔 (秒)
+    min_delay: 1.0           # 最小请求间隔 (秒)，建议 ≥1s
+    max_delay: 3.0           # 最大请求间隔 (秒)，建议 ≤5s
+    scroll_delay: 0.5        # 滚动后等待 (秒)
+    page_load_delay: 2.0     # 页面加载后等待 (秒)
 
   # 图片下载配置
   images:
