@@ -1,27 +1,44 @@
 # 🕷️ Zhihu-Scraper
 
-<div align="left">
+<div align="center">
+
+[![Python Version](https://img.shields.io/pypi/pyversions/zhihu-scraper.svg?style=flat-square&logo=python)](https://pypi.org/project/zhihu-scraper/)
+[![License](https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper.svg?style=flat-square)](https://opensource.org/licenses/MIT)
+[![Stars](https://img.shields.io/github/stars/yuchenzhu-research/zhihu-scraper.svg?style=flat-square&logo=github)](https://github.com/yuchenzhu-research/zhihu-scraper/stargazers)
+[![Issues](https://img.shields.io/github/issues/yuchenzhu-research/zhihu-scraper.svg?style=flat-square)](https://github.com/yuchenzhu-research/zhihu-scraper/issues)
 
 **高保真知乎内容离线备份工具** · **LaTeX 公式完美渲染** · **Markdown 导出**
 
+</div>
+
 ---
 
-### 📦 安装
+## 📦 安装
 
 ```bash
+# 方式一：pip 安装（推荐）
+pip install zhihu-scraper
+
+# 方式二：源码安装
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
-python -m venv venv && source venv/bin/activate
 pip install -e ".[cli]"
+
+# 安装浏览器
 playwright install chromium
 ```
 
+> **依赖说明**：需要 Python 3.10+，推荐使用 [uv](https://github.com/astral-sh/uv) 或 [conda](https://conda.io/) 管理环境。
+
 ---
 
-### ⚡ 快速开始
+## ⚡ 快速开始
 
 ```bash
-# 抓取问题 (前 10 个回答)
+# 交互式界面（推荐新手）
+python main.py
+
+# 命令行抓取单个链接
 zhihu fetch "https://www.zhihu.com/question/123456" -n 10
 
 # 批量抓取
@@ -33,21 +50,22 @@ zhihu config --show
 
 ---
 
-### ✨ 核心特性
+## ✨ 核心特性
 
-| | |
-|:--|:--|
-| 🎓 | **LaTeX 公式** - 支持 `*{N}{X}` 复杂矩阵 |
-| 🖼️ | **图片本地化** - 自动下载高清原图 |
-| 🧹 | **智能去噪** - 自动剔除广告和噪音 |
-| 🤖 | **双重界面** - 交互式 CLI + 命令行 |
-| 🛡️ | **反爬对抗** - Stealth JS + 随机延迟 |
+| 特性 | 描述 |
+|:---|:---|
+| 🎓 **LaTeX 渲染** | 支持复杂矩阵公式，自动修复 KaTeX 兼容问题 |
+| 🖼️ **图片本地化** | 自动下载高清原图，支持并发加速 |
+| 🧹 **智能去噪** | 广告、弹窗自动过滤，保留纯净内容 |
+| ⚡ **双重界面** | 交互式 TUI + Typer CLI，随心切换 |
+| 🛡️ **反爬对抗** | Stealth JS + 随机延迟，模拟真人行为 |
+| 📊 **并发控制** | 可控并发数，避免触发频率限制 |
 
 ---
 
-### 📖 使用指南
+## 📖 使用指南
 
-**CLI 命令**
+### CLI 命令
 
 | 命令 | 说明 |
 |:---|:---|
@@ -56,7 +74,7 @@ zhihu config --show
 | `zhihu config` | 配置管理 |
 | `zhihu check` | 环境检查 |
 
-**抓取选项**
+### 抓取选项
 
 | 选项 | 说明 | 默认 |
 |:---|:---|:---|
@@ -68,66 +86,77 @@ zhihu config --show
 
 ---
 
-### ⚙️ 配置 (config.yaml)
+## ⚙️ 配置
+
+创建 `config.yaml` 自定义行为：
 
 ```yaml
-humanize:           # 防反爬
-  min_delay: 1.0    # 最小请求间隔 (秒)
-  max_delay: 3.0    # 最大请求间隔 (秒)
+zhihu:
+  cookies: ./cookies.json  # 可选，登录后可抓取更多内容
 
-browser:           # 浏览器
-  headless: true
-  timeout: 30000
+crawler:
+  humanize:
+    enabled: true
+    min_delay: 1.0   # 最小请求间隔 (秒)
+    max_delay: 3.0   # 最大请求间隔 (秒)
 
-images:            # 图片下载
-  concurrency: 4
-  timeout: 30.0
+  images:
+    concurrency: 4
+    timeout: 30.0
+
+output:
+  directory: data
+  format: markdown
 ```
 
 ---
 
-### 📂 项目结构
+## 📂 项目结构
 
 ```
 .
-├── main.py              # 交互式 CLI
-├── cli/app.py           # Typer 命令行
+├── main.py              # 交互式 TUI 入口
+├── cli/app.py           # Typer CLI 命令
 ├── core/
-│   ├── scraper.py       # 爬虫引擎
-│   ├── converter.py     # HTML → Markdown
-│   ├── config.py        # 配置 + 日志
-│   └── errors.py        # 异常体系
+│   ├── scraper.py       # Playwright 爬虫引擎
+│   ├── converter.py     # HTML → Markdown 转换器
+│   ├── config.py        # 配置 + 日志 + Humanizer
+│   └── errors.py        # 异常分类体系
 ├── static/
-│   ├── stealth.min.js
-│   └── z_core.js
-├── config.yaml
-├── pyproject.toml
-└── cookies.json
+│   ├── stealth.min.js   # 浏览器指纹伪装
+│   └── z_core.js        # 签名算法
+├── config.yaml          # 项目配置
+├── pyproject.toml       # 依赖管理
+└── cookies.json         # 知乎登录凭证
 ```
 
 ---
 
-### 🛠️ 技术栈
+## 🛠️ 技术栈
 
-```
-Playwright    ·    httpx    ·    BeautifulSoup4
-markdownify   ·    Rich     ·    Typer
-structlog     ·    PyYAML
-```
+<div align="center">
+
+**[Playwright](https://playwright.dev/)** · **[httpx](https://www.python-httpx.org/)** · **[Rich](https://github.com/Textualize/rich)**
+
+**[Typer](https://typer.tiangolo.com/)** · **[markdownify](https://github.com/matthewwithanm/python-markdownify)** · **[structlog](https://www.structlog.org/)**
+
+</div>
 
 ---
 
-### ⚠️ 免责声明
+## ⚠️ 免责声明
 
-1. 仅用于计算机技术研究，严禁商业盈利
-2. 使用者应遵守目标网站协议
-3. 开发者不对不当使用承担责任
-4. 请尊重原创，仅个人学习收藏
+1. 本项目仅供学术研究和学习交流使用
+2. 使用者应遵守知乎相关服务协议
+3. 请勿用于任何商业用途
+4. 因使用本项目产生的法律纠纷，由使用者自行承担
 
 ---
 
 <div align="center">
 
 **如果对你有帮助，请 ⭐ Star 支持！**
+
+[![Stargazers over time](https://stars.medv.io/yuchenzhu-research/zhihu-scraper.svg)](https://stars.medv.io/yuchenzhu-research/zhihu-scraper)
 
 </div>

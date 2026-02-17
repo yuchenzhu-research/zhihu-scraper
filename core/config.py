@@ -274,44 +274,29 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
     else:
         log_config = config
 
-    # 解析日志级别
+    # 配置标准日志（防止第三方库日志混乱）
     import logging as stdlib_logging
     log_level = getattr(stdlib_logging, log_config.level.upper(), stdlib_logging.INFO)
+    stdlib_logging.basicConfig(
+        level=log_level,
+        format="%(message)s",
+    )
 
-    # 处理器列表
+    # structlog 配置 - 新 API
     processors = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
-    # 输出格式
     if log_config.format == "json":
         processors.append(structlog.processors.JSONRenderer())
     else:
-        # 美观的控制台输出
         processors.append(structlog.dev.ConsoleRenderer())
 
-    # 配置 structlog
     structlog.configure(
         processors=processors,
-        wrapper_class=stdlib_logging.Logger,
-        logger_factory=structlog.PrintLoggerFactory(),
-        cache_logger_on_first_use=False,
-    )
-
-    # 配置标准日志（防止第三方库日志混乱）
-    stdlib_logging.basicConfig(
-        level=log_level,
-        format="%(message)s" if log_config.format != "json" else "%(message)s",
-    )
-
-    log = structlog.get_logger()
-    log.info(
-        "logging_configured",
-        level=log_config.level,
-        format=log_config.format,
-        file=log_config.file,
+        wrapper_class=structlog.make_filtering_bound_logger(log_level),
     )
 
 
