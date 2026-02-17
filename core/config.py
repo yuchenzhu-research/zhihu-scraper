@@ -315,11 +315,6 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
     )
 
 
-def get_logger(name: str = "zhihu-scraper") -> structlog.BoundLoggerBase:
-    """获取结构化日志记录器"""
-    return structlog.get_logger(name)
-
-
 # ============================================================
 # 人类行为模拟 (Humanize)
 # ============================================================
@@ -327,6 +322,11 @@ def get_logger(name: str = "zhihu-scraper") -> structlog.BoundLoggerBase:
 import asyncio
 from random import uniform
 from contextlib import asynccontextmanager
+
+
+def get_logger(name: str = "zhihu-scraper") -> structlog.BoundLoggerBase:
+    """获取结构化日志记录器"""
+    return structlog.get_logger(name)
 
 
 class Humanizer:

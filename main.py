@@ -30,7 +30,7 @@ cfg = get_config()  # 加载配置
 log = get_logger()  # 获取日志记录器
 
 log.info("application_started", proxy=bool(PROXY_SERVER))
-from core.config import get_config, get_logger  # 新增日志系统
+
 
 # ==========================================
 # 核心配色系统 (Theme Tokens)
@@ -58,7 +58,6 @@ q_style = Style([
     ('separator', f'fg:{THEME["dim"]}'),
     ('instruction', f'fg:{THEME["dim"]}'),
 ])
-executor = ThreadPoolExecutor(max_workers=1)
 
 # ==========================================
 # 批量下载列表 (不想用命令行输入时，在这里填入链接)

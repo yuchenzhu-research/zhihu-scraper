@@ -5,7 +5,8 @@ cli/app.py — CLI 增强模块
 """
 
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+from random import uniform
 import asyncio
 import typer
 from rich import print as rprint
@@ -238,10 +239,6 @@ async def _check_playwright() -> None:
 # 内部助手
 # ============================================================
 
-import asyncio
-from random import uniform
-from typing import List, Dict, Any
-
 
 async def _batch_concurrent(
     urls: List[str],
@@ -310,8 +307,6 @@ async def _fetch_and_save(
 ) -> None:
     """执行抓取并保存"""
     from datetime import datetime
-    from concurrent.futures import ThreadPoolExecutor
-    from core.main import Pipeline  # 复用现有 Pipeline
 
     downloader = ZhihuDownloader(url)
     data = await downloader.fetch_page(**scrape_config)
