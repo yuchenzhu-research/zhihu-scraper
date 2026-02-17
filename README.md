@@ -1,168 +1,203 @@
-# 🚀 Zhihu-Scraper | 知乎万能离线备份工具
+# 🕷️ Zhihu-Scraper
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Language-Python3.9+-yellow.svg" alt="Python">
-  <img src="https://img.shields.io/badge/LaTeX-Perfect%20Render-blueviolet.svg" alt="LaTeX">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey.svg" alt="Platform">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
-</p>
+<div align="center">
 
-> **"让知乎的优质知识不再随风飘逝，而是静静躺在你的本地硬盘里。"**
+[![Python Version](https://img.shields.io/pypi/pyversions/zhihu-scraper?logo=python&style=flat-square)](https://pypi.org/project/zhihu-scraper/)
+[![Playwright](https://img.shields.io/badge/Playwright-1.49-blue?style=flat-square&logo=playwright)](https://playwright.dev/)
+[![License](https://img.shields.io/pypi/l/zhihu-scraper?color=green&style=flat-square)](https://github.com/yuchenzhu-research/zhihu-scraper/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/yuchenzhu-research/zhihu-scraper?style=flat-square)](https://github.com/yuchenzhu-research/zhihu-scraper/stargazers)
 
-**Zhihu-Scraper** 是一款专为知识深度爱好者打造的内容归档工具。它不仅仅是一个爬虫，更是一个**高保真排版还原引擎**。基于 Playwright 自动化驱动，它能将知乎专栏、回答完美转换为本地 Markdown，尤其解决了数学公式渲染、图片排版、视频卡片噪音等历史难题。
+**高质量知乎内容离线备份工具 | 高保真 Markdown 转换 | LaTeX 公式完美渲染**
 
----
-
-## 🔥 为什么选择这个项目？
-
-### 1. 🎓 工业级 LaTeX 公式还原 (The Killer Feature)
-- **零误差转换**：不仅支持标准 LaTeX 识别，还通过底层重构解决了 GitHub/KaTeX 不支持的 `*{N}{X}` 复杂矩阵定义，实测在 Obsidian、Typora、GitHub 中完美渲染。
-- **占位符保护**：内置公式保护策略，确保在转换为 Markdown 过程中特殊字符不被转义。
-
-### 2. 🖼️ 图片与资源彻底本地化
-- **离线阅读**：自动抓取文章内所有图片及头图，自动下载并重写路径。断网环境下，你的知识库依然图文并茂。
-- **高清原图**：优先采集 `data-actualsrc` 高清源，告别模糊缩略图。
-
-### 3. 🧹 暴力去噪，极简排版
-- **智能脱水**：自动剔除知乎烦人的广告卡片、视频占位符、点赞提醒、“查看更多”按钮，还你一个纯净的沉浸式阅读空间。
-
-### 4. 🧠 极客友好，开箱即用
-- **智能链接提取**：允许你粘贴一段杂乱的聊天记录或网页文本，程序会自动从中精准“钓出”所有合法的知乎链接并开启批量下载任务。
-- **自动代理感应**：无需手动配置！自动侦测 macOS 系统代理（Shadowrocket/ClashX），支持直接访问（如果不需要代理）。
+</div>
 
 ---
 
-## 🛠️ 快速上手
+## 📖 介绍
 
-### 1. 环境安装
+**Zhihu-Scraper** 是一款专为知识深度爱好者打造的内容归档工具。它不仅仅是一个爬虫，更是一个**高保真排版还原引擎**。
+
+基于 Playwright 自动化驱动，它能将知乎专栏、回答完美转换为本地 Markdown，尤其解决了数学公式渲染、图片排版、视频卡片噪音等历史难题。
+
+### ✨ 核心特性
+
+| 特性 | 说明 |
+|------|------|
+| 🎓 **LaTeX 公式** | 工业级公式还原，支持 `*{N}{X}` 复杂矩阵 |
+| 🖼️ **图片本地化** | 自动下载高清原图，断网也能阅读 |
+| 🧹 **智能去噪** | 自动剔除广告、视频、点赞提醒 |
+| 🤖 **双重界面** | 交互式 CLI + 命令行 (Typer) |
+| 🛡️ **反爬对抗** | Stealth JS + 人类行为模拟 |
+
+---
+
+## 🚀 快速上手
+
+### 1. 安装
+
 ```bash
 # 克隆代码
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 
-# 安装依赖 (推荐使用 venv)
-python3 -m venv venv && source venv/bin/activate
-pip install -e ".[cli]"  # 或 pip install -r requirements.txt
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate  # Linux/Mac
+# 或: .\venv\Scripts\activate  # Windows
+
+# 安装依赖 (CLI 模式)
+pip install -e ".[cli]"
+
+# 安装 Playwright 浏览器
 playwright install chromium
 ```
 
-### 2. 配置权限 (推荐)
-虽然本工具支持游客模式，但建议配置 Cookie 以解锁完整功能。
+### 2. 配置 Cookie (推荐)
 
-1. 在项目根目录，直接在 `cookies.json` 中填入你的知乎 Cookie。
-2. 确保包含 `z_c0` 和 `d_c0`。
-> **提示**: 你可以使用 EditThisCookie 插件导出，或者按 F12 在网络请求头中找到 `cookie` 字段。
+在 `cookies.json` 中填入你的知乎 Cookie：
 
-### 3. 运行爬虫
-
-#### 方式 A: 交互式界面 (原版)
-```bash
-python3 main.py
+```json
+[
+  {"name": "z_c0", "value": "你的z_c0值"},
+  {"name": "d_c0", "value": "你的d_c0值"}
+]
 ```
-粘贴知乎链接后，程序会自动识别模式。
 
-#### 方式 B: 命令行模式 (新版 ✨)
+> **获取方法**：登录知乎后，按 F12 打开开发者工具 → Network → 刷新页面 → 点击任意请求 → 复制 Cookie 头部
+
+### 3. 运行
+
+#### 方式 A: 交互式界面
 ```bash
-# 抓取单个链接
+python main.py
+```
+
+#### 方式 B: 命令行模式 (推荐)
+```bash
+# 抓取单个问题 (前 10 个回答)
 zhihu fetch "https://www.zhihu.com/question/123456" -n 10
 
 # 批量抓取
-zhihu batch ./urls.txt -c 8 -o ./output
+zhihu batch ./urls.txt -c 4 -o ./data
 
 # 查看配置
 zhihu config --show
 
-# 检查环境
+# 环境检查
 zhihu check
 ```
 
-**CLI 参数说明:**
-| 参数 | 说明 |
-|-----|------|
-| `fetch` | 抓取单个链接 |
-| `batch` | 批量抓取 |
-| `-n, --limit` | 限制回答数量 |
-| `-o, --output` | 输出目录 |
-| `-c, --concurrency` | 并发数 |
-| `-i, --no-images` | 不下载图片 |
-| `-b, --headless` | 无头模式 |
+---
 
-#### 🕹️ 模式说明
+## 📖 使用指南
 
-| 模式 | 触发条件 | 说明 |
-| :--- | :--- | :--- |
-| **游客模式** | 无 `cookies.json` | 仅抓取前 **3** 个回答 (知乎限制) |
-| **登录模式** | 有有效 Cookie | 解锁全部功能，支持以下两种抓取方式 |
+### CLI 命令
 
-**登录模式下的两种玩法：**
+| 命令 | 说明 |
+|------|------|
+| `zhihu fetch <url>` | 抓取单个链接 |
+| `zhihu batch <file>` | 批量抓取 |
+| `zhihu config` | 配置管理 |
+| `zhihu check` | 环境检查 |
 
-1. **按数量抓取**
-   - 输入 `1`，设定要抓取的回答数量 (img. `20`)。
-   - 程序将从顶部开始，抓取指定数量的回答。
+### 抓取选项
 
-2. **按范围抓取**
-   - 输入 `2`，设定 **起始锚点** 和 **结束锚点**。
-   - 支持 **答主名字** 或 **回答链接**。
-   - **效果**: 自动抓取两个锚点之间（闭区间）的所有回答。
-   - *适合存档特定时间段或特定话题下的高质量讨论。*
+| 选项 | 说明 | 默认值 |
+|------|------|--------|
+| `-n, --limit` | 限制回答数量 | 全部 |
+| `-o, --output` | 输出目录 | ./data |
+| `-c, --concurrency` | 图片并发数 | 4 |
+| `-i, --no-images` | 不下载图片 | False |
+| `-b, --headless` | 无头模式运行 | True |
 
-### 4. 常见问题
+### 配置说明
 
-**问题**: 抓取只有前 5 个回答，后面加载不出？
-**解决**: 本工具内置了自动修复机制：
-1. **自动点击 "显示全部"**: 程序会尝试点击页面上的折叠按钮。
-2. **自动切换排序**: 如果仍然卡顿，程序会自动尝试切换到 **"按时间排序"**。
-   - 此时请耐心等待 10-20 秒，通常能成功加载更多内容。
+所有配置均在 `config.yaml` 中管理：
+
+```yaml
+# 人类行为模拟 (防反爬)
+humanize:
+  min_delay: 1.0      # 最小请求间隔 (秒)
+  max_delay: 3.0      # 最大请求间隔 (秒)
+
+# 浏览器设置
+browser:
+  headless: true      # 无头模式
+  timeout: 30000      # 超时 (ms)
+
+# 图片下载
+images:
+  concurrency: 4      # 并发数
+  timeout: 30.0       # 超时 (秒)
+```
 
 ---
 
 ## 📂 项目结构
 
-本项目采用模块化设计，清晰分离了核心逻辑、静态资源和输出数据。
-
-```text
+```
 .
-├── main.py              # 🚀 启动入口 (交互式)
+├── main.py              # 🚀 启动入口 (交互式 CLI)
 ├── cli/
-│   ├── app.py           # ✨ CLI 命令行入口 (Typer)
-│   └── __init__.py
-├── core/                # 🧠 核心逻辑包
-│   ├── scraper.py       # 爬虫大脑：页面抓取、滚动加载、反爬对抗
-│   ├── converter.py     # 格式转换：HTML -> Markdown、LaTeX 公式修复
-│   ├── config.py        # 配置管理 + 结构化日志
-│   └── errors.py        # 错误处理体系
-├── static/              # 🧶 静态资源
-│   ├── stealth.min.js   # Puppeteer 反检测 JS 库
-│   └── z_core.js        # 知乎 x-zse-96 签名算法
-├── cookies.json         # 🍪 用户凭证
+│   ├── __init__.py
+│   └── app.py           # ✨ Typer CLI 命令行
+├── core/
+│   ├── __init__.py
+│   ├── scraper.py       # 爬虫引擎 + 反爬对抗
+│   ├── converter.py     # HTML → Markdown
+│   ├── config.py        # 配置 + 日志
+│   └── errors.py        # 异常体系
+├── static/
+│   ├── stealth.min.js   # 反检测脚本
+│   └── z_core.js        # 知乎签名算法
 ├── config.yaml          # ⚙️ 配置文件
 ├── pyproject.toml       # 📦 依赖管理
-└── data/                # 💾 输出目录
+├── cookies.json         # 🔑 用户凭证
+└── data/                # 📂 输出目录
     └── [日期] 问题标题/
-        ├── index.md     # 转换后的 Markdown
-        └── images/      # 本地化图片资源
+        ├── index.md     # Markdown 文件
+        └── images/      # 本地图片
 ```
 
 ---
 
-## ⚖️ 免责声明
+## 🛠️ 技术栈
 
-> [!CAUTION]
-> **使用本项目即代表您已阅读并同意以下条款：**
+<div align="center">
 
-1. **学术研究限制**：本项目代码仅用于计算机技术研究（如自动化测试、算法解密、离线化存储）与学习交流，严禁将本项目直接或间接用于任何商业非法盈利行为。
-2. **遵守 Robots 协议**：使用者在运行本项目前，应自行熟悉并遵守相关网站的 `robots.txt` 规则及相关用户协议。
-3. **法律责任自负**：本项目不含任何绕过付款限制的功能。开发者不对用户因不当使用代码（如高频采集导致账号封禁、IP 受限或法律诉讼等）而产生的后果承担任何责任。
-4. **尊重原创**：请在备份时尊重原作者的知识产权，内容请仅供个人收藏。
+| 层级 | 技术 |
+|------|------|
+| **浏览器** | Playwright |
+| **HTTP** | httpx (异步) |
+| **HTML 解析** | BeautifulSoup4 |
+| **格式转换** | markdownify |
+| **CLI** | Rich + Typer |
+| **日志** | structlog |
+| **配置** | PyYAML |
+
+</div>
 
 ---
 
-## 🌟 Star Trend
+## ⚠️ 免责声明
+
+> **使用本项目即代表您已阅读并同意以下条款：**
+
+1. 本项目仅用于计算机技术研究，严禁用于商业非法盈利行为
+2. 使用者应自行遵守目标网站的 `robots.txt` 和用户协议
+3. 开发者不对因不当使用产生的后果承担责任
+4. 请尊重原创，仅用于个人学习收藏
+
+---
+
+## 📈 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yuchenzhu-research/zhihu-scraper&type=Date)](https://star-history.com/#yuchenzhu-research/zhihu-scraper&Date)
 
 ---
 
-<p align="center">
-  如果这个工具帮你保存了一篇好文章，请给个 ⭐ <b>Star</b> 吧！
-</p>
+<div align="center">
+
+如果这个工具对你有帮助，请给个 ⭐ **Star** 吧！
+
+</div>
