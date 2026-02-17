@@ -1,0 +1,76 @@
+# ============================================================
+# 🐸 知乎爬虫配置文件
+# ============================================================
+
+# 知乎相关配置
+zhihu:
+  # Cookie 配置
+  cookies:
+    file: "cookies.json"
+    required: true  # 设为 false 可在无登录下运行（游客模式）
+
+  # 浏览器配置
+  browser:
+    headless: true           # 是否无头模式运行
+    timeout: 30000           # 页面加载超时 (ms)
+    viewport:
+      width: 1920
+      height: 1080
+    channel: "chrome"        # 使用系统 Chrome
+    args:
+      - "--disable-blink-features=AutomationControlled"
+      - "--no-sandbox"
+      - "--disable-infobars"
+      # - "--disable-gpu"  # 如不稳定可启用
+
+  # 反爬虫配置
+  anti_detection:
+    stealth: true            # 注入 stealth.min.js
+    webgl: true              # WebGL 参数伪装
+    navigator: true          # navigator.webdriver 伪装
+
+  # 签名算法配置
+  signature:
+    enabled: false           # 目前页面访问不需要，API 请求需要
+
+# 爬虫通用配置
+crawler:
+  # 重试策略
+  retry:
+    max_attempts: 3          # 最大重试次数
+    base_delay: 1.0          # 基础延迟 (秒)
+    max_delay: 30.0          # 最大延迟 (秒)
+    exponential_base: 2.0    # 指数退避底数
+    jitter: true             # 是否添加随机抖动
+
+  # 滚动加载配置
+  scroll:
+    timeout: 60000           # 滚动总超时 (ms)
+    pause: 1000              # 每次滚动后等待 (ms)
+    viewport_height: 800     # 视口高度（用于渐进加载）
+
+  # 智能延迟 (模拟真人)
+  humanize:
+    enabled: true
+    min_delay: 0.5           # 最小请求间隔 (秒)
+    max_delay: 2.0           # 最大请求间隔 (秒)
+
+  # 图片下载配置
+  images:
+    concurrency: 4           # 并发下载数
+    timeout: 30.0            # 下载超时 (秒)
+    referer: "https://www.zhihu.com/"
+
+# 导出配置
+output:
+  directory: "data"
+  format: "markdown"
+  images_subdir: "images"
+  folder_format: "[{date}] {title}"  # 支持 {date}, {title}, {author}
+
+# 日志配置
+logging:
+  level: "INFO"              # DEBUG / INFO / WARNING / ERROR
+  format: "console"          # console (美观) / json (结构化)
+  file: "logs/scraper.log"   # 日志文件路径（可选）
+  log_exceptions: true       # 是否记录异常堆栈

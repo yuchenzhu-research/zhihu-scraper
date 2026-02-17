@@ -1,0 +1,57 @@
+[project]
+name = "zhihu-scraper"
+version = "1.0.0"
+description = "🕷️ 高质量知乎内容爬取工具"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "Your Name", email = "you@example.com" }
+]
+keywords = ["zhihu", "scraper", "crawler"]
+
+# 核心依赖
+dependencies = [
+    "playwright>=1.49.0",
+    "markdownify>=0.14.1",
+    "beautifulsoup4>=4.12.3",
+    "httpx>=0.28.1",
+    "PyExecJS>=1.5.1",
+    "rich>=13.0.0",
+    "questionary>=2.0.0",
+    "pyyaml>=6.0",
+    "structlog>=24.0.0",
+]
+
+# 条件依赖
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "mypy>=1.5",
+    "ruff>=0.1",
+]
+lint = [
+    "mypy>=1.5",
+    "ruff>=0.1",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "N"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
