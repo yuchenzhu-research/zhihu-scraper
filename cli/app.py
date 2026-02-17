@@ -12,7 +12,7 @@ from rich import print as rprint
 from rich.panel import Panel
 from rich.text import Text
 
-from core.config import get_config, get_logger
+from core.config import get_config, get_logger, get_humanizer
 from core.scraper import ZhihuDownloader
 from core.converter import ZhihuConverter
 from core.errors import handle_error
@@ -143,25 +143,23 @@ def batch(
         rprint("[red]❌ 未找到有效链接[/red]")
         raise SystemExit(1)
 
-    log.info("batch_started", file=str(input_file), count=len(urls), concurrency=concurrency)
-    rprint(f"[bold]📋 批量任务: {len(urls)} 个链接[/bold]")
+    # 限制并发数
+    max_concurrency = min(concurrency, len(urls), 8)
+    log.info("batch_started", file=str(input_file), count=len(urls), concurrency=max_concurrency)
+    rprint(f"[bold]📋 批量任务: {len(urls)} 个链接 (并发: {max_concurrency})[/bold]")
 
-    # TODO: 真正的并发实现（待后续优化）
-    success, failed = 0, 0
-    for i, url in enumerate(urls, 1):
-        rprint(f"\n[{i}/{len(urls)}] 处理中...")
-        try:
-            asyncio.run(_fetch_and_save(
-                url=url,
-                output_dir=output,
-                scrape_config={},
-                download_images=not no_images,
-                headless=headless
-            ))
-            success += 1
-        except Exception as e:
-            handle_error(e, log)
-            failed += 1
+    # 并发执行
+    results = asyncio.run(_batch_concurrent(
+        urls=urls,
+        output_dir=output,
+        concurrency=max_concurrency,
+        download_images=not no_images,
+        headless=headless
+    ))
+
+    # 统计结果
+    success = sum(1 for r in results if r["success"])
+    failed = len(results) - success
 
     rprint(f"\n[bold]📊 批量完成: {success} 成功, {failed} 失败[/bold]")
     log.info("batch_completed", success=success, failed=failed)
@@ -239,6 +237,69 @@ async def _check_playwright() -> None:
 # ============================================================
 # 内部助手
 # ============================================================
+
+import asyncio
+from random import uniform
+from typing import List, Dict, Any
+
+
+async def _batch_concurrent(
+    urls: List[str],
+    output_dir: Path,
+    concurrency: int,
+    download_images: bool,
+    headless: bool,
+) -> List[Dict[str, Any]]:
+    """
+    并发批量抓取
+
+    Args:
+        urls: URL 列表
+        output_dir: 输出目录
+        concurrency: 并发数
+        download_images: 是否下载图片
+        headless: 无头模式
+
+    Returns:
+        结果列表
+    """
+    semaphore = asyncio.Semaphore(concurrency)
+    humanizer = get_humanizer()
+
+    async def fetch_one(url: str, index: int) -> Dict[str, Any]:
+        async with semaphore:
+            # 任务间随机延迟，避免触发反爬
+            if index > 0:
+                delay = uniform(0.5, 2.0) * (index % 3 + 1)
+                await asyncio.sleep(delay)
+
+            try:
+                await _fetch_and_save(
+                    url=url,
+                    output_dir=output_dir,
+                    scrape_config={},
+                    download_images=download_images,
+                    headless=headless
+                )
+                return {"url": url, "success": True}
+            except Exception as e:
+                handle_error(e, log)
+                return {"url": url, "success": False, "error": str(e)}
+
+    # 创建所有任务
+    tasks = [fetch_one(url, i) for i, url in enumerate(urls)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # 清理结果
+    cleaned = []
+    for r in results:
+        if isinstance(r, dict):
+            cleaned.append(r)
+        else:
+            cleaned.append({"url": "unknown", "success": False})
+
+    return cleaned
+
 
 async def _fetch_and_save(
     url: str,
