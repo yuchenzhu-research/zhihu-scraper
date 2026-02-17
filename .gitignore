@@ -1,20 +1,51 @@
+# ========================================
 # Python
+# ========================================
 __pycache__/
 *.py[cod]
 *$py.class
-.venv
-.env
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environments
+.venv/
+venv/
+env/
+.env/
+
+# Type checking
+.mypy_cache/
+.pytest_cache/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 .DS_Store
 
-# Project
-.agent/
-data/
-browser_data/
-log.txt
-cookies.json
+# ========================================
+# Project - 本地数据 (不上传)
+# ========================================
+.data/               # 抓取的内容输出
+.browser_data/       # 浏览器数据
+.logs/              # 日志文件
+cookies.json        # 用户 Cookie 敏感信息
 
-*.bak
-debug_page.html
-debug_scroll.py
-debug_user_data/
-*.html
+# Debug 文件
+*.html              # debug_page.html 等
+debug_*.py
+debug_*/
+.bak
+
+# ========================================
+# 文档 (本地维护，不上传)
+# ========================================
+docs/
+!.gitkeep

@@ -1,7 +1,0 @@
-playwright>=1.49.0
-markdownify>=0.14.1
-beautifulsoup4>=4.12.3
-httpx>=0.28.1
-PyExecJS>=1.5.1
-rich>=13.0.0
-questionary>=2.0.0
