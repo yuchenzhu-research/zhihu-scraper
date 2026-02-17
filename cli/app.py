@@ -1,0 +1,315 @@
+"""
+cli/app.py — CLI 增强模块
+
+使用 Typer 提供现代化命令行接口，支持参数自动补全。
+"""
+
+from pathlib import Path
+from typing import Optional, List
+import asyncio
+import typer
+from rich import print as rprint
+from rich.panel import Panel
+from rich.text import Text
+
+from core.config import get_config, get_logger
+from core.scraper import ZhihuDownloader
+from core.converter import ZhihuConverter
+from core.errors import handle_error
+
+# ============================================================
+# CLI 应用初始化
+# ============================================================
+
+app = typer.Typer(
+    name="zhihu",
+    help="🕷️ 知乎高质量内容爬取工具",
+    add_completion=False,
+    no_args_is_help=True,
+)
+
+# 初始化配置和日志
+cfg = get_config()
+log = get_logger()
+
+
+# ============================================================
+# 工具函数
+# ============================================================
+
+def sanitize_filename(name: str) -> str:
+    """清理文件名非法字符"""
+    import re
+    name = re.sub(r'[/\\:*?"<>|\x00-\x1f]', "_", name)
+    name = name.strip(" .")
+    return name[:50] or "untitled"
+
+
+def extract_urls(text: str) -> List[str]:
+    """从文本中提取知乎链接"""
+    import re
+    pattern = r"(?:https?://)?(?:www\.|zhuanlan\.)?zhihu\.com/(?:p/\d+|question/\d+(?:/answer/\d+)?)"
+    matches = re.findall(pattern, text)
+    return list(dict.fromkeys([(m if m.startswith("http") else "https://" + m) for m in matches]))
+
+
+def print_result(
+    title: str,
+    author: str,
+    success: bool,
+    path: str = "",
+    error: Optional[str] = None
+) -> None:
+    """打印单条结果"""
+    if success:
+        rprint(f"✅ [bold cyan]{author}[/] - [white]{title[:30]}...[/]")
+        rprint(f"   📁 {path}")
+    else:
+        rprint(f"❌ [bold cyan]{author}[/] - [yellow]{title[:30]}...[/]")
+        rprint(f"   💥 {error}")
+
+
+# ============================================================
+# 命令定义
+# ============================================================
+
+@app.command("fetch")
+def fetch(
+    url: str = typer.Argument(..., help="知乎链接 (问题/回答/专栏)"),
+    output: Path = typer.Option(Path("./data"), "-o", "--output", help="输出目录"),
+    limit: Optional[int] = typer.Option(None, "-n", "--limit", help="限制回答数量 (仅限问题页)"),
+    no_images: bool = typer.Option(False, "-i", "--no-images", help="不下载图片"),
+    headless: bool = typer.Option(True, "-b", "--headless", help="无头模式运行浏览器"),
+) -> None:
+    """
+    抓取单个知乎链接。
+
+    示例:
+        zhihu fetch "https://www.zhihu.com/question/123456"
+        zhihu fetch "https://www.zhihu.com/question/123456" -n 10
+        zhihu fetch "https://www.zhihu.com/p/abcdef" -o ./output
+    """
+    log.info("fetch_started", url=url, limit=limit)
+
+    try:
+        downloader = ZhihuDownloader(url)
+
+        # 检测是否需要登录
+        if not downloader.has_valid_cookies() and cfg.zhihu.cookies_required:
+            rprint("[yellow]⚠️  未检测到有效 Cookie，将使用游客模式[/yellow]")
+
+        # 准备抓取配置
+        scrape_config = {}
+        if limit and "/question/" in url and "/answer/" not in url:
+            scrape_config = {"start": 0, "limit": limit}
+
+        # 执行抓取
+        rprint(f"🌍 正在访问: {url}")
+
+        asyncio.run(_fetch_and_save(
+            url=url,
+            output_dir=output,
+            scrape_config=scrape_config,
+            download_images=not no_images,
+            headless=headless
+        ))
+
+    except Exception as e:
+        handle_error(e, log)
+        raise SystemExit(1)
+
+
+@app.command("batch")
+def batch(
+    input_file: Path = typer.Argument(..., help="URL列表文件 (每行一个链接)"),
+    output: Path = typer.Option(Path("./data"), "-o", "--output", help="输出目录"),
+    concurrency: int = typer.Option(4, "-c", "--concurrency", help="并发数"),
+    no_images: bool = typer.Option(False, "-i", "--no-images", help="不下载图片"),
+    headless: bool = typer.Option(True, "-b", "--headless", help="无头模式"),
+) -> None:
+    """
+    批量抓取多个知乎链接。
+
+    示例:
+        zhihu batch ./urls.txt
+        zhihu batch ./urls.txt -c 8 -o ./output
+    """
+    if not input_file.exists():
+        rprint(f"[red]❌ 文件不存在: {input_file}[/red]")
+        raise SystemExit(1)
+
+    urls = extract_urls(input_file.read_text())
+    if not urls:
+        rprint("[red]❌ 未找到有效链接[/red]")
+        raise SystemExit(1)
+
+    log.info("batch_started", file=str(input_file), count=len(urls), concurrency=concurrency)
+    rprint(f"[bold]📋 批量任务: {len(urls)} 个链接[/bold]")
+
+    # TODO: 真正的并发实现（待后续优化）
+    success, failed = 0, 0
+    for i, url in enumerate(urls, 1):
+        rprint(f"\n[{i}/{len(urls)}] 处理中...")
+        try:
+            asyncio.run(_fetch_and_save(
+                url=url,
+                output_dir=output,
+                scrape_config={},
+                download_images=not no_images,
+                headless=headless
+            ))
+            success += 1
+        except Exception as e:
+            handle_error(e, log)
+            failed += 1
+
+    rprint(f"\n[bold]📊 批量完成: {success} 成功, {failed} 失败[/bold]")
+    log.info("batch_completed", success=success, failed=failed)
+
+
+@app.command("config")
+def config_cmd(
+    show: bool = typer.Option(False, "--show", help="显示当前配置"),
+    path: bool = typer.Option(False, "--path", help="显示配置文件路径"),
+) -> None:
+    """
+    查看或管理配置。
+
+    示例:
+        zhihu config --show
+        zhihu config --path
+    """
+    if path:
+        from pathlib import Path as P
+        config_path = P(__file__).parent.parent / "config.yaml"
+        rprint(f"📄 配置文件: [cyan]{config_path}[/]")
+        raise SystemExit(0)
+
+    if show:
+        rprint(Panel(
+            Text(f"""
+[b]配置路径:[/] {Path(__file__).parent.parent / "config.yaml"}
+
+[b]输出目录:[/] {cfg.output.directory}
+[b]日志级别:[/] {cfg.logging.level}
+[b]浏览器:[/] {"无头" if cfg.zhihu.browser.headless else "有头"}
+[b]重试次数:[/] {cfg.crawler.retry.max_attempts}
+[b]图片并发:[/] {cfg.crawler.images.concurrency}
+            """.strip(), justify="left"),
+            title="🛠️ 当前配置",
+            border_style="cyan"
+        ))
+
+
+@app.command("check")
+def check() -> None:
+    """
+    检查环境依赖和配置是否正常。
+    """
+    from playwright.async_api import async_playwright
+
+    rprint("🔍 系统检查...\n")
+
+    # 检查配置文件
+    config_path = Path(__file__).parent.parent / "config.yaml"
+    if config_path.exists():
+        rprint("✅ config.yaml 存在")
+    else:
+        rprint("❌ config.yaml 不存在")
+
+    # 检查 cookies
+    cookies_path = Path(__file__).parent.parent / "cookies.json"
+    has_cookie = cookies_path.exists() and "YOUR_COOKIE_HERE" not in cookies_path.read_text()
+    rprint(f"{'✅' if has_cookie else '⚠️'} cookies.json {'有效' if has_cookie else '未配置或无效'}")
+
+    # 检查 playwright
+    try:
+        asyncio.run(_check_playwright())
+        rprint("✅ Playwright 正常")
+    except Exception as e:
+        rprint(f"❌ Playwright 错误: {e}")
+
+
+async def _check_playwright() -> None:
+    """检查 playwright"""
+    async with async_playwright() as pw:
+        await pw.chromium.launch(headless=True)
+
+
+# ============================================================
+# 内部助手
+# ============================================================
+
+async def _fetch_and_save(
+    url: str,
+    output_dir: Path,
+    scrape_config: dict,
+    download_images: bool = True,
+    headless: bool = True,
+) -> None:
+    """执行抓取并保存"""
+    from datetime import datetime
+    from concurrent.futures import ThreadPoolExecutor
+    from core.main import Pipeline  # 复用现有 Pipeline
+
+    downloader = ZhihuDownloader(url)
+    data = await downloader.fetch_page(**scrape_config)
+
+    if not data:
+        rprint("[yellow]⚠️  未获取到内容[/yellow]")
+        return
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 处理单个或多个结果
+    items = data if isinstance(data, list) else [data]
+
+    for item in items:
+        title = sanitize_filename(item["title"])
+        author = sanitize_filename(item["author"])
+
+        folder_name = f"[{today}] {title}"
+        folder = output_dir / folder_name
+        folder.mkdir(parents=True, exist_ok=True)
+
+        # 下载图片
+        img_map = {}
+        if download_images:
+            img_urls = ZhihuConverter.extract_image_urls(item["html"])
+            if img_urls:
+                rprint(f"   📥 下载 {len(img_urls)} 张图片...")
+                img_map = await ZhihuDownloader.download_images(
+                    img_urls,
+                    folder / "images"
+                )
+
+        # 转换并保存
+        converter = ZhihuConverter(img_map=img_map)
+        md = converter.convert(item["html"])
+
+        header = (
+            f"# {item['title']}\n\n"
+            f"> **作者**: {item['author']}  \n"
+            f"> **来源**: [{url}]({url})  \n"
+            f"> **日期**: {today}\n\n"
+            "---\n\n"
+        )
+
+        out_path = folder / "index.md"
+        out_path.write_text(header + md, encoding="utf-8")
+
+        rprint(f"✅ 保存: [cyan]{author}[/] - {title[:25]}...")
+        rprint(f"   📁 {out_path}")
+
+
+# ============================================================
+# 入口点
+# ============================================================
+
+def main() -> None:
+    """CLI 入口"""
+    app()
+
+
+if __name__ == "__main__":
+    main()
