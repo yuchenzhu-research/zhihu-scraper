@@ -21,6 +21,16 @@ from rich.live import Live
 
 from core.converter import ZhihuConverter
 from core.scraper import ZhihuDownloader, PROXY_SERVER
+from core.config import get_config, get_logger
+
+# ==========================================
+# 初始化配置和日志
+# ==========================================
+cfg = get_config()  # 加载配置
+log = get_logger()  # 获取日志记录器
+
+log.info("application_started", proxy=bool(PROXY_SERVER))
+from core.config import get_config, get_logger  # 新增日志系统
 
 # ==========================================
 # 核心配色系统 (Theme Tokens)
@@ -55,7 +65,8 @@ executor = ThreadPoolExecutor(max_workers=1)
 # ==========================================
 BATCH_URLS = []
 
-DATA_DIR = Path(__file__).parent / "data"
+# 使用配置中的输出目录
+DATA_DIR = Path(cfg.output.directory)
 
 async def _async_input(prompt_text: str) -> str:
     """封装 rich 的 console.input 为异步模式，带有现代感的 Prompt。"""

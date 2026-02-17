@@ -13,15 +13,16 @@ import asyncio
 import hashlib
 import json
 import re
+import subprocess
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Union, List, Optional
 
 import httpx
-# 需 pip install PyExecJS
 import execjs
 from playwright.async_api import async_playwright, Playwright
-import subprocess
+
+from .config import get_config, get_logger
 
 def get_auto_proxy() -> Optional[str]:
     """
