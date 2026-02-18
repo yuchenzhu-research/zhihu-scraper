@@ -131,8 +131,9 @@ class ZhihuDownloader:
             for c in cookies:
                 if c.get("name") == "z_c0" and c.get("value") and c.get("value") != "YOUR_COOKIE_HERE":
                     return True
-        except:
-            pass
+        except Exception as e:
+            log = get_logger()
+            log.warning("cookie_check_failed", error=str(e)[:100])
         return False
 
     async def debug_dump_page(self, output_path: str = "debug_page.html"):
@@ -329,16 +330,16 @@ class ZhihuDownloader:
         # 等待问题标题加载
         try:
             await page.wait_for_selector(".QuestionHeader-title", timeout=5000)
-        except:
-            pass
-        
+        except Exception:
+            pass  # 标题可能不存在，继续处理
+
         # 尝试点击 "查看全部" 按钮 (如果是 auto 模式且 limit 较小，其实可以不点，为了保险还是点一下)
         await self._click_view_all(page)
 
         # 等待至少一个回答项加载
         try:
             await page.wait_for_selector(".ContentItem.AnswerItem", timeout=5000)
-        except:
+        except Exception:
             print("⚠️ 未检测到回答列表，可能需要登录或无回答")
 
         # 智能滚动逻辑
@@ -444,7 +445,7 @@ class ZhihuDownloader:
                         with open("debug_failed_scroll.html", "w", encoding="utf-8") as f:
                             f.write(await page.content())
                         print("💾 已保存调试页面: debug_failed_scroll.html")
-                        
+
                         btns = page.locator("button")
                         cnt = await btns.count()
                         print(f"🔎 页面剩余按钮 ({cnt}个):")
@@ -453,7 +454,9 @@ class ZhihuDownloader:
                             if txt.strip():
                                 clean_txt = txt.strip().replace('\n', ' ')
                                 print(f"   [Btn] {clean_txt}")
-                    except: pass
+                    except Exception as e:
+                        log = get_logger()
+                        log.warning("debug_dump_failed", error=str(e)[:100])
                     break
             else:
                 no_change_count = 0
@@ -568,7 +571,8 @@ class ZhihuDownloader:
                      # 简单的字符串提取，比 json.loads 快且容错
                      m = re.search(r'"itemId":(\d+)', zop)
                      if m: answer_id = m.group(1)
-        except: pass
+        except Exception:
+            pass  # 解析失败时使用默认值
         if not answer_id:
              # try name attribute
              answer_id = await item.get_attribute("name") or ""
@@ -596,7 +600,7 @@ class ZhihuDownloader:
              
         return False
 
-    async def _click_view_all(self, page):
+    async def _click_view_all(self, page) -> bool:
         """点击 '查看全部' 按钮的封装。"""
         humanizer = get_humanizer()
         candidates = [
@@ -623,8 +627,8 @@ class ZhihuDownloader:
                     # 使用配置的页面加载延迟
                     await humanizer.page_load()
                     return True
-            except:
-                pass
+            except Exception:
+                continue  # 单个选择器失败，继续尝试下一个
         return False
 
     async def _switch_sort_order(self, page):
@@ -667,7 +671,7 @@ class ZhihuDownloader:
         try:
             # 优先等待回答主体，给 15s 超时
             await page.wait_for_selector(".ContentItem.AnswerItem", timeout=15000)
-        except:
+        except Exception:
             print("⚠️  等待回答内容超时，尝试直接解析...")
         
         # 尝试从 URL 提取 answer_id
@@ -738,7 +742,7 @@ class ZhihuDownloader:
             if unit == "万": val *= 10000
             elif unit in ("k", "K"): val *= 1000
             return int(val)
-        except:
+        except (ValueError, TypeError):
             return 0
 
     async def _extract_date(self, element) -> str:
@@ -747,14 +751,16 @@ class ZhihuDownloader:
             # 1. 尝试找 meta (适用于 Page 或包含 meta 的容器)
             meta = await element.locator('meta[itemprop="datePublished"]').get_attribute("content", timeout=500)
             if meta: return meta[:10]
-        except: pass
-        
+        except Exception:
+            pass
+
         try:
             # 2. 尝试找 "发布于 ..." 文本 (适用于 AnswerItem)
             text = await element.locator(".ContentItem-time").first.inner_text(timeout=500)
             m = re.search(r"(\d{4}-\d{2}-\d{2})", text)
             if m: return m.group(1)
-        except: pass
+        except Exception:
+            pass
 
         return dt_date.today().isoformat()
 
@@ -762,7 +768,7 @@ class ZhihuDownloader:
         try:
             el = page.locator(selector).first
             return await el.inner_text(timeout=2000)
-        except:
+        except Exception:
             return default
 
     # ── 图片下载 ──────────────────────────────────────────────
