@@ -56,13 +56,13 @@ class ZhihuDownloader:
         await humanizer.page_load()
 
         if self.page_type == "article":
-            return self._extract_article()
+            return await self._extract_article()
         elif self.page_type == "question":
-            return self._extract_question(**kwargs)
+            return await self._extract_question(**kwargs)
         else:
-            return self._extract_answer()
+            return await self._extract_answer()
 
-    def _extract_article(self) -> dict:
+    async def _extract_article(self) -> dict:
         """提取专栏文章数据。"""
         # 从 URL 提取 Article ID
         # e.g., https://zhuanlan.zhihu.com/p/123456
@@ -71,7 +71,21 @@ class ZhihuDownloader:
              raise Exception(f"无法从专栏 URL 提取 ID: {self.url}")
         
         article_id = match.group(1)
-        data = self.api_client.get_article(article_id)
+        try:
+            data = self.api_client.get_article(article_id)
+        except Exception as e:
+            print(f"⚠️ API 请求专栏失败 ({e})，正在启动 Playwright 无头浏览器智能降级回退机制...")
+            # Fallback 策略
+            import asyncio
+            from .browser_fallback import extract_zhuanlan_html
+            from .cookie_manager import cookie_manager
+            
+            # 使用现有 session 的 cookies
+            session_cookies = cookie_manager.get_current_session()
+            data = await extract_zhuanlan_html(article_id, session_cookies)
+            
+            if not data:
+                raise Exception(f"专栏文章 {article_id} API 及降级抓取均失败，请手工检查 URL 或重新分配 Cookie。")
         
         author = data.get("author", {}).get("name", "未知作者")
         title = data.get("title", "未知专栏标题")
@@ -98,7 +112,7 @@ class ZhihuDownloader:
             "upvotes": upvotes
         }
 
-    def _extract_answer(self) -> dict:
+    async def _extract_answer(self) -> dict:
         """提取单个回答数据。"""
         # https://www.zhihu.com/question/298203515/answer/2008258573281562692
         match = re.search(r"answer/(\d+)", self.url)
@@ -127,7 +141,7 @@ class ZhihuDownloader:
             "upvotes": upvotes
         }
 
-    def _extract_question(self, start: int = 0, limit: int = 3, **kwargs) -> List[dict]:
+    async def _extract_question(self, start: int = 0, limit: int = 3, **kwargs) -> List[dict]:
         """提取问题下的多个回答。利用 API 分页直接获取，无视 DOM 滚动。"""
         match = re.search(r"question/(\d+)", self.url)
         if not match:
