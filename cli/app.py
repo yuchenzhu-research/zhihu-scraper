@@ -206,7 +206,8 @@ def monitor(
         output_dir=output,
         concurrency=max_concurrency,
         download_images=not no_images,
-        headless=headless
+        headless=headless,
+        collection_id=collection_id
     ))
 
     success = sum(1 for r in results if r["success"])
@@ -217,6 +218,53 @@ def monitor(
     if success > 0:
         m.mark_updated(collection_id, new_last_id)
         rprint(f"[cyan]✅ 已保存最新进度指针: {new_last_id}[/cyan]")
+
+
+@app.command("query")
+def query_db(
+    keyword: str = typer.Argument(..., help="要搜索的关键词"),
+    limit: int = typer.Option(10, "-l", "--limit", help="最大显示结果数量"),
+    data_dir: str = typer.Option("./data", "-d", "--data-dir", help="数据目录（默认 ./data）"),
+) -> None:
+    """
+    在本地 SQLite 数据库中检索已抓取的知乎内容。
+
+    示例:
+        zhihu query "深度学习"
+    """
+    from core.db import ZhihuDatabase
+    from rich.table import Table
+    
+    db_path = Path(data_dir) / "zhihu.db"
+    if not db_path.exists():
+        rprint("[red]❌ 未找到知乎数据库，请先执行抓取任务 (fetch 或 monitor)。[/red]")
+        raise SystemExit(1)
+        
+    db = ZhihuDatabase(str(db_path))
+    results = db.search_articles(keyword, limit)
+    db.close()
+    
+    if not results:
+        rprint(f"[yellow]⚠️ 未找到包含关键词 '[bold]{keyword}[/bold]' 的文章。[/yellow]")
+        return
+        
+    table = Table(title=f"🔍 检索结果: '{keyword}' (前 {len(results)} 条)")
+    table.add_column("Type", justify="center", style="cyan")
+    table.add_column("Author", style="green")
+    table.add_column("Title", style="magenta", overflow="fold")
+    table.add_column("Captured At", style="dim")
+    table.add_column("Zhihu ID", justify="right", style="blue")
+    
+    for row in results:
+        table.add_row(
+            row["type"],
+            row["author"],
+            row["title"],
+            row["created_at"].split("T")[0],
+            row["answer_id"]
+        )
+        
+    rprint(table)
 
 
 @app.command("config")
@@ -299,6 +347,7 @@ async def _batch_concurrent(
     concurrency: int,
     download_images: bool,
     headless: bool,
+    collection_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     并发批量抓取
@@ -329,7 +378,8 @@ async def _batch_concurrent(
                     output_dir=output_dir,
                     scrape_config={},
                     download_images=download_images,
-                    headless=headless
+                    headless=headless,
+                    collection_id=collection_id
                 )
                 return {"url": url, "success": True}
             except Exception as e:
@@ -357,6 +407,7 @@ async def _fetch_and_save(
     scrape_config: dict,
     download_images: bool = True,
     headless: bool = True,
+    collection_id: Optional[str] = None,
 ) -> None:
     """执行抓取并保存"""
     from datetime import datetime
@@ -405,10 +456,20 @@ async def _fetch_and_save(
         )
 
         out_path = folder / "index.md"
-        out_path.write_text(header + md, encoding="utf-8")
+        full_md = header + md
+        out_path.write_text(full_md, encoding="utf-8")
+
+        # 保存入库
+        from core.db import ZhihuDatabase
+        db_folder = output_dir if output_dir.name == "data" else output_dir.parent
+        if db_folder.name != "data":
+             db_folder = Path("./data") # fallback
+        db = ZhihuDatabase(str(db_folder / "zhihu.db"))
+        db.save_article(item, full_md, collection_id=collection_id)
+        db.close()
 
         rprint(f"✅ 保存: [cyan]{author}[/] - {title[:25]}...")
-        rprint(f"   📁 {out_path}")
+        rprint(f"   📁 {out_path} & 入库 DB")
 
 
 # ============================================================

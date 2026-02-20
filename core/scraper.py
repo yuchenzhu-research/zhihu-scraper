@@ -88,6 +88,9 @@ class ZhihuDownloader:
             html = f'<img src="{title_img}" alt="TitleImage"><br>{html}'
 
         return {
+            "id": article_id,
+            "type": "article",
+            "url": self.url,
             "title": title.strip(), 
             "author": author.strip(), 
             "html": html, 
@@ -114,6 +117,9 @@ class ZhihuDownloader:
         date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
 
         return {
+            "id": answer_id,
+            "type": "answer",
+            "url": self.url,
             "title": title.strip(), 
             "author": author.strip(), 
             "html": html, 
@@ -146,6 +152,9 @@ class ZhihuDownloader:
             date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
 
             results.append({
+                "id": str(data.get("id", "")),
+                "type": "answer",
+                "url": f"https://www.zhihu.com/question/{question_id}/answer/{data.get('id', '')}",
                 "title": title.strip(), 
                 "author": author.strip(), 
                 "html": html, 
