@@ -267,6 +267,21 @@ def query_db(
     rprint(table)
 
 
+@app.command("interactive")
+def interactive() -> None:
+    """
+    启动带霓虹控制台面板的交互式抓取模式。
+
+    示例:
+        zhihu interactive
+    """
+    from cli.interactive import run_interactive
+    try:
+        asyncio.run(run_interactive())
+    except Exception as e:
+        handle_error(e, log)
+
+
 @app.command("config")
 def config_cmd(
     show: bool = typer.Option(False, "--show", help="显示当前配置"),
