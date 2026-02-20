@@ -166,6 +166,59 @@ def batch(
     log.info("batch_completed", success=success, failed=failed)
 
 
+@app.command("monitor")
+def monitor(
+    collection_id: str = typer.Argument(..., help="知乎收藏夹ID (如 78170682)"),
+    output: Path = typer.Option(Path("./data"), "-o", "--output", help="输出目录"),
+    concurrency: int = typer.Option(4, "-c", "--concurrency", help="并发数"),
+    no_images: bool = typer.Option(False, "-i", "--no-images", help="不下载图片"),
+    headless: bool = typer.Option(True, "-b", "--headless", help="无头模式"),
+) -> None:
+    """
+    增量监控并抓取知乎收藏夹的新增内容。
+
+    示例:
+        zhihu monitor 78170682
+    """
+    log.info("monitor_started", collection_id=collection_id)
+    rprint(f"[bold]📡 启动增量监控: 收藏夹 {collection_id}[/bold]")
+
+    from core.monitor import CollectionMonitor
+    m = CollectionMonitor(data_dir=str(output))
+
+    try:
+        new_items, new_last_id = m.get_new_items(collection_id)
+    except Exception as e:
+        handle_error(e, log)
+        raise SystemExit(1)
+
+    if not new_items:
+        rprint("[green]✨ 收藏夹没有新增内容，监控结束。[/green]")
+        return
+        
+    rprint(f"\n[bold]🛒 准备下载 {len(new_items)} 个新内容...[/bold]")
+    
+    urls = [item["url"] for item in new_items]
+    max_concurrency = min(concurrency, len(urls), 8)
+    
+    results = asyncio.run(_batch_concurrent(
+        urls=urls,
+        output_dir=output,
+        concurrency=max_concurrency,
+        download_images=not no_images,
+        headless=headless
+    ))
+
+    success = sum(1 for r in results if r["success"])
+    failed = len(results) - success
+
+    rprint(f"\n[bold]📊 监控下载完成: {success} 成功, {failed} 失败[/bold]")
+    
+    if success > 0:
+        m.mark_updated(collection_id, new_last_id)
+        rprint(f"[cyan]✅ 已保存最新进度指针: {new_last_id}[/cyan]")
+
+
 @app.command("config")
 def config_cmd(
     show: bool = typer.Option(False, "--show", help="显示当前配置"),

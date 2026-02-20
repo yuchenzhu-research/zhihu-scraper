@@ -172,3 +172,20 @@ class ZhihuAPIClient:
         if not data or "data" not in data:
             return []
         return data["data"]
+
+    def get_collection_page(self, collection_id: str, limit: int = 20, offset: int = 0) -> dict:
+        """获取收藏夹某页的详细内容（文章或回答），并包含 paging 信息。"""
+        include = (
+            "data[*].content.is_normal,admin_closed_comment,reward_info,is_collapsed,"
+            "annotation_action,annotation_detail,collapse_reason,is_sticky,collapsed_by,"
+            "suggest_edit,comment_count,can_comment,content,editable_content,attachment,"
+            "voteup_count,reshipment_settings,comment_permission,created_time,updated_time,"
+            "review_info,relevant_info,question,excerpt,is_labeled,paid_info,paid_info_content,"
+            "reaction_instruction,relationship.is_authorized,is_author,voting,is_thanked,"
+            "is_nothelp,is_recognized;data[*].content.author.follower_count,vip_info,badge[*].topics"
+        )
+        path = f"/api/v4/collections/{collection_id}/items?offset={offset}&limit={limit}&include={urllib.parse.quote(include)}"
+        data = self.fetch_api(path)
+        if not data:
+            return {"data": [], "paging": {"is_end": True}}
+        return data
