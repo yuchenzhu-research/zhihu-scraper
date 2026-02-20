@@ -14,6 +14,7 @@ import execjs
 from curl_cffi import requests
 
 from .config import get_logger
+from .cookie_manager import cookie_manager
 
 # 默认全局 JS 签名解释器路径
 ZHIHU_JS_PATH = Path(__file__).parent.parent / "static" / "z_core.js"
@@ -22,9 +23,18 @@ COOKIES_PATH = Path(__file__).parent.parent / "cookies.json"
 class ZhihuAPIClient:
     def __init__(self):
         self.log = get_logger()
-        self._cookies_dict = self._load_cookies()
         self._js_ctx = self._init_js_context()
-        # 默认模拟 Chrome 110 的完整底层指纹 (避免触发 WAF/zse_ck 拦截)
+        self.session = None
+        self._cookies_dict = None
+        
+        # 初始化 Session
+        self._init_session()
+
+    def _init_session(self) -> None:
+        """从 CookieManager 获取当前主 Session 构建网络指纹与头"""
+        self._cookies_dict = cookie_manager.get_current_session() or {}
+        
+        # 即使只切代理也重新初始化底层的 curl 握手
         self.session = requests.Session(impersonate="chrome110")
         
         # 基础请求头
@@ -38,20 +48,6 @@ class ZhihuAPIClient:
         if self._cookies_dict:
             for k, v in self._cookies_dict.items():
                 self.session.cookies.set(k, v, domain=".zhihu.com")
-
-    def _load_cookies(self) -> Dict[str, str]:
-        """从 cookies.json 加载并转换为字典格式。"""
-        cookies_dict = {}
-        if COOKIES_PATH.exists():
-            try:
-                with open(COOKIES_PATH, "r", encoding="utf-8") as f:
-                    cookies_list = json.load(f)
-                    for c in cookies_list:
-                        if c.get("value") and c.get("value") != "YOUR_COOKIE_HERE":
-                            cookies_dict[c['name']] = c['value']
-            except Exception as e:
-                self.log.error("load_cookies_failed", error=str(e))
-        return cookies_dict
 
     def _init_js_context(self):
         """初始化 PyExecJS 执行环境，用于生成 x-zse-96。"""
@@ -96,7 +92,11 @@ class ZhihuAPIClient:
                 return response.json()
             elif response.status_code == 403:
                 self.log.error("api_forbidden", status=403, text=response.text[:200])
-                raise Exception("请求遭到知乎安全盾 403 拦截，请检查 Cookie 重启或更换 IP。")
+                # 触发轮换并通知上游进行一次重试 (由业务代码或手动递归控制)
+                cookie_manager.rotate_session()
+                # 重新载入底层 session
+                self._init_session()
+                raise Exception("请求遭到知乎安全盾 403 拦截，已尝试轮换 Cookie 池。")
             else:
                 self.log.error("api_error", status=response.status_code)
                 return None
