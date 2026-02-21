@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🕷️ Zhihu Scraper (v3.0)
+# 🕷️ Zhihu Scraper
 
 **高保真知乎内容离线备份工具 · 纯后端原生 API 握手 · SQLite 实体库架构**
 
@@ -15,17 +15,37 @@
 
 ---
 
-## ⚡ 核心演进 (v3.0 Architecture)
+## ⚡ 核心演进 (Core Evolution)
 
-在全新的 v3.0 架构中，项目彻底抛弃了以往沉重低效的无头浏览器页面解析思路（除非遇到终极 WAF 才会作为降级使用），**重构为直接与知乎后台 JSON API 交互的纯粹网络协议引擎。**
+本项目重构为直接与知乎后台 JSON API 交互的纯粹网络协议引擎。项目严格遵循领域驱动设计 (DDD) 的分层思想，杜绝了面条代码。
 
 | 核心组件引擎 | 技术解析与功能特性 |
 | :--- | :--- |
 | 🚀 **原生 API 提速引擎** | 依赖 `curl_cffi` 完美模拟 Chrome 底层 TLS/HTTP2 网络握手指纹，无视绝大数网关拦截。同时本地内置 `z_core.js` V8 逆向签名验证，实现 **毫秒级、0渲染开销** 的数据捕获。 |
 | 💿 **SQLite 主动存储池** | 获取到的每一个问题/专栏/回答，提取出核心字段，使用 UPSERT（冲突平滑更新）持久化写入 `data/zhihu.db` 构建真正的**本地化智能知识库**。 |
-| 🔄 **自动化增量监听 (Monitor)** | 全新指令 `zhihu monitor`！利用状态指针 (Last ID) 实现对上万条知乎“收藏夹”记录的**无缝增量扫描**，只抓取昨晚刚加入的数据。极其适合挂载 Cron 定时任务！ |
-| 🛡️ **专栏墙降级与 Cookie 池** | 内置智能重试机制：当面对防抓取极严谨的**知乎专栏**时，自动无感拉起 Playwright 并注入动态 **Cookie 轮换池**中的备用小号，突破终极 `zse_ck` 防线！ |
+| 🔄 **自动化增量监听 (Monitor)** | 全新指令 `zhihu monitor`！利用状态指针 (Last ID) 实现对上万条知乎“收藏夹”记录的**无缝增量扫描**，只抓取最新加入的数据。极其适合挂载 Cron 定时任务！ |
+| 🛡️ **专栏墙降级与 Cookie 池** | 内置智能重试机制：当面对防抓取极严谨的**知乎专栏**时，自动无感拉起 Playwright 并注入动态 **Cookie 轮换池**中的备用账号，突破终极 `zse_ck` 防线！ |
 | 🎓 **排版引擎增强** | 完善并清洗图片防盗链链接，在最终导出的纯净 `Markdown` 内完美离线转换复杂的 LaTeX ($...$) 矩阵公式与重点加粗内容。 |
+
+---
+
+## 🏗️ 架构粒度拆解 (Directory Structure)
+
+当前的架构非常清晰，实现了模块化、解耦合与高内聚：
+
+*   **`cli/` (入口与视图层)**
+    *   `app.py`: 核心 Typer CLI 路由。定义了 `fetch`, `batch`, `monitor`, `query` 等核心命令，负责解析用户传参并下发给 core 层，最后整合 UI 输出。
+    *   `interactive.py`: 极具设计感的交互式仪表盘终端（通过 `zhihu interactive` 触发），是对传统命令行输入的图形化增强。
+*   **`core/` (核心业务逻辑层)**
+    *   **`api_client.py`**: 引擎之源。囊括了向知乎发起 API 请求的底层通道。负责合并 Cookie、生成时间戳、调用 `z_core.js` 算签名、附带 TLS 指纹，最后返回纯净的 Dict 数据。
+    *   **`scraper.py`**: 页面级业务编排。判断 URL 类型（问题/回答/专栏），向 `api_client` 索要数据，提炼标题与正文 HTML，并统筹图片下载工作。
+    *   **`converter.py`**: Markdown 解析器。接收 HTML，将图片替换为本地相对路径，处理数学公式、加粗等语义标签，输出标准化 Markdown。
+    *   **`db.py`**: 结构化数据库访问层 (DAL)。负责维护局域内的 SQLite，包含 `articles` 建表、全文索引、防重排异的 UPSERT 操作，以及基础的模糊查询。
+    *   **`monitor.py`**: 增量抓取模块。拉取收藏夹比对记录指针，输出“增量 Delta”，避免重复请求扫描海量收藏夹引起封禁。
+    *   **`cookie_manager.py`**: 动态账号调度。在遭遇 HTTP 403 当下立即无缝转交至尚未冷却的独立凭证。
+    *   **`browser_fallback.py`**: 针对强保护专栏页，在静默模式下弹出的自动化容器执行环境。
+*   **`static/` (逆向资产库)**: 绝密的逆向环境。包含了剥离出来的关键算法（如 `x-zse-96`）。
+*   **`data/` (输出目录)**: 不被 Git 追踪的内容产生地，包含 `zhihu.db` 以及产生的文章独立 `.md` 子文件夹。
 
 ---
 
@@ -52,12 +72,12 @@ playwright install chromium
 
 ---
 
-## 🕹️ 五大核心控制台指令 (CLI Features)
+## 🕹️ 五大核心控制台指令与工作流 (CLI Workflows)
 
-v3.0 版本搭载了一整套完备的 CLI 矩阵体系（同时兼容纯炫酷终端 UI 和 Shell 管道组合），输入 `zhihu` 或 `zhihu --help` 皆可快速调用。
+搭载了一整套完备的 CLI 矩阵体系（兼容炫酷终端 UI 和 Shell 管道组合），输入 `zhihu` 皆可快速调用。
 
 ### 1. 交互式仪表盘终端 (✨强烈推荐)
-这是传统脚本到赛博纪元的飞跃！启动炫酷且全图形引导的 **Americana Fusion UI 终端引擎**：
+启动炫酷且全图形引导的 **Americana Fusion UI 终端引擎**：
 ```bash
 zhihu interactive
 
@@ -65,7 +85,7 @@ zhihu interactive
 ```
 
 ### 2. 精准定点抓取 (Fetch)
-不管它是知乎的一个极其刁钻的独立回答，还是一个总和问题，还是超长专栏，一行拿走：
+流程：验证 URL -> 触发请求/降级 -> 图片并发落盘 -> Markdown 转换 -> 存入 SQLite 并生成独立文章文件。
 ```bash
 zhihu fetch "https://www.zhihu.com/question/12345/answer/98765"
 
@@ -81,14 +101,15 @@ zhihu batch ./urls.txt -c 8
 ```
 
 ### 4. 收藏夹状态指针监控同步 (Monitor)
-专为常年维护某个几十万条目私人知乎大收藏夹的用户开发。每次运行它都会从你收藏夹第 1 页开始爬，一旦遇到你在本地已经存进 SQLite 过的数据，立马**自动中断程序退出**（防止无脑重复刷封号）！抓取效率极高。
+专为常年维护某个几十万条目私人知乎大收藏夹的用户开发。
+流程：调度 `monitor` -> 获取最近的 API 页面 -> 与文件 `.monitor_state.json` 的顶端记录比对 -> 算出增量并丢给并发池 -> 同步最新指针。
 ```bash
 # 输入公开收藏夹的纯数字 ID 即可
 zhihu monitor 78170682
 ```
 
 ### 5. 本地 SQLite 知识库疾速闪查 (Query)
-数据存下来如果不利用就等于死了。现在你可以一秒跨越全量抓取离线库匹配关键字！
+检索全量抓取离线库匹配关键字！流程：直接调用 `db.search_articles` 执行高速检索并利用 Rich 框架打印结果。
 ```bash
 # 根据标题、内容或作者，一键列出表格，支持管道再分发
 zhihu query "人工智能的底层逻辑"
@@ -96,13 +117,15 @@ zhihu query "人工智能的底层逻辑"
 
 ---
 
-## 🛠️ 高级反制：配置与身份凭证池
+## 🛠️ 当前限制与高级反制策略
 
-如果你需要爬取的私域内容要求极高的等级，你也可以在工程根目录填装弹药。
+### ⚠️ 关于专栏的极强风控 (Current Limitations)
+知乎对其 `zhuanlan.zhihu.com` 的防护策略远高于正常的问答（问答接口即使被封锁概率也极小）。我们在访问专栏纯文本接口时，依然有极高概率遭遇 `403` 或触发安全检测。**系统会自动启动智能 Playwright 回退机制，这是正常且必要的手段，通过引入微小的性能开销换取关键资料的绝对留存率。**
 
 ### `cookies.json` 与 `cookie_pool/` 轮询矩阵 (重磅防封)
+如果你需要爬取的私域内容要求极高的等级，你也可以在工程根目录填装弹药。
 1. 默认身份：将你主号抓包拦截到的基础 Cookie（JSON数组格式）全量覆盖至工具目录下的 `cookies.json`。
-2. **集群防封**：在同级目录下新建文件夹 `cookie_pool/`。把你所有小号的 `any_name.json` 扔进去！在遇到高危 WAF 时（比如触发了 HTTP 403 惩罚），底层的 `CookieManager` 将自动替你踢掉被封的号，立刻换一个未冷却的小号接着跑！
+2. **集群防封**：在同级目录下新建文件夹 `cookie_pool/`。把你所有账号的 `.json` 放进去。在遇到高危 WAF 时（比如触发了 HTTP 403 惩罚），底层的 `CookieManager` 将自动无缝接力。
 
 ### `config.yaml` 核心节律指引
 默认情况无需修改。它能定义最低重试间隔与并发宽容度。
@@ -123,7 +146,7 @@ output:
 
 ---
 
-## 🧱 技术栈基石与架构 (Tech Stack)
+## 🧱 技术栈基石 (Tech Stack)
 
 <div align="center">
 
@@ -132,11 +155,6 @@ output:
 **[Typer](https://typer.tiangolo.com/)** (CLI 驱动) · **[Rich](https://github.com/Textualize/rich)** (赛博 TUI 组件) · **[PyExecJS](https://pypi.org/project/PyExecJS/)** (本地 V8 动态执行环境)
 
 </div>
-
-### 目录分层逻辑 (Design Pattern)
-- `cli/`：视图解析逻辑（Typer 路由映射及炫酷的 Interactive Shell 展示墙）。
-- `core/`：核心商业领域模型。绝不涉及显示渲染，专心搞 WAF 欺骗网络通道 (`api_client`)，多账号池分配 (`cookie_manager`) 和 SQL 全增量存取 (`db.py`)。
-- `static/`：最宝贵的资产库：`z_core.js` 原版底层验证破解，由我们全系接管。
 
 ---
 
