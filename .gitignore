@@ -22,9 +22,15 @@ env/
 .pytest_cache/
 *.egg-info/
 
-# IDE
+# IDE & AI Agents
 .vscode/
 .idea/
+.cursor/
+.cursorrules
+.agent/
+.agents/
+_agent/
+_agents/
 *.swp
 *.swo
 *~
@@ -37,6 +43,7 @@ data/                # 抓取的内容输出
 browser_data/        # 浏览器数据
 logs/                # 日志文件
 cookies.json         # 用户 Cookie 敏感信息
+cookie_pool/         # 多账号轮换备用池文件夹
 
 # Debug 文件
 *.html              # debug_page.html 等
