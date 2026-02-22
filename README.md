@@ -1,165 +1,183 @@
 <div align="center">
 
 # 🕷️ Zhihu Scraper
+**为数据科学与大模型语料设计的高雅、稳定的知乎内容提取器**
 
-**高保真知乎内容离线备份工具 · 纯后端原生 API 握手 · SQLite 实体库架构**
+<p align="center">
+  简体中文 | [English](README_EN.md)
+</p>
 
-[![Python Version](https://img.shields.io/pypi/pyversions/zhihu-scraper.svg?style=for-the-badge&logo=python)](https://pypi.org/project/zhihu-scraper/)
-[![License](https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![Stars](https://img.shields.io/github/stars/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&logo=github)](https://github.com/yuchenzhu-research/zhihu-scraper/stargazers)
-[![Issues](https://img.shields.io/github/issues/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge)](https://github.com/yuchenzhu-research/zhihu-scraper/issues)
+<p align="center">
+  <img alt="Python Version" src="https://img.shields.io/pypi/pyversions/zhihu-scraper.svg?style=for-the-badge&logo=python&color=blue">
+  <img alt="License" src="https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&color=blue">
+  <img alt="Stars" src="https://img.shields.io/github/stars/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&logo=github&color=blue">
+  <img alt="Issues" src="https://img.shields.io/github/issues/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&color=blue">
+</p>
 
-**[极速抓取]** · **[防封号 Cookie 池]** · **[Markdown 与数据库双引擎存储]**
+[**🚀 快速开始**](#-快速开始) | [**🧠 项目哲学**](#-项目哲学为什么选择它) | [**🏗️ 架构设计**](#%EF%B8%8F-基础设施与架构设计) | [**📊 产出预览**](#-精选数据产出)
 
 </div>
 
 ---
 
-## ⚡ 核心演进 (Core Evolution)
+## 🧠 项目哲学 (为什么选择它？)
 
-本项目重构为直接与知乎后台 JSON API 交互的纯粹网络协议引擎。项目严格遵循领域驱动设计 (DDD) 的分层思想，杜绝了面条代码。
+抓取知乎内容历来是一场针对 `x-zse-96` 签名、严格的 `zse_ck` Cookie 校验以及频繁的 Cloudflare/WAF 拦截的持久战。
 
-| 核心组件引擎 | 技术解析与功能特性 |
-| :--- | :--- |
-| 🚀 **原生 API 提速引擎** | 依赖 `curl_cffi` 完美模拟 Chrome 底层 TLS/HTTP2 网络握手指纹，无视绝大数网关拦截。同时本地内置 `z_core.js` V8 逆向签名验证，实现 **毫秒级、0渲染开销** 的数据捕获。 |
-| 💿 **SQLite 主动存储池** | 获取到的每一个问题/专栏/回答，提取出核心字段，使用 UPSERT 持久化写入 `data/zhihu.db` 构建真正的**本地化智能知识库**。 |
-| 🔄 **自动化增量监听 (Monitor)** | 全新指令 `zhihu monitor`！利用状态指针 (Last ID) 实现对上万条知乎“收藏夹”记录的**无缝增量扫描**，只抓取最新加入的数据。极其适合挂载 Cron 定时任务！ |
-| 🛡️ **专栏墙降级与 Cookie 池** | 内置智能重试机制：当面对防抓取极严谨的**知乎专栏**时，自动无感拉起 Playwright 并注入动态 **Cookie 轮换池**中的备用账号，突破终极 `zse_ck` 防线！ |
-| 🎓 **排版引擎增强** | 完善并清洗图片防盗链链接，在最终导出的纯净 `Markdown` 内完美离线转换复杂的 LaTeX ($...$) 矩阵公式与重点加粗内容。 |
+`zhihu-scraper` 不仅仅是一个脚本；它是一个**工程级的数据管道**。它摒弃了脆弱的 CSS 选择器，转而与知乎后端进行原生的底层 JSON API 握手，在无需浏览器开销（除非必要）的情况下，提供高度流畅且高性能的提取体验。
 
----
-
-## 🏗️ 架构粒度拆解 (Directory Structure)
-
-当前的架构非常清晰，实现了模块化、解耦合与高内聚：
-
-*   **`cli/` (入口与视图层)**
-    *   `app.py`: 核心 Typer CLI 路由。定义了 `fetch`, `batch`, `monitor`, `query` 等核心命令，负责解析传参并整合 UI 输出。
-    *   `interactive.py`: 交互式仪表盘终端，对传统命令行输入的极强图形化增强。
-*   **`core/` (核心业务逻辑层)**
-    *   **`api_client.py`**: 引擎之源。负责向知乎发起底层请求，合并 Cookie、调用签名算法并携带 TLS 指纹，返回纯净 JSON。
-    *   **`scraper.py`**: 页面级业务编排。负责判断 URL 类型，向下游索要数据，提炼核心正文并统筹图片下载工作。
-    *   **`converter.py`**: Markdown 解析器。将图片源统一替换为本地相对路径，处理 LaTeX 及加粗等语义标签，渲染标准 Markdown 排版。
-    *   **`db.py`**: 结构化数据库访问层 (DAL)。负责维护局域 SQLite 库，建立全文索引并提供防重冲突持久化处理机制。
-    *   **`monitor.py`**: 增量抓取模块。比对收藏夹最新记录指针，推算系统增量，防止触发重复浏览限制。
-    *   **`cookie_manager.py`**: 动态账号调度。在遭遇 API 频率管制或拦截时，无缝分配未冷冻的独立凭证转交上下文。
-    *   **`browser_fallback.py`**: 针对强保护专栏页，在静默模式下弹出的自动化容器执行环境。
-*   **`static/` (逆向资产库)**: 绝密的逆向环境。包含了剥离出来的关键算法（如 `x-zse-96`）。
-*   **`data/` (输出目录)**: 不被 Git 追踪的内容产生地，包含 `zhihu.db` 以及产生的文章独立 `.md` 子文件夹。
+### ✨ 核心特性
+- 🚀 **零开销原生握手：** 使用 `curl_cffi` 完美模拟 Chrome 底层 TLS/HTTP2 指纹，静默绕过网关。
+- 🛡️ **智能 Cookie 池与自动降级：** 通过 JSON 池自动轮换身份。若遭遇强力拦截，系统会平滑降级至无头 Playwright 实例，突破“知乎专栏”的硬核防线。
+- 📦 **双引擎持久化：** 内容不只是简单的堆砌。它被优雅地解析为排版精美的 `Markdown`（支持完美的 LaTeX 数学公式）并结构化地 `UPSERT` 到本地 `SQLite` 知识库中。
+- 🔄 **增量监控运行：** 专用的 `monitor` 模式，利用状态指针（Last ID）追踪进度。即使是上万条的收藏夹，也能通过 Cron 任务轻松实现只抓取增量数据。
 
 ---
 
-## 📦 极简安装部署
+## 🚀 快速开始
 
-本项目深度依赖诸如 `PyExecJS` 与 `curl_cffi` 等底层 C 库。要求 **Python 3.10+**。
+**30 秒内**即可上手运行。标准提取模式无需复杂的浏览器配置。
 
-### 标准安装
+### 1. 安装
+
 ```bash
-# 1. 基础环境安装
+# 极简设置（仅原生 API 模式）
 pip install zhihu-scraper
 
-# 2. 如果需开启专栏防护降级环境，须按需补充渲染引擎：
+# 完整推荐（包含 CLI 与 Playwright 降级引擎）
+pip install "zhihu-scraper[cli]"
 playwright install chromium
 ```
 
-### 开发者源码安装
+### 2. 5 秒疾速提取
+
+在终端中粘贴任何知乎链接（回答、文章或问题）。
+
+```bash
+# 开箱即用
+zhihu fetch "https://www.zhihu.com/question/123456/answer/987654"
+
+# 交互式仪表盘（强烈推荐，体验最佳）
+zhihu interactive
+```
+
+*想要构建自己的 Agent 数据管道？这是 Python SDK 的调用方式：*
+
+```python
+import asyncio
+from core.scraper import ZhihuDownloader
+from core.converter import ZhihuConverter
+
+async def extract_knowledge():
+    # 1. 初始化针对某个回答的下载器
+    url = "https://www.zhihu.com/question/28696373/answer/2835848212"
+    downloader = ZhihuDownloader(url)
+    
+    # 2. 从 API 获取原始数据
+    data = await downloader.fetch_page()
+    
+    # 3. 转换为纯净的 Markdown（自动处理 LaTeX）
+    converter = ZhihuConverter()
+    markdown_text = converter.convert(data['html'])
+    
+    print(markdown_text[:200]) # 完美适配 LLM 语料输入
+
+asyncio.run(extract_knowledge())
+```
+
+---
+
+## 📊 精选数据产出
+
+`zhihu-scraper` 的输出被设计为一件精致的数字展品。它将混乱的网络源码标准化为机器可读的代码艺术。
+
+### 本地文件系统
+使用 CLI 时，数据会井然有序地存储：
+```text
+data/
+├── [2026-02-22] 深入理解大模型的底层逻辑/
+│   ├── index.md           # 纯净的 Markdown 文件
+│   └── images/            # 本地存储的图片，已绕过防盗链
+└── zhihu.db               # 本地 SQLite 全文知识库
+```
+
+### 结构化 JSON (SQLite 实体)
+提取的核心数据对象经过完美结构化，可直接用于 RAG (检索增强生成) 数据库：
+
+```json
+{
+  "type": "answer",
+  "answer_id": "2835848212",
+  "question_id": "28696373",
+  "author": "Tech Whisperer",
+  "title": "深入理解大模型的底层逻辑",
+  "voteup_count": 14205,
+  "created_at": "2023-01-15T08:32:00Z",
+  "html": "<p>大语言模型 (LLM) 本质上是在...</p>"
+}
+```
+
+---
+
+## 🏗️ 基础设施与架构设计
+
+该项目严格遵循领驱动设计 (DDD)，将提取机制、Markdown 解析和数据持久层完美解耦。
+
+```mermaid
+flowchart TD
+    %% 样式
+    classDef client fill:#2D3139,stroke:#5C6370,stroke-width:2px,color:#D7DAE0;
+    classDef process fill:#1C2833,stroke:#1A5276,stroke-width:2px,color:#A9CCE3;
+    classDef storage fill:#112F2C,stroke:#148F77,stroke-width:2px,color:#A2D9CE;
+
+    A[目标 URL]:::client --> B{路由 / 抓取编排}:::process
+    B -->|需 Playwright?| C[浏览器降级引擎]:::process
+    B -->|原生握手| D[API 客户端 (curl_cffi)]:::process
+    
+    C --> E[原始 JSON 对象]:::process
+    D --> E
+    
+    E --> F[V8 沙箱环境 (z_core.js)]:::process
+    F -->|密文解析 x-zse-96| G[干净的 HTML/内容]:::process
+    
+    G --> H(Markdown 转换器):::process
+    G --> I[SQLite 本地库]:::storage
+    
+    H --> J[index.md]:::storage
+    H --> K[images/]:::storage
+```
+
+---
+
+## 🕹️ 五大 CLI 工作流
+
+CLI 提供了一个功能强大的 `zhihu` 顶级命令。
+
+1. **`zhihu interactive`** (✨ 推荐): 启动一个赛博朋克风格的终端 UI (TUI)，直观配置批量任务和检索。
+2. **`zhihu fetch [URL]`**: 带有图片下载功能的单条稳定提取。
+3. **`zhihu batch [FILE]`**: 通过文本文件提供 URL 列表。自动启动异步、限频的线程池 (`-c 8`)。
+4. **`zhihu monitor [ID]`**: “自动化 Cron”功能。提供收藏夹 ID，它会维护一个状态指针，仅抓取最新增加的收藏。
+5. **`zhihu query "[关键词]"`**: 依托 SQLite 引擎，对所有已下载知识进行极速本地检索。
+
+---
+
+## 🤝 参与贡献
+
+欢迎任何形式的贡献！本项目正不断突破非结构化 Web 数据解析的边界。
+
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
-pip install -e ".[cli]"
-playwright install chromium
+pip install -e ".[dev]"
 ```
+
+提交 Pull Request 之前，请确保运行 `ruff` 和 `pytest`。
+
+<p align="center">
+  <br>
+  <b><a href="#top">⬆ 返回顶部</a></b>
+</p>
 
 ---
 
-## 🕹️ 五大核心控制台指令 (CLI Workflows)
-
-搭载了完备的 CLI 控制台应用系统，输入 `zhihu` 即可全局调用。
-
-### 1. 交互式仪表盘终端 (✨强烈推荐)
-启动全图形控制台引导的终端 UI 环境：
-```bash
-zhihu interactive
-
-# => 回车进入终端后，直接图形化勾选及配置批量抓取、检索任务
-```
-
-### 2. 精准抓取 (Fetch)
-流程：验证 URL -> 触发请求与降级 -> 资源并发落盘 -> 格式转换与 SQLite 持久化。
-```bash
-zhihu fetch "https://www.zhihu.com/question/12345/answer/98765"
-
-# 参数可选:
-# -i, --no-images : 纯文本模式，忽略图片并发操作
-```
-
-### 3. 多线程文件队列抓取 (Batch)
-通过外部文本源提供列表，执行不间断全自动收集：
-```bash
-# -c 代表启动对应的底层高并发信道
-zhihu batch ./urls.txt -c 8
-```
-
-### 4. 收藏夹自动化状态监控 (Monitor)
-专为持久维护长生命周期重度知乎收藏记录的用户设计。
-流程：调度 `monitor` -> 解析最近 API 页面区块 -> 对比本地 `.monitor_state.json` 的顶端记录 -> 计算绝对增量并交接给并发池 -> 同步更新指针状态。
-```bash
-# 传入目标收藏单的数字 ID (例如 https://www.zhihu.com/collection/78170682)
-zhihu monitor 78170682
-```
-
-### 5. 私域本地数据库闪查 (Query)
-支持多维数据库查询，跨过全部离线知识库全速响应。
-```bash
-# 根据任意标题、段落或作者名称深度遍历检索
-zhihu query "人工智能的底层逻辑"
-```
-
----
-
-## 🛠️ 高级反制策略
-
-### ⚠️ 专栏高危安全限制 (Current Limitations)
-知乎专栏 `zhuanlan.zhihu.com` 的应用型防护策略远高于常规模块。当发起接口请求时，极大概率会触碰 `403` 管制或验证墙拦截。**框架内嵌自动化的 Playwright 降级回退机制，通过容许少许无头渲染性能开销最大化文本回收完整度。**
-
-### 配置多账号验证矩阵 (Cookies Rotation)
-如需开启极致收集能力，请在此系统配置并绑定独立身份。
-1. **默认身份**：将捕获的基础 Cookie 结构导入到配置目录的 `cookies.json`。
-2. **集群防封**：在同级目录下建立 `cookie_pool/` 文件夹放置多个备份凭证 `.json`。若触发极高危 WAF 控制流隔离，底部的 `CookieManager` 安全路由网会自动丢弃报废凭证，切换其他活跃身份接力任务。
-
-### `config.yaml` 核心节律
-用来调整时间平滑和宽容规则：
-```yaml
-zhihu:
-  cookies: ./cookies.json
-
-crawler:
-  humanize: # 拟人化时间轴补偿
-    enabled: true
-    min_delay: 1.0   
-    max_delay: 3.5   
-
-output:
-  directory: data
-  format: markdown
-```
-
----
-
-## 🧱 技术栈基石 (Tech Stack)
-
-<div align="center">
-
-**[curl_cffi](https://github.com/lexiforest/curl_cffi)** (TLS 伪装) · **[Playwright](https://playwright.dev/)** (防线重构) · **[SQLite](https://sqlite.org/)** (数据全系固化)
-
-**[Typer](https://typer.tiangolo.com/)** (CLI 驱动) · **[Rich](https://github.com/Textualize/rich)** (赛博 TUI 组件) · **[PyExecJS](https://pypi.org/project/PyExecJS/)** (本地 V8 动态执行环境)
-
-</div>
-
----
-
-## ⚠️ 免责声明 (Disclaimer)
-
-1. 本项目仅供学术研究和学习交流使用，旨在探讨大规模非结构化文档的数据保存技术。
-2. 代码内含有对特定平台底层 HTTP 认证指纹特征的解析，严禁用此工具从事任何黑产打压、DDOS 恶意爬取及商业化倒卖活动。
-3. 任何由使用者擅自配置高并发参数导致被知乎封锁账户，产生的连带责任由部署者自行全权承担。使用者应遵守对应平台的法律法规与相关的 Robot 协议。
+*📝 **免责声明：** 本框架仅供学术研究和个人存档使用。严禁将底层 HTTP 认证指纹解析用于商业化或非法 DDoS 活动。针对因配置过高并发导致账户受限的情况，维护者不承担任何责任。*
