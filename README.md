@@ -133,14 +133,14 @@ flowchart TD
     classDef process fill:#1C2833,stroke:#1A5276,stroke-width:2px,color:#A9CCE3;
     classDef storage fill:#112F2C,stroke:#148F77,stroke-width:2px,color:#A2D9CE;
 
-    A[目标 URL]:::client --> B{路由 / 抓取编排}:::process
+    A[目标 URL]:::client --> B{"路由 / 抓取编排"}:::process
     B -->|需 Playwright?| C[浏览器降级引擎]:::process
-    B -->|原生握手| D[API 客户端 (curl_cffi)]:::process
+    B -->|原生握手| D["API 客户端 (curl_cffi)"]:::process
     
     C --> E[原始 JSON 对象]:::process
     D --> E
     
-    E --> F[V8 沙箱环境 (z_core.js)]:::process
+    E --> F["V8 沙箱环境 (z_core.js)"]:::process
     F -->|密文解析 x-zse-96| G[干净的 HTML/内容]:::process
     
     G --> H(Markdown 转换器):::process

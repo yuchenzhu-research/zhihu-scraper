@@ -133,14 +133,14 @@ flowchart TD
     classDef process fill:#1C2833,stroke:#1A5276,stroke-width:2px,color:#A9CCE3;
     classDef storage fill:#112F2C,stroke:#148F77,stroke-width:2px,color:#A2D9CE;
 
-    A[Target URL]:::client --> B{Router / Scraper}:::process
+    A[Target URL]:::client --> B{"Router / Scraper"}:::process
     B -->|Requires Playwright?| C[Browser Fallback]:::process
-    B -->|Native Handshake| D[API Client (curl_cffi)]:::process
+    B -->|Native Handshake| D["API Client (curl_cffi)"]:::process
     
     C --> E[Raw JSON Object]:::process
     D --> E
     
-    E --> F[V8 Sandbox (z_core.js)]:::process
+    E --> F["V8 Sandbox (z_core.js)"]:::process
     F -->|Decrypt x-zse-96| G[Clean HTML/Content]:::process
     
     G --> H(Markdown Converter):::process
