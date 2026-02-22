@@ -4,14 +4,17 @@
 **为数据科学与大模型语料设计的高雅、稳定的知乎内容提取器**
 
 <p align="center">
-  简体中文 | [English](README_EN.md)
+  <img src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python Version" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="License" />
+  <img src="https://img.shields.io/github/stars/yuchenzhu-research/zhihu-scraper?style=flat-square&logo=github&color=blue" alt="Stars" />
+  <img src="https://img.shields.io/github/issues/yuchenzhu-research/zhihu-scraper?style=flat-square&color=blue" alt="Issues" />
 </p>
 
 <p align="center">
-  <img alt="Python Version" src="https://img.shields.io/pypi/pyversions/zhihu-scraper.svg?style=for-the-badge&logo=python&color=blue">
-  <img alt="License" src="https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&color=blue">
-  <img alt="Stars" src="https://img.shields.io/github/stars/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&logo=github&color=blue">
-  <img alt="Issues" src="https://img.shields.io/github/issues/yuchenzhu-research/zhihu-scraper.svg?style=for-the-badge&color=blue">
+  <strong>
+    简体中文 | 
+    <a href="README_EN.md">English</a>
+  </strong>
 </p>
 
 [**🚀 快速开始**](#-快速开始) | [**🧠 项目哲学**](#-项目哲学为什么选择它) | [**🏗️ 架构设计**](#%EF%B8%8F-基础设施与架构设计) | [**📊 产出预览**](#-精选数据产出)
