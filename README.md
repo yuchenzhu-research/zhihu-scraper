@@ -164,6 +164,35 @@ CLI 提供了一个功能强大的 `zhihu` 顶级命令。
 
 ---
 
+## 🔧 便捷脚本（新增）
+
+为了提升日常可用性，仓库新增了 `scripts/` 助手脚本，适合“先跑起来，再精调参数”的场景：
+
+```bash
+# 1) 初始化环境（venv + 依赖）
+bash scripts/ensure_env.sh
+
+# 2) 初始化 Cookie 模板
+bash scripts/setup_cookie.sh
+
+# 3) 健康检查
+bash scripts/check.sh
+
+# 4) 单条抓取（带重试）
+bash scripts/fetch.sh --url "https://www.zhihu.com/question/123" --retry 3 --sleep 1.5
+
+# 5) 批量抓取（推荐并发 1~2）
+bash scripts/batch.sh --file ./urls.txt --concurrency 2 --retry 3 --sleep 1.5
+
+# 6) 问题回答分页抓取（offset）
+bash scripts/fetch_batched.sh --url "https://www.zhihu.com/question/123" --total 50 --batch 10 --sleep 1.5 --retry 3 --dedupe id
+
+# 7) 本地检索
+bash scripts/query.sh --keyword "大模型" --limit 20
+```
+
+> 建议：高风控时段将并发控制在 `1~2`，并将 `sleep` 保持在 `>=1.2s`。
+
 ## 🤝 参与贡献
 
 欢迎任何形式的贡献！本项目正不断突破非结构化 Web 数据解析的边界。

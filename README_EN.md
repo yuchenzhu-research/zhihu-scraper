@@ -164,6 +164,35 @@ The CLI provides a `zhihu` top-level command packed with operational power.
 
 ---
 
+## 🔧 Utility Scripts (Added)
+
+To improve day-to-day usability, this fork includes helper scripts under `scripts/`:
+
+```bash
+# 1) Initialize environment (venv + deps)
+bash scripts/ensure_env.sh
+
+# 2) Create cookie template
+bash scripts/setup_cookie.sh
+
+# 3) Health check
+bash scripts/check.sh
+
+# 4) Single fetch with retry
+bash scripts/fetch.sh --url "https://www.zhihu.com/question/123" --retry 3 --sleep 1.5
+
+# 5) Batch fetch (recommended concurrency 1~2)
+bash scripts/batch.sh --file ./urls.txt --concurrency 2 --retry 3 --sleep 1.5
+
+# 6) Offset-based batched answer fetch
+bash scripts/fetch_batched.sh --url "https://www.zhihu.com/question/123" --total 50 --batch 10 --sleep 1.5 --retry 3 --dedupe id
+
+# 7) Local query
+bash scripts/query.sh --keyword "LLM" --limit 20
+```
+
+> Recommendation: keep concurrency at `1~2` and `sleep >= 1.2s` during sensitive periods.
+
 ## 🤝 Contributing
 
 We welcome contributions! This is an active repository pushing the boundaries of what parsing unstructured web data should look like.
