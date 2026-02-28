@@ -17,11 +17,30 @@
   </strong>
 </p>
 
-[**🚀 Quick Start**](#-quick-start) | [**🧠 Philosophy**](#-the-philosophy) | [**🏗️ Architecture**](#%EF%B8%8F-infrastructure--architecture) | [**📊 Output Preview**](#-curated-data-output)
+[**🆕 Fork Enhancements**](#-fork-enhancements-v310) | [**🚀 Quick Start**](#-quick-start) | [**🧠 Philosophy**](#-the-philosophy) | [**🏗️ Architecture**](#%EF%B8%8F-infrastructure--architecture) | [**📊 Output Preview**](#-curated-data-output)
 
 </div>
 
 ---
+
+## 🆕 Fork Enhancements (v3.1.0)
+
+> This fork adds practical usability and operability improvements on top of upstream.
+
+### What is newly added (vs upstream)
+- ✅ `scripts/ensure_env.sh`: one-command venv + dependency bootstrap
+- ✅ `scripts/setup_cookie.sh`: cookie template initializer
+- ✅ `scripts/check.sh`: environment/config sanity checks
+- ✅ `scripts/fetch.sh`: single URL fetch with `--retry` / `--sleep`
+- ✅ `scripts/batch.sh`: batch fetch with concurrency + retry controls
+- ✅ `scripts/query.sh`: local query wrapper
+- ✅ `scripts/fetch_batched.sh` + `fetch_question_batched.py`: offset-based question answer fetch with dedupe strategy
+- ✅ `templates/cookies.json.example`: standard cookie template
+
+### Why this matters
+- Improves reliability for daily runs (retry + pacing controls)
+- Reduces onboarding friction with script-first workflows
+- Makes automation easier (cron / CI / schedulers)
 
 ## 🧠 The Philosophy (Why this Scraper?)
 
