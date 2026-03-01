@@ -17,11 +17,30 @@
   </strong>
 </p>
 
-[**🚀 快速开始**](#-快速开始) | [**🧠 项目哲学**](#-项目哲学为什么选择它) | [**🏗️ 架构设计**](#%EF%B8%8F-基础设施与架构设计) | [**📊 产出预览**](#-精选数据产出)
+[**🆕 Fork 增强能力**](#-fork-增强能力-v310) | [**🚀 快速开始**](#-快速开始) | [**🧠 项目哲学**](#-项目哲学为什么选择它) | [**🏗️ 架构设计**](#%EF%B8%8F-基础设施与架构设计) | [**📊 产出预览**](#-精选数据产出)
 
 </div>
 
 ---
+
+## 🆕 Fork 增强能力 (v3.1.0)
+
+> 本仓库在上游基础上增加了“更易用”的执行与运维能力，适合直接落地日常抓取任务。
+
+### 新增内容（相对上游）
+- ✅ `scripts/ensure_env.sh`：一键初始化 venv + 依赖
+- ✅ `scripts/setup_cookie.sh`：自动生成 Cookie 模板
+- ✅ `scripts/check.sh`：环境/配置健康检查
+- ✅ `scripts/fetch.sh`：单链接抓取（支持 `--retry` / `--sleep`）
+- ✅ `scripts/batch.sh`：批量抓取（支持并发+重试）
+- ✅ `scripts/query.sh`：本地检索包装
+- ✅ `scripts/fetch_batched.sh` + `fetch_question_batched.py`：问题回答 offset 分页抓取，支持去重策略
+- ✅ `templates/cookies.json.example`：标准 Cookie 示例模板
+
+### 为什么这些增强重要
+- 让“能跑”变成“稳定跑”：失败可重试、参数可控
+- 降低上手门槛：脚本化命令，不需要记复杂参数
+- 更适合自动化：可直接接入 cron / CI / 任务编排器
 
 ## 🧠 项目哲学 (为什么选择它？)
 
@@ -163,6 +182,35 @@ CLI 提供了一个功能强大的 `zhihu` 顶级命令。
 5. **`zhihu query "[关键词]"`**: 依托 SQLite 引擎，对所有已下载知识进行极速本地检索。
 
 ---
+
+## 🔧 便捷脚本（新增）
+
+为了提升日常可用性，仓库新增了 `scripts/` 助手脚本，适合“先跑起来，再精调参数”的场景：
+
+```bash
+# 1) 初始化环境（venv + 依赖）
+bash scripts/ensure_env.sh
+
+# 2) 初始化 Cookie 模板
+bash scripts/setup_cookie.sh
+
+# 3) 健康检查
+bash scripts/check.sh
+
+# 4) 单条抓取（带重试）
+bash scripts/fetch.sh --url "https://www.zhihu.com/question/123" --retry 3 --sleep 1.5
+
+# 5) 批量抓取（推荐并发 1~2）
+bash scripts/batch.sh --file ./urls.txt --concurrency 2 --retry 3 --sleep 1.5
+
+# 6) 问题回答分页抓取（offset）
+bash scripts/fetch_batched.sh --url "https://www.zhihu.com/question/123" --total 50 --batch 10 --sleep 1.5 --retry 3 --dedupe id
+
+# 7) 本地检索
+bash scripts/query.sh --keyword "大模型" --limit 20
+```
+
+> 建议：高风控时段将并发控制在 `1~2`，并将 `sleep` 保持在 `>=1.2s`。
 
 ## 🤝 参与贡献
 

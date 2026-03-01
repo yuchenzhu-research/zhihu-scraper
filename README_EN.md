@@ -17,11 +17,30 @@
   </strong>
 </p>
 
-[**🚀 Quick Start**](#-quick-start) | [**🧠 Philosophy**](#-the-philosophy) | [**🏗️ Architecture**](#%EF%B8%8F-infrastructure--architecture) | [**📊 Output Preview**](#-curated-data-output)
+[**🆕 Fork Enhancements**](#-fork-enhancements-v310) | [**🚀 Quick Start**](#-quick-start) | [**🧠 Philosophy**](#-the-philosophy) | [**🏗️ Architecture**](#%EF%B8%8F-infrastructure--architecture) | [**📊 Output Preview**](#-curated-data-output)
 
 </div>
 
 ---
+
+## 🆕 Fork Enhancements (v3.1.0)
+
+> This fork adds practical usability and operability improvements on top of upstream.
+
+### What is newly added (vs upstream)
+- ✅ `scripts/ensure_env.sh`: one-command venv + dependency bootstrap
+- ✅ `scripts/setup_cookie.sh`: cookie template initializer
+- ✅ `scripts/check.sh`: environment/config sanity checks
+- ✅ `scripts/fetch.sh`: single URL fetch with `--retry` / `--sleep`
+- ✅ `scripts/batch.sh`: batch fetch with concurrency + retry controls
+- ✅ `scripts/query.sh`: local query wrapper
+- ✅ `scripts/fetch_batched.sh` + `fetch_question_batched.py`: offset-based question answer fetch with dedupe strategy
+- ✅ `templates/cookies.json.example`: standard cookie template
+
+### Why this matters
+- Improves reliability for daily runs (retry + pacing controls)
+- Reduces onboarding friction with script-first workflows
+- Makes automation easier (cron / CI / schedulers)
 
 ## 🧠 The Philosophy (Why this Scraper?)
 
@@ -163,6 +182,35 @@ The CLI provides a `zhihu` top-level command packed with operational power.
 5. **`zhihu query "[KEYWORD]"`**: Lightning-fast local searches across all downloaded knowledge via the SQLite engine.
 
 ---
+
+## 🔧 Utility Scripts (Added)
+
+To improve day-to-day usability, this fork includes helper scripts under `scripts/`:
+
+```bash
+# 1) Initialize environment (venv + deps)
+bash scripts/ensure_env.sh
+
+# 2) Create cookie template
+bash scripts/setup_cookie.sh
+
+# 3) Health check
+bash scripts/check.sh
+
+# 4) Single fetch with retry
+bash scripts/fetch.sh --url "https://www.zhihu.com/question/123" --retry 3 --sleep 1.5
+
+# 5) Batch fetch (recommended concurrency 1~2)
+bash scripts/batch.sh --file ./urls.txt --concurrency 2 --retry 3 --sleep 1.5
+
+# 6) Offset-based batched answer fetch
+bash scripts/fetch_batched.sh --url "https://www.zhihu.com/question/123" --total 50 --batch 10 --sleep 1.5 --retry 3 --dedupe id
+
+# 7) Local query
+bash scripts/query.sh --keyword "LLM" --limit 20
+```
+
+> Recommendation: keep concurrency at `1~2` and `sleep >= 1.2s` during sensitive periods.
 
 ## 🤝 Contributing
 
