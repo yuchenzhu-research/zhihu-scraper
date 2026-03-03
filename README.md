@@ -44,40 +44,46 @@
 - **Python 3.10** 或更高版本
 - **Git**
 
-### 安装方式
-
-#### 方式一：从 PyPI 安装（推荐）
+### 安装步骤
 
 ```bash
-pip install zhihu-scraper
-zhihu interactive  # 启动交互式界面
-```
-
-#### 方式二：从源码运行（开发者）
-
-```bash
-# 1. 克隆项目
+# 1️⃣ 克隆项目
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 
-# 2. 创建虚拟环境（推荐）
+# 2️⃣ 创建虚拟环境（推荐）
 python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows: .venv\Scripts\activate
 
-# 3. 安装依赖
+# 3️⃣ 安装依赖
 pip install -e ".[cli]"
 
-# 4. 安装 Playwright 浏览器（如需降级引擎）
+# 4️⃣ 安装 Playwright 浏览器
 playwright install chromium
-
-# 5. 运行！
-zhihu fetch "https://www.zhihu.com/question/123456"
 ```
 
-### 🔑 配置 Cookie
+### 运行
 
-1. 用浏览器登录知乎（F12 → Network → 任意请求 → Request Headers → 复制 `cookie` 值）
+**方式一：交互式界面（推荐）**
+
+```bash
+python3 -m cli.app interactive
+```
+
+启动后会看到一个 TUI 界面，直接粘贴知乎链接即可抓取。
+
+**方式二：直接抓取单个链接**
+
+```bash
+python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/789012"
+```
+
+### 🔑 配置 Cookie（可选）
+
+如果遇到访问限制，可以配置知乎 Cookie：
+
+1. 用浏览器登录知乎（F12 → Network → 任意请求 → 复制 `cookie` 值）
 2. 编辑项目根目录下的 `cookies.json`：
 ```json
 {
@@ -94,7 +100,7 @@ zhihu fetch "https://www.zhihu.com/question/123456"
 }
 ```
 
-> 💡 **提示**：如果暂不配置 Cookie，也可以游客身份运行，但部分内容可能受限。
+> 💡 **提示**：不配置 Cookie 也可以游客身份运行，但部分内容可能受限。
 
 ---
 

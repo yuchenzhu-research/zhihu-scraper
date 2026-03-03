@@ -46,38 +46,44 @@ Scraping Zhihu (知乎) has historically been an uphill battle against `x-zse-96
 
 ### Installation
 
-#### Option 1: Install from PyPI (Recommended)
-
 ```bash
-pip install zhihu-scraper
-zhihu interactive  # Launch interactive UI
-```
-
-#### Option 2: Run from Source (Developers)
-
-```bash
-# 1. Clone the repository
+# 1️⃣ Clone the repository
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 
-# 2. Create virtual environment (recommended)
+# 2️⃣ Create virtual environment (recommended)
 python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows: .venv\Scripts\activate
 
-# 3. Install dependencies
+# 3️⃣ Install dependencies
 pip install -e ".[cli]"
 
-# 4. Install Playwright browser (if fallback engine needed)
+# 4️⃣ Install Playwright browser
 playwright install chromium
-
-# 5. Run!
-zhihu fetch "https://www.zhihu.com/question/123456"
 ```
 
-### 🔑 Configuring Cookies
+### Running
 
-1. Log in to Zhihu in your browser (F12 → Network → any request → Request Headers → copy `cookie` value)
+**Option 1: Interactive UI (Recommended)**
+
+```bash
+python3 -m cli.app interactive
+```
+
+Starts a TUI interface where you can paste Zhihu URLs directly.
+
+**Option 2: Fetch a single URL**
+
+```bash
+python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/789012"
+```
+
+### 🔑 Configuring Cookies (Optional)
+
+If you encounter access limits, configure your Zhihu cookie:
+
+1. Log in to Zhihu in your browser (F12 → Network → any request → copy `cookie` value)
 2. Edit `cookies.json` in the project root:
 ```json
 {
@@ -94,7 +100,7 @@ zhihu fetch "https://www.zhihu.com/question/123456"
 }
 ```
 
-> 💡 **Tip**: You can run without configuring cookies (guest mode), but some content may be restricted.
+> 💡 **Tip**: You can run without cookies (guest mode), but some content may be restricted.
 
 ---
 
