@@ -46,37 +46,40 @@ Scraping Zhihu (知乎) has historically been an uphill battle against `x-zse-96
 
 ### Installation
 
+#### Option 1: Install from PyPI (Recommended)
+
 ```bash
-# 1️⃣ Clone the repository
+pip install zhihu-scraper
+zhihu interactive  # Launch interactive UI
+```
+
+#### Option 2: Run from Source (Developers)
+
+```bash
+# 1. Clone the repository
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 
-# 2️⃣ Create virtual environment (recommended)
+# 2. Create virtual environment (recommended)
 python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows: .venv\Scripts\activate
 
-# 3️⃣ Install dependencies
+# 3. Install dependencies
 pip install -e ".[cli]"
 
-# 4️⃣ Install Playwright browser
+# 4. Install Playwright browser
 playwright install chromium
 ```
 
 ### Running
 
-**Option 1: Interactive UI (Recommended)**
-
 ```bash
+# Interactive UI (Recommended)
 python3 -m cli.app interactive
-```
 
-Starts a TUI interface where you can paste Zhihu URLs directly.
-
-**Option 2: Fetch a single URL**
-
-```bash
-python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/789012"
+# Or use the script
+./zhihu interactive
 ```
 
 ### 🔑 Configuring Cookies (Optional)
@@ -109,11 +112,11 @@ If you encounter access limits, configure your Zhihu cookie:
 Open your terminal and paste any Zhihu URL (Answer, Article, or Question).
 
 ```bash
-# Works immediately out of the box.
-zhihu fetch "https://www.zhihu.com/question/123456/answer/987654"
+# Interactive UI
+python3 -m cli.app interactive
 
-# Interactive UI Dashboard (Recommended for the best experience)
-zhihu interactive
+# Or fetch directly
+python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/987654"
 ```
 
 *Want to build your own agent pipeline? Here is the Python SDK approach:*
@@ -204,15 +207,15 @@ flowchart TD
 
 ---
 
-## 🕹️ The 5 CLI Workflows 
+## 🕹️ The 5 CLI Workflows
 
-The CLI provides a `zhihu` top-level command packed with operational power.
+The CLI provides the following commands (via `python3 -m cli.app` or `./zhihu`):
 
-1. **`zhihu interactive`** (✨ Recommended): Launches a beautiful, cyberpunk-styled Terminal UI (TUI) for configuring batch tasks and queries visually.
-2. **`zhihu fetch [URL]`**: Single robust extraction with image downloading capabilities.
-3. **`zhihu batch [FILE]`**: Provide a text file of URLs. Automatically launches an asynchronous, rate-limited thread pool (`-c 8`).
-4. **`zhihu monitor [ID]`**: The "Cron" feature. Give it a collection ID, and it maintains a state pointer (`.monitor_state.json`) to only download new bookmarks.
-5. **`zhihu query "[KEYWORD]"`**: Lightning-fast local searches across all downloaded knowledge via the SQLite engine.
+1. **`python3 -m cli.app interactive`** (✨ Recommended): Launches a beautiful Terminal UI (TUI) for configuring batch tasks and queries.
+2. **`python3 -m cli.app fetch [URL]`**: Single robust extraction with image downloading.
+3. **`python3 -m cli.app batch [FILE]`**: Provide a text file of URLs. Automatically launches an asynchronous, rate-limited thread pool (`-c 8`).
+4. **`python3 -m cli.app monitor [ID]`**: The "Cron" feature. Give it a collection ID, and it maintains a state pointer to only download new bookmarks.
+5. **`python3 -m cli.app query "[KEYWORD]"`**: Search locally downloaded Markdown files.
 
 ---
 

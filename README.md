@@ -44,39 +44,42 @@
 - **Python 3.10** 或更高版本
 - **Git**
 
-### 安装步骤
+### 安装方式
+
+#### 方式一：从 PyPI 安装（推荐）
 
 ```bash
-# 1️⃣ 克隆项目
+pip install zhihu-scraper
+zhihu interactive  # 启动交互式界面
+```
+
+#### 方式二：从源码运行（开发者）
+
+```bash
+# 1. 克隆项目
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 
-# 2️⃣ 创建虚拟环境（推荐）
+# 2. 创建虚拟环境（推荐）
 python3 -m venv .venv
 source .venv/bin/activate  # macOS/Linux
 # Windows: .venv\Scripts\activate
 
-# 3️⃣ 安装依赖
+# 3. 安装依赖
 pip install -e ".[cli]"
 
-# 4️⃣ 安装 Playwright 浏览器
+# 4. 安装 Playwright 浏览器
 playwright install chromium
 ```
 
 ### 运行
 
-**方式一：交互式界面（推荐）**
-
 ```bash
+# 交互式界面（推荐）
 python3 -m cli.app interactive
-```
 
-启动后会看到一个 TUI 界面，直接粘贴知乎链接即可抓取。
-
-**方式二：直接抓取单个链接**
-
-```bash
-python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/789012"
+# 或使用脚本
+./zhihu interactive
 ```
 
 ### 🔑 配置 Cookie（可选）
@@ -109,11 +112,11 @@ python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/789012"
 在终端中粘贴任何知乎链接（回答、文章或问题）。
 
 ```bash
-# 开箱即用
-zhihu fetch "https://www.zhihu.com/question/123456/answer/987654"
+# 交互式界面
+python3 -m cli.app interactive
 
-# 交互式仪表盘（强烈推荐，体验最佳）
-zhihu interactive
+# 或直接抓取
+python3 -m cli.app fetch "https://www.zhihu.com/question/123456/answer/987654"
 ```
 
 *想要构建自己的 Agent 数据管道？这是 Python SDK 的调用方式：*
@@ -206,13 +209,13 @@ flowchart TD
 
 ## 🕹️ 五大 CLI 工作流
 
-CLI 提供了一个功能强大的 `zhihu` 顶级命令。
+CLI 提供了以下命令（使用 `python3 -m cli.app` 或 `./zhihu` 调用）：
 
-1. **`zhihu interactive`** (✨ 推荐): 启动一个赛博朋克风格的终端 UI (TUI)，直观配置批量任务和检索。
-2. **`zhihu fetch [URL]`**: 带有图片下载功能的单条稳定提取。
-3. **`zhihu batch [FILE]`**: 通过文本文件提供 URL 列表。自动启动异步、限频的线程池 (`-c 8`)。
-4. **`zhihu monitor [ID]`**: “自动化 Cron”功能。提供收藏夹 ID，它会维护一个状态指针，仅抓取最新增加的收藏。
-5. **`zhihu query "[关键词]"`**: 依托 SQLite 引擎，对所有已下载知识进行极速本地检索。
+1. **`python3 -m cli.app interactive`** (✨ 推荐): 启动交互式终端 UI (TUI)，直观配置批量任务和检索。
+2. **`python3 -m cli.app fetch [URL]`**: 带有图片下载功能的单条稳定提取。
+3. **`python3 -m cli.app batch [FILE]`**: 通过文本文件提供 URL 列表。自动启动异步、限频的线程池 (`-c 8`)。
+4. **`python3 -m cli.app monitor [ID]`**: “自动化 Cron”功能。提供收藏夹 ID，仅抓取最新增量。
+5. **`python3 -m cli.app query “[关键词]”`**: 对所有已下载 Markdown 文件进行本地检索。
 
 ---
 
