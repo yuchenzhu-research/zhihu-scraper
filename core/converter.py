@@ -58,9 +58,10 @@ class ZhihuConverter:
 
     @staticmethod
     def extract_image_urls(html: str) -> list[str]:
-        """从 HTML 中抽取所有需要下载的图片 URL（不含公式图片）。"""
+        """从 HTML 中抽取所有需要下载的图片 URL（不含公式图片、不含重复尺寸）。"""
         soup = BeautifulSoup(html, "html.parser")
         urls: list[str] = []
+        seen_base: set[str] = set()  # 用于去重同主题图片
 
         for img in soup.find_all("img"):
             if "ztext-math" in (img.get("class") or []):
@@ -73,9 +74,25 @@ class ZhihuConverter:
             )
             if not src or src.startswith("data:") or "noavatar" in src:
                 continue
+
+            # 提取基础名用于去重：v2-xxx_720w.jpg → v2-xxx
+            # 知乎图片命名规则：v2-xxx_720w.jpg, v2-xxx_r.jpg
+            base_name = src.split("/")[-1].split("?")[0]
+            for suffix in ["_720w", "_r", "_l"]:
+                if base_name.endswith(suffix + ".jpg"):
+                    base_name = base_name.replace(suffix + ".jpg", ".jpg")
+                    break
+                if base_name.endswith(suffix + ".png"):
+                    base_name = base_name.replace(suffix + ".png", ".png")
+                    break
+
+            # 如果已经见过同主题图片，跳过
+            if base_name in seen_base:
+                continue
+            seen_base.add(base_name)
             urls.append(src)
 
-        return list(dict.fromkeys(urls))  # 去重保序
+        return urls
 
     # ── 预处理 HTML ──────────────────────────────────────────
 

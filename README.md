@@ -58,20 +58,66 @@
 
 ## 🚀 快速开始
 
-**30 秒内**即可上手运行。标准提取模式无需复杂的浏览器配置。
+### 前置要求
 
-### 1. 安装
+- **Python 3.10** 或更高版本
+- **Git**
+
+### 安装方式
+
+#### 方式一：从 PyPI 安装（推荐）
 
 ```bash
-# 极简设置（仅原生 API 模式）
 pip install zhihu-scraper
-
-# 完整推荐（包含 CLI 与 Playwright 降级引擎）
-pip install "zhihu-scraper[cli]"
-playwright install chromium
+zhihu interactive  # 启动交互式界面
 ```
 
-### 2. 5 秒疾速提取
+#### 方式二：从源码运行（开发者）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
+cd zhihu-scraper
+
+# 2. 创建虚拟环境（推荐）
+python3 -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# Windows: .venv\Scripts\activate
+
+# 3. 安装依赖
+pip install -e ".[cli]"
+
+# 4. 安装 Playwright 浏览器（如需降级引擎）
+playwright install chromium
+
+# 5. 运行！
+zhihu fetch "https://www.zhihu.com/question/123456"
+```
+
+### 🔑 配置 Cookie
+
+1. 用浏览器登录知乎（F12 → Network → 任意请求 → Request Headers → 复制 `cookie` 值）
+2. 编辑项目根目录下的 `cookies.json`：
+```json
+{
+  "cookies": [
+    {
+      "name": "zse_ck",
+      "value": "你的 Cookie 值"
+    },
+    {
+      "name": "其他 Cookie 名称",
+      "value": "其他值"
+    }
+  ]
+}
+```
+
+> 💡 **提示**：如果暂不配置 Cookie，也可以游客身份运行，但部分内容可能受限。
+
+---
+
+## 📦 5 秒极速提取
 
 在终端中粘贴任何知乎链接（回答、文章或问题）。
 
@@ -211,6 +257,30 @@ bash scripts/query.sh --keyword "大模型" --limit 20
 ```
 
 > 建议：高风控时段将并发控制在 `1~2`，并将 `sleep` 保持在 `>=1.2s`。
+
+---
+
+## ❓ 常见问题
+
+### Q: 报错 "Cookie required" 怎么办？
+A: 编辑 `cookies.json`，填入登录知乎后的 Cookie 值。获取方法：浏览器登录知乎 → F12 → Network → 任意请求 → Request Headers → 复制 `cookie`。
+
+### Q: 速度太慢/被限流？
+A:
+- 检查网络连接
+- 调整 `config.yaml` 中的 `humanize.min_delay` 和 `humanize.max_delay` 增大间隔
+- 确保 Cookie 有效
+
+### Q: 提取失败/被知乎拦截？
+A: 项目会自动降级到 Playwright 模式。请勿设置过高并发或过快请求频率。等待几分钟后重试。
+
+### Q: 能在 Windows 上运行吗？
+A: 支持！确保安装 Python 3.10+ 和 Git 后，使用 PowerShell 按上述步骤操作即可。
+
+### Q: 图片下载失败？
+A: 图片下载需要正确的 `referer` 头，项目已默认配置。如仍失败，检查网络是否能访问知乎图床。
+
+---
 
 ## 🤝 参与贡献
 

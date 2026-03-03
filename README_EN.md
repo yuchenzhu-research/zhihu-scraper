@@ -56,27 +56,73 @@ Scraping Zhihu (知乎) has historically been an uphill battle against `x-zse-96
 
 ---
 
-## 🚀 Quick Start (Vibe Coding)
+## 🚀 Quick Start
 
-Get up and running in **under 30 seconds**. No complex browser setups required for standard extraction.
+### Prerequisites
 
-### 1. Installation
+- **Python 3.10** or higher
+- **Git**
+
+### Installation
+
+#### Option 1: Install from PyPI (Recommended)
 
 ```bash
-# Minimal setup (Native API mode only)
 pip install zhihu-scraper
-
-# Recommended (Includes CLI & Playwright Fallback Engine)
-pip install "zhihu-scraper[cli]"
-playwright install chromium
+zhihu interactive  # Launch interactive UI
 ```
 
-### 2. The 5-Second Extraction
+#### Option 2: Run from Source (Developers)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
+cd zhihu-scraper
+
+# 2. Create virtual environment (recommended)
+python3 -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# Windows: .venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -e ".[cli]"
+
+# 4. Install Playwright browser (if fallback engine needed)
+playwright install chromium
+
+# 5. Run!
+zhihu fetch "https://www.zhihu.com/question/123456"
+```
+
+### 🔑 Configuring Cookies
+
+1. Log in to Zhihu in your browser (F12 → Network → any request → Request Headers → copy `cookie` value)
+2. Edit `cookies.json` in the project root:
+```json
+{
+  "cookies": [
+    {
+      "name": "zse_ck",
+      "value": "your_cookie_value"
+    },
+    {
+      "name": "other_cookie_name",
+      "value": "other_value"
+    }
+  ]
+}
+```
+
+> 💡 **Tip**: You can run without configuring cookies (guest mode), but some content may be restricted.
+
+---
+
+## 📦 5-Second Extraction
 
 Open your terminal and paste any Zhihu URL (Answer, Article, or Question).
 
 ```bash
-# It works immediately out of the box.
+# Works immediately out of the box.
 zhihu fetch "https://www.zhihu.com/question/123456/answer/987654"
 
 # Interactive UI Dashboard (Recommended for the best experience)
@@ -211,6 +257,30 @@ bash scripts/query.sh --keyword "LLM" --limit 20
 ```
 
 > Recommendation: keep concurrency at `1~2` and `sleep >= 1.2s` during sensitive periods.
+
+---
+
+## ❓ FAQ
+
+### Q: Getting "Cookie required" error?
+A: Edit `cookies.json` and add your Zhihu login cookie. How to get it: Log in to Zhihu in browser → F12 → Network → any request → Request Headers → copy `cookie`.
+
+### Q: Too slow / rate limited?
+A:
+- Check your network connection
+- Increase `humanize.min_delay` and `humanize.max_delay` in `config.yaml` to add more delay between requests
+- Ensure your cookies are valid
+
+### Q: Extraction failed / blocked by Zhihu?
+A: The tool will automatically fall back to Playwright mode. Avoid setting high concurrency or too fast request rates. Wait a few minutes and retry.
+
+### Q: Can this run on Windows?
+A: Yes! Just make sure Python 3.10+ and Git are installed, then follow the steps using PowerShell.
+
+### Q: Image download failed?
+A: Image downloading requires the correct `referer` header, which is configured by default. If it still fails, check if your network can access Zhihu's image CDN.
+
+---
 
 ## 🤝 Contributing
 

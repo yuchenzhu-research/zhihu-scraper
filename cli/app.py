@@ -223,47 +223,60 @@ def monitor(
 @app.command("query")
 def query_db(
     keyword: str = typer.Argument(..., help="要搜索的关键词"),
-    limit: int = typer.Option(10, "-l", "--limit", help="最大显示结果数量"),
     data_dir: str = typer.Option("./data", "-d", "--data-dir", help="数据目录（默认 ./data）"),
 ) -> None:
     """
-    在本地 SQLite 数据库中检索已抓取的知乎内容。
+    在本地 Markdown 文件中检索已抓取的知乎内容。
 
     示例:
         zhihu query "深度学习"
     """
-    from core.db import ZhihuDatabase
     from rich.table import Table
-    
-    db_path = Path(data_dir) / "zhihu.db"
-    if not db_path.exists():
-        rprint("[red]❌ 未找到知乎数据库，请先执行抓取任务 (fetch 或 monitor)。[/red]")
+
+    base_dir = Path(data_dir)
+    if not base_dir.exists():
+        rprint("[red]❌ 数据目录不存在[/red]")
         raise SystemExit(1)
-        
-    db = ZhihuDatabase(str(db_path))
-    results = db.search_articles(keyword, limit)
-    db.close()
-    
+
+    results = []
+    for md_file in base_dir.rglob("index.md"):
+        try:
+            content = md_file.read_text(encoding="utf-8")
+            if keyword in content:
+                # 从路径提取标题
+                folder_name = md_file.parent.name
+                # 标题格式: [2026-03-03] 标题
+                title = folder_name.split("] ", 1)[1] if "] " in folder_name else folder_name
+
+                # 搜索上下文
+                lines = content.split("\n")
+                context = ""
+                for i, line in enumerate(lines):
+                    if keyword in line:
+                        context = line.strip()[:100]
+                        break
+
+                results.append({
+                    "title": title,
+                    "path": str(md_file),
+                    "context": context
+                })
+        except Exception:
+            continue
+
     if not results:
-        rprint(f"[yellow]⚠️ 未找到包含关键词 '[bold]{keyword}[/bold]' 的文章。[/yellow]")
+        rprint(f"[yellow]⚠️ 未找到包含关键词 '{keyword}' 的文章。[/yellow]")
         return
-        
-    table = Table(title=f"🔍 检索结果: '{keyword}' (前 {len(results)} 条)")
-    table.add_column("Type", justify="center", style="cyan")
-    table.add_column("Author", style="green")
-    table.add_column("Title", style="magenta", overflow="fold")
-    table.add_column("Captured At", style="dim")
-    table.add_column("Zhihu ID", justify="right", style="blue")
-    
-    for row in results:
-        table.add_row(
-            row["type"],
-            row["author"],
-            row["title"],
-            row["created_at"].split("T")[0],
-            row["answer_id"]
-        )
-        
+
+    rprint(f"🔍 找到 {len(results)} 条结果：\n")
+
+    table = Table(title=f"🔍 搜索结果: '{keyword}'")
+    table.add_column("标题", style="magenta", overflow="fold")
+    table.add_column("路径", style="dim")
+
+    for r in results:
+        table.add_row(r["title"], r["path"])
+
     rprint(table)
 
 
@@ -474,17 +487,8 @@ async def _fetch_and_save(
         full_md = header + md
         out_path.write_text(full_md, encoding="utf-8")
 
-        # 保存入库
-        from core.db import ZhihuDatabase
-        db_folder = output_dir if output_dir.name == "data" else output_dir.parent
-        if db_folder.name != "data":
-             db_folder = Path("./data") # fallback
-        db = ZhihuDatabase(str(db_folder / "zhihu.db"))
-        db.save_article(item, full_md, collection_id=collection_id)
-        db.close()
-
         rprint(f"✅ 保存: [cyan]{author}[/] - {title[:25]}...")
-        rprint(f"   📁 {out_path} & 入库 DB")
+        rprint(f"   📁 {out_path}")
 
 
 # ============================================================
