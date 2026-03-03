@@ -261,19 +261,7 @@ A: The project will auto-fallback to Playwright mode.
 ### Q: Can it run on Windows?
 A: Yes! Python 3.10+ and Git are sufficient.
 
----
 
-## Contributing
-
-```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-pip install -e ".[dev]"
-```
-
-Before submitting, please run `ruff` and `pytest`.
-
----
 
 <p align="center">
   <a href="#top">⬆ Back to Top</a>

@@ -238,19 +238,7 @@ CREATE TABLE articles (
 | 提取失败/被拦截 | 项目会自动降级到 Playwright 模式 |
 | Windows 能用吗 | 支持！Python 3.10+ 和 Git 即可 |
 
----
 
-## 参与贡献
-
-```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-pip install -e ".[dev]"
-```
-
-提交前请运行 `ruff` 和 `pytest`。
-
----
 
 <p align="center">
   <a href="#top">⬆ 返回顶部</a>
