@@ -1,31 +1,66 @@
 """
-scraper.py — 知乎页面抓取 & 图片下载模块 (v3.0 纯协议引擎 API 版)
+scraper.py — 知乎页面抓取 & 图片下载模块
 
 免责声明：
 本项目仅供学术研究和学习交流使用，请勿用于任何商业用途。
 使用者应遵守知乎的相关服务协议和 robots.txt 协议。
 
-集成纯协议层网络客户端，直接基于 v4 API 抓取。
-大幅度降低对 CPU 和内存的消耗，防封核心依赖于 TLS 指纹模拟 (curl_cffi)。
+使用 Playwright 浏览器模式抓取，配合 stealth.min.js 反检测。
 """
 
 import asyncio
-from typing import Union, List, Optional
-import httpx
-from pathlib import Path
+import hashlib
 import re
-from datetime import datetime
+import subprocess
+from pathlib import Path
+from urllib.parse import urlparse
 
-from .config import get_logger, get_humanizer
-from .api_client import ZhihuAPIClient
+import httpx
+from playwright.async_api import async_playwright, Playwright
+
+# 从配置文件读取
+from .config import get_logger
+
+# 全局配置
+STEALTH_JS_PATH = Path(__file__).parent.parent / "static" / "stealth.min.js"
+USER_DATA_DIR = Path(__file__).parent.parent / "browser_data"
+
+
+def get_auto_proxy() -> str | None:
+    """
+    自动获取 macOS 系统代理设置。
+    """
+    try:
+        output = subprocess.check_output("scutil --proxy", shell=True).decode("utf-8")
+        if "HTTPEnable : 1" in output:
+            match = re.search(r"HTTPPort : (\d+)", output)
+            if match:
+                return f"http://127.0.0.1:{match.group(1)}"
+    except Exception:
+        pass
+    return None
+
+
+PROXY_SERVER = get_auto_proxy()
+
 
 class ZhihuDownloader:
-    """从知乎文章/回答页面直接抓取 API 数据并下载图片到本地。"""
+    """从知乎文章/回答页面抓取 HTML 内容并下载图片到本地。"""
+
+    _UA = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/128.0.0.0 Safari/537.36"
+    )
+
+    _IMG_HEADERS = {
+        "Referer": "https://www.zhihu.com/",
+        "User-Agent": _UA,
+    }
 
     def __init__(self, url: str) -> None:
         self.url = url.split("?")[0]
         self.page_type = self._detect_type()
-        self.api_client = ZhihuAPIClient()
         self.log = get_logger()
 
     def _detect_type(self) -> str:
@@ -33,221 +68,216 @@ class ZhihuDownloader:
             return "article"
         if "/answer/" in self.url:
             return "answer"
-        if "/question/" in self.url:
-            return "question"
         return "article"
 
-    def has_valid_cookies(self) -> bool:
-        """检查是否有有效 Cookie (兼容 CLI 调用)。"""
-        return bool(self.api_client._cookies_dict)
+    # ── 页面抓取 Core ──────────────────────────────────────────
 
-    async def fetch_page(self, **kwargs) -> Union[dict, List[dict]]:
+    async def fetch_page(self) -> dict:
         """
-        使用纯协议层抓取页面数据。
-        支持传入 kwargs (如 start, limit) 传递给 _extract_question。
-        注意：目前已经是轻量级代码，但为了兼容 v2.0 的协程外壳，方法签名保留 async。
+        使用 Playwright 浏览器抓取页面。
         """
-        humanizer = get_humanizer()
-        
-        self.log.info("start_fetching", url=self.url, page_type=self.page_type)
-        print(f"🌍 访问 [API 模式]: {self.url}")
-        
-        # 模拟部分延时，以避免瞬时高频请求
-        await humanizer.page_load()
+        async with async_playwright() as pw:
+            launch_args = [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-infobars",
+                "--disable-gpu",
+            ]
 
-        if self.page_type == "article":
-            return await self._extract_article()
-        elif self.page_type == "question":
-            return await self._extract_question(**kwargs)
-        else:
-            return await self._extract_answer()
+            context = await pw.chromium.launch_persistent_context(
+                user_data_dir=USER_DATA_DIR,
+                headless=True,
+                args=launch_args,
+                user_agent=self._UA,
+                viewport={"width": 1920, "height": 1080},
+                proxy={"server": PROXY_SERVER} if PROXY_SERVER else None,
+                java_script_enabled=True,
+                locale="zh-CN",
+                channel="chrome",
+            )
 
-    async def _extract_article(self) -> dict:
-        """提取专栏文章数据。"""
-        # 从 URL 提取 Article ID
-        # e.g., https://zhuanlan.zhihu.com/p/123456
-        match = re.search(r"p/(\d+)", self.url)
-        if not match:
-             raise Exception(f"无法从专栏 URL 提取 ID: {self.url}")
-        
-        article_id = match.group(1)
+            try:
+                page = context.pages[0] if context.pages else await context.new_page()
+
+                # 注入 stealth.min.js
+                if STEALTH_JS_PATH.exists():
+                    await context.add_init_script(path=STEALTH_JS_PATH)
+
+                # 注入额外的 WebGL / Navigator 伪造
+                await context.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', {
+                        get: () => undefined
+                    });
+                    const getParameter = WebGLRenderingContext.prototype.getParameter;
+                    WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                        if (parameter === 37445) return 'Intel Inc.';
+                        if (parameter === 37446) return 'Intel Iris OpenGL Engine';
+                        return getParameter(parameter);
+                    };
+                """)
+
+                page.set_default_timeout(30000)
+
+                print(f"🌍 访问: {self.url}")
+                await asyncio.sleep(1)
+                await page.goto(self.url, wait_until="domcontentloaded")
+                await page.wait_for_timeout(3000)
+
+                # 关闭弹窗
+                await self._dismiss_popup(page)
+
+                # 提取内容
+                if self.page_type == "article":
+                    result = await self._extract_article(page)
+                else:
+                    result = await self._extract_answer(page)
+
+                return result
+
+            finally:
+                await context.close()
+
+    async def _dismiss_popup(self, page) -> None:
+        """关闭登录弹窗。"""
         try:
-            data = self.api_client.get_article(article_id)
-        except Exception as e:
-            print(f"⚠️ API 请求专栏失败 ({e})，正在启动 Playwright 无头浏览器智能降级回退机制...")
-            # Fallback 策略
-            import asyncio
-            from .browser_fallback import extract_zhuanlan_html
-            from .cookie_manager import cookie_manager
-            
-            # 使用现有 session 的 cookies
-            session_cookies = cookie_manager.get_current_session()
-            data = await extract_zhuanlan_html(article_id, session_cookies)
-            
-            if not data:
-                raise Exception(f"专栏文章 {article_id} API 及降级抓取均失败，请手工检查 URL 或重新分配 Cookie。")
-        
-        author = data.get("author", {}).get("name", "未知作者")
-        title = data.get("title", "未知专栏标题")
-        html = data.get("content", "")
-        upvotes = data.get("voteup_count", 0)
-        
-        # 将 timestamp 转为日历格式
-        created_sec = data.get("created", 0)
-        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+            btn = page.locator("button.Modal-closeButton")
+            if await btn.count() > 0:
+                await btn.click(timeout=2000)
+                await page.wait_for_timeout(500)
+        except Exception:
+            pass
 
-        # 挂载头图
-        title_img = data.get("image_url")
-        if title_img:
-            html = f'<img src="{title_img}" alt="TitleImage"><br>{html}'
+    async def _extract_article(self, page) -> dict:
+        """提取文章。"""
+        text = await page.locator("body").inner_text()
+        if "40362" in text or "请求存在异常" in text:
+            raise Exception("触发知乎反爬 (40362)")
 
-        return {
-            "id": article_id,
-            "type": "article",
-            "url": self.url,
-            "title": title.strip(), 
-            "author": author.strip(), 
-            "html": html, 
-            "date": date_str,
-            "upvotes": upvotes
-        }
+        await page.wait_for_selector("h1.Post-Title", timeout=10000)
 
-    async def _extract_answer(self) -> dict:
-        """提取单个回答数据。"""
-        # https://www.zhihu.com/question/298203515/answer/2008258573281562692
-        match = re.search(r"answer/(\d+)", self.url)
-        if not match:
-             raise Exception(f"无法从回答 URL 提取 ID: {self.url}")
-             
-        answer_id = match.group(1)
-        data = self.api_client.get_answer(answer_id)
-        
-        author = data.get("author", {}).get("name", "未知作者")
-        title = data.get("question", {}).get("title", "未知问题")
-        html = data.get("content", "")
-        upvotes = data.get("voteup_count", 0)
-        
-        created_sec = data.get("created_time", 0)
-        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+        title = await page.locator("h1.Post-Title").inner_text()
+        author = await self._safe_text(page, ".AuthorInfo span.UserLink-Name", "未知作者")
+        if author == "未知作者":
+            author = await self._safe_text(page, ".AuthorInfo-name .UserLink-link", "未知作者")
 
-        return {
-            "id": answer_id,
-            "type": "answer",
-            "url": self.url,
-            "title": title.strip(), 
-            "author": author.strip(), 
-            "html": html, 
-            "date": date_str,
-            "upvotes": upvotes
-        }
+        date = await self._extract_date(page)
 
-    async def _extract_question(self, start: int = 0, limit: int = 3, **kwargs) -> List[dict]:
-        """提取问题下的多个回答。利用 API 分页直接获取，无视 DOM 滚动。"""
-        match = re.search(r"question/(\d+)", self.url)
-        if not match:
-             raise Exception(f"无法从问题 URL 提取 ID: {self.url}")
-             
-        question_id = match.group(1)
-        
-        # 为了防封，可以一次拿一页（如 limit=20 内），如果你需要很多，需要在这里循环
-        # 如果 limit 很大，建议使用 for 循环带 delay 分页拿
-        print(f"🎯 目标: API 抓取问题 {question_id} 的前 {limit} 个回答 (从第 {start} 只开始)")
-        
-        answers_data = self.api_client.get_question_answers(question_id, limit=limit, offset=start)
-        
-        results = []
-        for data in answers_data:
-            author = data.get("author", {}).get("name", "未知作者")
-            title = data.get("question", {}).get("title", "未知问题")
-            html = data.get("content", "")
-            upvotes = data.get("voteup_count", 0)
-            
-            created_sec = data.get("created_time", 0)
-            date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+        rich = page.locator(".Post-RichTextContainer .RichText").first
+        if await rich.count() > 0:
+            html = await rich.inner_html()
+        else:
+            html = await page.locator(".RichText").first.inner_html()
 
-            results.append({
-                "id": str(data.get("id", "")),
-                "type": "answer",
-                "url": f"https://www.zhihu.com/question/{question_id}/answer/{data.get('id', '')}",
-                "title": title.strip(), 
-                "author": author.strip(), 
-                "html": html, 
-                "date": date_str,
-                "upvotes": upvotes
-            })
-            
-        print(f"✅ 成功命中 {len(results)} 个回答。")
-        return results
+        # 尝试获取头图
+        try:
+            title_img = page.locator("img.TitleImage").first
+            if await title_img.count() > 0:
+                src = await title_img.get_attribute("src")
+                if src:
+                    html = f'<img src="{src}" alt="TitleImage"><br>{html}'
+        except Exception:
+            pass
+
+        return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
+
+    async def _extract_answer(self, page) -> dict:
+        """提取回答。"""
+        text = await page.locator("body").inner_text()
+        if "40362" in text:
+            raise Exception("触发知乎反爬 (40362)")
+
+        await page.wait_for_selector(".QuestionAnswer-content", timeout=10000)
+
+        title = await self._safe_text(page, "h1.QuestionHeader-title", "未知问题")
+        author = await self._safe_text(page, ".AuthorInfo-name .UserLink-link", "未知作者")
+        if author == "未知作者":
+            author = await self._safe_text(page, ".AuthorInfo span.UserLink-Name", "未知作者")
+
+        date = await self._extract_date(page)
+        html = await page.locator(".QuestionAnswer-content .RichText").first.inner_html()
+
+        return {"title": title.strip(), "author": author.strip(), "html": html, "date": date}
+
+    async def _extract_date(self, page) -> str:
+        from datetime import date as dt_date
+        try:
+            meta = await page.locator('meta[itemprop="datePublished"]').get_attribute("content", timeout=2000)
+            if meta:
+                return meta[:10]
+        except:
+            pass
+        return dt_date.today().isoformat()
+
+    async def _safe_text(self, page, selector: str, default: str) -> str:
+        try:
+            el = page.locator(selector).first
+            return await el.inner_text(timeout=2000)
+        except:
+            return default
 
     # ── 图片下载 ──────────────────────────────────────────────
-    @classmethod
-    async def download_images(
-        cls,
-        img_urls: List[str],
-        dest: Path,
-        *,
-        concurrency: int = 4,
-        timeout: float = 30.0,
-    ) -> dict[str, str]:
-        """
-        并发下载图片 (保持使用轻量的 httpx 客户端进行基础资源下载)
-        """
-        if not img_urls:
-            return {}
 
+    @classmethod
+    async def download_images(cls, img_urls: list[str], dest: Path) -> dict[str, str]:
+        """
+        并发下载图片，返回 URL → 相对路径 的映射。
+        返回的路径格式为 "images/xxx.jpg"，用于 Markdown 引用。
+        """
         dest.mkdir(parents=True, exist_ok=True)
         url_to_local: dict[str, str] = {}
-        sem = asyncio.Semaphore(concurrency)
-        client = httpx.AsyncClient(headers={
-            "Referer": "https://www.zhihu.com/",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-        })
 
-        async def worker(url: str):
-            async with sem:
-                try:
-                    # 获取文件名（取基础名，去重同主题图片）
-                    # 知乎会返回多种尺寸：_720w.jpg, _r.jpg, 无后缀
-                    # 我们只取第一种，忽略其他尺寸
-                    file_name = url.split("/")[-1]
-                    # 去除查询参数
-                    if "?" in file_name:
-                        file_name = file_name.split("?")[0]
-                    # 去除尺寸后缀，只保留基础名：v2-xxx_720w.jpg → v2-xxx.jpg
-                    for suffix in ["_720w", "_r", "_l"]:
-                        if file_name.endswith(suffix + ".jpg"):
-                            file_name = file_name.replace(suffix + ".jpg", ".jpg")
-                            break
-                        if file_name.endswith(suffix + ".png"):
-                            file_name = file_name.replace(suffix + ".png", ".png")
-                            break
-                    # 补全扩展名
-                    if "." not in file_name:
-                        file_name += ".jpg"
+        if not img_urls:
+            return url_to_local
 
-                    local_path = dest / file_name
-
-                    # 已存在就跳过
-                    if local_path.exists():
-                        # 返回带 images/ 前缀的路径
-                        url_to_local[url] = f"images/{file_name}"
-                        return
-
-                    resp = await client.get(url, timeout=timeout)
-                    resp.raise_for_status()
-                    with open(local_path, "wb") as f:
-                        f.write(resp.content)
-
-                    # 返回带 images/ 前缀的路径
-                    url_to_local[url] = f"images/{file_name}"
-                    
-                except Exception as e:
-                    # 使用 print 代替 log 避免阻塞过深
-                    print(f"⚠️ 图片下载失败 [{url}]: {e}")
-
-        # 并发执行
-        tasks = [worker(url) for url in img_urls]
-        await asyncio.gather(*tasks)
-        await client.aclose()
+        limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        async with httpx.AsyncClient(
+            headers=cls._IMG_HEADERS,
+            timeout=30.0,
+            follow_redirects=True,
+            proxy=PROXY_SERVER,
+            limits=limits,
+        ) as client:
+            tasks = [cls._download_one(client, url, dest, url_to_local) for url in img_urls]
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         return url_to_local
+
+    @staticmethod
+    async def _download_one(client, url, dest, mapping):
+        """
+        下载单张图片。
+        知乎图片命名规则：v2-xxx_720w.jpg, v2-xxx_r.jpg
+        我们去重后缀，只保留基础文件名。
+        """
+        try:
+            if url.startswith("//"):
+                url = "https:" + url
+
+            # 过滤不需要的图片
+            if "data:image" in url or "equation" in url:
+                return
+
+            resp = await client.get(url)
+            resp.raise_for_status()
+
+            # 提取文件名并去除尺寸后缀
+            fname = url.split("/")[-1].split("?")[0]
+            for suffix in ["_720w", "_r", "_l"]:
+                if fname.endswith(suffix + ".jpg"):
+                    fname = fname.replace(suffix + ".jpg", ".jpg")
+                    break
+                if fname.endswith(suffix + ".png"):
+                    fname = fname.replace(suffix + ".png", ".png")
+                    break
+
+            # 确保有扩展名
+            if "." not in fname:
+                fname += ".jpg"
+
+            fpath = dest / fname
+            fpath.write_bytes(resp.content)
+
+            # 返回带 images/ 前缀的路径（用于 Markdown）
+            mapping[url] = f"images/{fname}"
+        except Exception:
+            pass
