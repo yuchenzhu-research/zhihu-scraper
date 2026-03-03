@@ -52,6 +52,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from core.config import get_config, get_logger, get_humanizer
+from core.utils import sanitize_filename, extract_urls
 from core.scraper import ZhihuDownloader
 from core.converter import ZhihuConverter
 from core.errors import handle_error
@@ -76,33 +77,8 @@ log = get_logger()
 # Utility Functions (工具函数)
 # ============================================================
 
-def sanitize_filename(name: str) -> str:
-    """
-    Sanitize filename by removing illegal characters
-    清理文件名非法字符
-    """
-    import re
-    name = re.sub(r'[/\\:*?"<>|\x00-\x1f]', "_", name)
-    name = name.strip(" .")
-    return name[:50] or "untitled"
-
-
-def extract_urls(text: str) -> List[str]:
-    """
-    Extract Zhihu links from text
-    从文本中提取知乎链接
-
-    Supported URL formats:
-    - Column article: https://zhuanlan.zhihu.com/p/123456
-    - Single answer: https://www.zhihu.com/question/123/answer/456
-    - Question page: https://www.zhihu.com/question/123
-    """
-    import re
-    pattern = r"(?:https?://)?(?:www\.|zhuanlan\.)?zhihu\.com/(?:p/\d+|question/\d+(?:/answer/\d+)?)"
-    matches = re.findall(pattern, text)
-    # Deduplicate and add protocol header / 去重并补全协议头
-    return list(dict.fromkeys([(m if m.startswith("http") else "https://" + m) for m in matches]))
-
+# Note: sanitize_filename and extract_urls are now imported from core.utils
+# to avoid code duplication across CLI and interactive modules.
 
 def print_result(
     title: str,

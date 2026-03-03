@@ -11,10 +11,9 @@ interactive.py — 交互式面板模块 (Americana Fusion 风格)
 """
 
 import asyncio
-import re
 import time
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
 import questionary
@@ -29,6 +28,7 @@ from rich import box
 from rich.live import Live
 
 from core.config import get_config, get_logger
+from core.utils import extract_urls
 from core.scraper import ZhihuDownloader
 from cli.app import _fetch_and_save
 
@@ -79,19 +79,7 @@ async def _async_input(prompt_text: str) -> str:
     return await loop.run_in_executor(executor, console.input, full_prompt)
 
 
-def extract_urls(text: str) -> List[str]:
-    """
-    Extract Zhihu links from text
-    从文本中提取知乎链接
-    """
-    pattern = r"(?:https?://)?(?:www\.|zhuanlan\.)?zhihu\.com/(?:p/\d+|question/\d+(?:/answer/\d+)?)"
-    matches = re.findall(pattern, text)
-    results = []
-    for m in matches:
-        if not m.startswith("http"):
-            m = "https://" + m
-        results.append(m)
-    return list(dict.fromkeys(results))
+# Note: extract_urls is now imported from core.utils to avoid code duplication
 
 
 def _print_banner():
