@@ -3,6 +3,7 @@ import argparse
 import csv
 import json
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -68,13 +69,17 @@ def main():
     )
 
     fetched = 0
-    for offset in range(0, args.total, args.batch):
+    offset = 0
+    failed = False
+
+    while fetched < args.total:
         limit = min(args.batch, args.total - fetched)
         print(f"[info] fetching offset={offset} limit={limit}")
         try:
             items = fetch_with_retry(client, qid, limit, offset, args.retry, args.sleep)
         except Exception as e:  # noqa: BLE001
-            print(f"[warn] batch failed offset={offset}: {e}")
+            print(f"[error] batch failed offset={offset}: {e}", file=sys.stderr)
+            failed = True
             break
 
         if not items:
@@ -93,10 +98,19 @@ def main():
         fetched = len(all_items)
         print(f"[info] batch got={len(items)} added={added} total_unique={fetched}")
 
+        offset += args.batch
+
         if fetched >= args.total:
             break
 
         time.sleep(args.sleep)
+
+    if failed:
+        print(
+            f"[error] fetch aborted with partial data: unique={fetched}/{args.total}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     json_path = out_dir / f"question_{qid}_answers.json"
     json_path.write_text(json.dumps(all_items, ensure_ascii=False, indent=2), encoding="utf-8")
