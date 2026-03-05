@@ -104,15 +104,15 @@ def print_result(
 
 @app.command("fetch")
 def fetch(
-    url: str = typer.Argument(..., help="Zhihu link (question/answer/column) / 知乎链接 (问题/回答/专栏)"),
+    url: str = typer.Argument(..., help="Zhihu link(s) (article/answer/question) / 知乎链接（支持多条，含混杂文本）"),
     output: Path = typer.Option(Path("./data"), "-o", "--output", help="Output directory / 输出目录"),
     limit: Optional[int] = typer.Option(None, "-n", "--limit", help="Limit answer count (question pages only) / 限制回答数量 (仅限问题页)"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
     headless: bool = typer.Option(True, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
 ) -> None:
     """
-    Scrape a single Zhihu link.
-    抓取单个知乎链接。
+    Scrape one or more Zhihu links. Automatically extracts URLs from text.
+    抓取一个或多个知乎链接。支持从混杂文本中自动提取。
 
     Supported link types:
     - Column article: https://zhuanlan.zhihu.com/p/123456
@@ -120,34 +120,42 @@ def fetch(
     - Question page (batch): https://www.zhihu.com/question/123
 
     Examples:
-        zhihu fetch "https://www.zhihu.com/p/123456"
-        zhihu fetch "https://www.zhihu.com/question/123456" -n 10
-        zhihu fetch "https://www.zhihu.com/p/abcdef" -o ./output
+    zhihu fetch "https://www.zhihu.com/p/123456"
+    zhihu fetch "Text containing https://www.zhihu.com/p/123 https://www.zhihu.com/p/456"
+    zhihu fetch "https://www.zhihu.com/question/123456" -n 10
     """
-    log.info("fetch_started", url=url, limit=limit)
+    urls = extract_urls(url)
+    if not urls:
+        rprint("[red]❌ No valid Zhihu links found in input / 未在输入中找到有效链接[/red]")
+        raise SystemExit(1)
+
+    rprint(f"🔍 Found {len(urls)} link(s) / 识别到 {len(urls)} 个链接")
+    log.info("fetch_started", count=len(urls), limit=limit)
 
     try:
-        downloader = ZhihuDownloader(url)
-
-        # Check if login is required / 检测是否需要登录
-        if not downloader.has_valid_cookies() and cfg.zhihu.cookies_required:
+        # Check login once / 统一检测一次 Cookie
+        from core.api_client import ZhihuAPIClient
+        temp_client = ZhihuAPIClient()
+        if not temp_client._cookies_dict and cfg.zhihu.cookies_required:
             rprint("[yellow]⚠️  No valid Cookie detected, will use guest mode / 未检测到有效 Cookie，将使用游客模式[/yellow]")
 
-        # Prepare scraping configuration / 准备抓取配置
-        scrape_config = {}
-        if limit and "/question/" in url and "/answer/" not in url:
-            scrape_config = {"start": 0, "limit": limit}
+        for i, target_url in enumerate(urls):
+            if len(urls) > 1:
+                rprint(f"\n[bold green]🚀 Task {i+1}/{len(urls)}:[/] {target_url}")
 
-        # Execute scraping / 执行抓取
-        rprint(f"🌍 Accessing / 正在访问: {url}")
+            # Prepare scraping configuration / 准备抓取配置
+            scrape_config = {}
+            if limit and "/question/" in target_url and "/answer/" not in target_url:
+                scrape_config = {"start": 0, "limit": limit}
 
-        asyncio.run(_fetch_and_save(
-            url=url,
-            output_dir=output,
-            scrape_config=scrape_config,
-            download_images=not no_images,
-            headless=headless
-        ))
+            # Execute scraping / 执行抓取
+            asyncio.run(_fetch_and_save(
+                url=target_url,
+                output_dir=output,
+                scrape_config=scrape_config,
+                download_images=not no_images,
+                headless=headless
+            ))
 
     except Exception as e:
         handle_error(e, log)
