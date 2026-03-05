@@ -104,11 +104,19 @@ flowchart TB
 
     D --> O["data/ + zhihu.db"]
 ```
+Usage Examples:
 
+**Method 1: Interactive UI Mode (Recommended)**
 ```bash
-./zhihu fetch "https://www.zhihu.com/p/123456"
-./zhihu interactive
+python cli/app.py interactive
 ```
+
+**Method 2: CLI / API Mode**
+```bash
+python cli/app.py fetch "https://www.zhihu.com/p/123456"
+```
+
+> 💡 If you encounter permission issues when running `./zhihu`, we recommend using `python cli/app.py` directly.
 
 ### Python SDK
 

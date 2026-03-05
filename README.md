@@ -87,12 +87,18 @@ flowchart TB
 ```
 
 使用示例：
+
+**方式一：UI 交互模式（推荐）**
 ```bash
-./zhihu fetch "https://www.zhihu.com/p/123456"
-./zhihu interactive
+python cli/app.py interactive
 ```
 
-### Python SDK
+**方式二：CLI 命令行模式**
+```bash
+python cli/app.py fetch "https://www.zhihu.com/p/123456"
+```
+
+> 💡 如果直接运行 `./zhihu` 遇到权限问题，建议统一使用 `python cli/app.py` 执行命令。
 
 ```python
 import asyncio
