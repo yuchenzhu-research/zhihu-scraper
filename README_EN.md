@@ -182,6 +182,17 @@ If Method A doesn't work, use this method:
 5. On the right pane, select **Headers** → **Request Headers**.
 6. Find the `cookie:` field, search for `z_c0=` and `d_c0=` within it, extract their values, and format them into the JSON.
 
+### 💡 Scraping Strategy & Limits
+
+| Content Type | Guest (No Cookie) | Logged In (With Cookie) | Recommendation |
+| :--- | :--- | :--- | :--- |
+| **Answers / Questions** | ✅ Supported (Top 3 only) | ✅ Unlimited (Fast/Stable) | Best used via `interactive` |
+| **Column Articles** | ❌ Mostly Blocked (403) | ✅ Supported (Auto Fallback) | **Cookie Required** for bypassing WAF |
+
+> **💡 Stability Tips**:
+> - **Prefer Single Fetch**: We recommend using `interactive` mode to input URLs one by one. This simulates human behavior better than massive `batch` jobs. Since Columns often require browser rendering, handling them one by one is more reliable.
+> - **Column Special Handling**: Zhihu's Column WAF blocks pure protocol requests. If you see an `article_forbidden` error, it is expected; the system will automatically trigger a Playwright "fallback" to get the content.
+
 > 💡 Guest mode is available without Cookies, but some content will be restricted (e.g. comments, bottom half of Yanxuan articles).
 
 ---
