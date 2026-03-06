@@ -12,7 +12,6 @@ config.py — 配置管理模块
 ================================================================================
 """
 
-import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from dataclasses import dataclass, field
@@ -237,7 +236,7 @@ class ConfigLoader:
         if config_path is None:
             # Default search in project root directory
             # 默认查找项目根目录
-            root = Path(__file__).parent.parent
+            root = get_project_root()
             config_path = root / "config.yaml"
         else:
             config_path = Path(config_path)
@@ -311,6 +310,25 @@ def get_config(config_path: Optional[Union[str, Path]] = None) -> Config:
     return loader.load(config_path)
 
 
+def get_project_root() -> Path:
+    """
+    Get project root path
+    获取项目根目录
+    """
+    return Path(__file__).parent.parent
+
+
+def resolve_project_path(path: Union[str, Path]) -> Path:
+    """
+    Resolve relative paths against project root
+    将相对路径解析为项目根目录下的绝对路径
+    """
+    path = Path(path)
+    if path.is_absolute():
+        return path
+    return get_project_root() / path
+
+
 # ============================================================
 # Logging System (日志系统)
 # ============================================================
@@ -325,31 +343,45 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
     else:
         log_config = config
 
-    # Configure standard logging (prevent third-party library log mess)
-    # 配置标准日志（防止第三方库日志混乱）
-    import logging as stdlib_logging
-    log_level = getattr(stdlib_logging, log_config.level.upper(), stdlib_logging.INFO)
-    stdlib_logging.basicConfig(
-        level=log_level,
-        format="%(message)s",
-    )
+    import logging
 
-    # structlog configuration - new API
-    # structlog 配置 - 新 API
-    processors = [
+    log_level = getattr(logging, log_config.level.upper(), logging.INFO)
+
+    shared_processors = [
         structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
+        structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
     ]
 
     if log_config.format == "json":
-        processors.append(structlog.processors.JSONRenderer())
+        renderer = structlog.processors.JSONRenderer()
     else:
-        processors.append(structlog.dev.ConsoleRenderer())
+        renderer = structlog.dev.ConsoleRenderer()
+
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=renderer,
+        foreign_pre_chain=shared_processors,
+    )
+
+    handlers = [logging.StreamHandler()]
+    if log_config.file:
+        log_path = resolve_project_path(log_config.file)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
+
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.setLevel(log_level)
+
+    for handler in handlers:
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
 
     structlog.configure(
-        processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(log_level),
+        processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        wrapper_class=structlog.stdlib.BoundLogger,
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
     )
 
 

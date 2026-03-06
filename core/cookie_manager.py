@@ -19,7 +19,60 @@ import random
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from .config import get_logger
+from .config import get_config, get_logger, resolve_project_path
+
+
+PLACEHOLDER_COOKIE_VALUES = {
+    "YOUR_COOKIE_HERE",
+    "YOUR_Z_C0_HERE",
+    "YOUR_D_C0_HERE",
+}
+
+
+def is_placeholder_cookie_value(value: Optional[str]) -> bool:
+    """
+    Check whether a cookie value is still a template placeholder
+    检查 Cookie 值是否仍是模板占位符
+    """
+    if not value:
+        return True
+
+    value = value.strip()
+    return value in PLACEHOLDER_COOKIE_VALUES or (value.startswith("YOUR_") and value.endswith("_HERE"))
+
+
+def load_cookie_dict(path: Path) -> Dict[str, str]:
+    """
+    Parse a cookie file and return non-placeholder key/value pairs
+    解析 Cookie 文件并返回过滤掉占位符后的键值对
+    """
+    cookies_dict: Dict[str, str] = {}
+    if not path.exists():
+        return cookies_dict
+
+    with open(path, "r", encoding="utf-8") as f:
+        cookies_list = json.load(f)
+        if isinstance(cookies_list, list):
+            for cookie in cookies_list:
+                name = cookie.get("name")
+                value = cookie.get("value")
+                if name and not is_placeholder_cookie_value(value):
+                    cookies_dict[name] = value.strip()
+        elif isinstance(cookies_list, dict):
+            for name, value in cookies_list.items():
+                if name and not is_placeholder_cookie_value(value):
+                    cookies_dict[name] = value.strip()
+
+    return cookies_dict
+
+
+def has_real_cookie_values(path: Path) -> bool:
+    """
+    Check whether a cookie file contains at least one real Zhihu session key
+    检查 Cookie 文件是否至少包含一个真实的知乎会话键值
+    """
+    session = load_cookie_dict(path)
+    return "z_c0" in session or "d_c0" in session
 
 
 class CookieManager:
@@ -28,10 +81,11 @@ class CookieManager:
     English: Zhihu anti-rate-limiting multi-account Cookie manager
     """
 
-    def __init__(self, base_cookies_path: str = "cookies.json", pool_dir: str = "cookie_pool"):
+    def __init__(self, base_cookies_path: Optional[str] = None, pool_dir: Optional[str] = None):
+        cfg = get_config()
         self.log = get_logger()
-        self.base_path = Path(base_cookies_path)
-        self.pool_dir = Path(pool_dir)
+        self.base_path = resolve_project_path(base_cookies_path or cfg.zhihu.cookies_file)
+        self.pool_dir = resolve_project_path(pool_dir or "cookie_pool")
         self.sessions: List[Dict[str, str]] = []
         self._current_index = -1
 
@@ -71,26 +125,11 @@ class CookieManager:
         Convert JSON array (Name/Value) to dict, filter out useless placeholders
         将 JSON 数组 (Name/Value) 转换为 dict，过滤无用占位符
         """
-        cookies_dict = {}
-        if path.exists():
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    cookies_list = json.load(f)
-                    if isinstance(cookies_list, list):
-                        for c in cookies_list:
-                            name = c.get("name")
-                            val = c.get("value")
-                            if name and val and val != "YOUR_COOKIE_HERE":
-                                cookies_dict[name] = val
-                    elif isinstance(cookies_list, dict):
-                        # Support direct k:v format
-                        # 直接 k:v 格式的支持
-                        for k, v in cookies_list.items():
-                            if v and v != "YOUR_COOKIE_HERE":
-                                cookies_dict[k] = v
-            except Exception as e:
-                self.log.warning("cookie_parse_failed", file=path.name, error=str(e))
-        return cookies_dict
+        try:
+            return load_cookie_dict(path)
+        except Exception as e:
+            self.log.warning("cookie_parse_failed", file=path.name, error=str(e))
+            return {}
 
     def _is_valid_session(self, session: Dict[str, str]) -> bool:
         """

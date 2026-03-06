@@ -26,7 +26,6 @@ from .cookie_manager import cookie_manager
 # Default global JS signature interpreter path
 # 默认全局 JS 签名解释器路径
 ZHIHU_JS_PATH = Path(__file__).parent.parent / "static" / "z_core.js"
-COOKIES_PATH = Path(__file__).parent.parent / "cookies.json"
 
 
 class ZhihuAPIClient:

@@ -16,7 +16,7 @@ browser_fallback.py — 针对强风控路由的智能降维回退机制
 """
 
 from typing import Optional, Dict
-from .config import get_logger
+from .config import get_config, get_logger
 
 
 async def extract_zhuanlan_html(
@@ -46,20 +46,29 @@ async def extract_zhuanlan_html(
     import re
 
     log = get_logger()
+    browser_cfg = get_config().zhihu.browser
     url = f"https://zhuanlan.zhihu.com/p/{article_id}"
     log.info("trigger_browser_fallback", url=url)
 
     async with async_playwright() as p:
+        launch_args = browser_cfg.args or [
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+        ]
+        launch_kwargs = {
+            "headless": headless,
+            "args": launch_args,
+        }
+        if browser_cfg.channel:
+            launch_kwargs["channel"] = browser_cfg.channel
+
         # Use real Chrome browser type to reduce risk
         # 使用真实的 Chrome 浏览器类型降低风险
-        browser = await p.chromium.launch(headless=headless, args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox"
-        ])
+        browser = await p.chromium.launch(**launch_kwargs)
 
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080}
+            viewport=browser_cfg.viewport,
         )
 
         # Inject cookie tickets to avoid redirection to homepage login wall
@@ -86,7 +95,7 @@ async def extract_zhuanlan_html(
         try:
             # JS engine is responsible for cracking zse-ck shield, then render column
             # JS 引擎负责解开 zse-ck 的盾，随后才能渲染专栏
-            resp = await page.goto(url, wait_until="domcontentloaded", timeout=15000)
+            await page.goto(url, wait_until="domcontentloaded", timeout=browser_cfg.timeout)
 
             # Check if redirected to homepage login wall
             # 检测是否被重定向到首页登录墙
@@ -95,7 +104,7 @@ async def extract_zhuanlan_html(
 
             # Wait for main content (Post-RichTextContainer is the unique content container for columns)
             # 等待正文内容出现 (Post-RichTextContainer 就是专栏特有的正文容器)
-            await page.wait_for_selector(".Post-RichTextContainer", timeout=10000)
+            await page.wait_for_selector(".Post-RichTextContainer", timeout=browser_cfg.timeout)
 
             # Get page information / 获取页面信息
             title = await page.title()

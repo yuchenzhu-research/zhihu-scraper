@@ -12,7 +12,6 @@ interactive.py — 交互式面板模块 (Americana Fusion 风格)
 
 import asyncio
 import time
-from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
@@ -27,7 +26,8 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskPr
 from rich import box
 from rich.live import Live
 
-from core.config import get_config, get_logger
+from core.config import get_config, get_logger, resolve_project_path
+from core.cookie_manager import has_real_cookie_values
 from core.utils import extract_urls
 from core.scraper import ZhihuDownloader
 from cli.app import _fetch_and_save
@@ -63,7 +63,7 @@ q_style = Style([
     ('instruction', f'fg:{THEME["dim"]}'),
 ])
 
-DATA_DIR = Path(cfg.output.directory)
+DATA_DIR = resolve_project_path(cfg.output.directory)
 
 
 async def _async_input(prompt_text: str) -> str:
@@ -110,7 +110,12 @@ def _print_banner():
         header_content, border_style=THEME["accent"], box=box.ROUNDED, padding=(1, 2), width=70
     )
 
-    cookie_status = f"[{THEME['success']}]VALID[/]" if Path("cookies.json").exists() else f"[{THEME['warn']}]MISSING[/]"
+    cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
+    cookie_status = (
+        f"[{THEME['success']}]VALID[/]"
+        if has_real_cookie_values(cookie_path)
+        else f"[{THEME['warn']}]MISSING[/]"
+    )
 
     status_line = Text.assemble(
         " 🔑 ", ("SEAL: ", THEME["accent"]), (cookie_status, ""), "  |  ",

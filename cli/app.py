@@ -51,7 +51,7 @@ from rich import print as rprint
 from rich.panel import Panel
 from rich.text import Text
 
-from core.config import get_config, get_logger, get_humanizer
+from core.config import get_config, get_logger, get_humanizer, resolve_project_path
 from core.utils import sanitize_filename, extract_urls
 from core.scraper import ZhihuDownloader
 from core.converter import ZhihuConverter
@@ -71,6 +71,8 @@ app = typer.Typer(
 # Initialize configuration and logging / 初始化配置和日志
 cfg = get_config()
 log = get_logger()
+DEFAULT_OUTPUT_DIR = resolve_project_path(cfg.output.directory)
+DEFAULT_BROWSER_HEADLESS = cfg.zhihu.browser.headless
 
 
 # ============================================================
@@ -98,6 +100,21 @@ def print_result(
         rprint(f"   💥 {error}")
 
 
+def build_output_folder_name(item_date: str, title: str, author: str, item_key: str) -> str:
+    """
+    Render output directory name from config template and append a stable unique suffix.
+    根据配置模板生成输出目录名，并附加稳定唯一后缀。
+    """
+    folder_template = cfg.output.folder_format or "[{date}] {title}"
+    try:
+        rendered = folder_template.format(date=item_date, title=title, author=author)
+    except KeyError:
+        rendered = f"[{item_date}] {title}"
+
+    rendered = sanitize_filename(rendered, max_length=120)
+    return f"{rendered} ({item_key})"
+
+
 # ============================================================
 # Command Definitions (命令定义)
 # ============================================================
@@ -105,10 +122,10 @@ def print_result(
 @app.command("fetch")
 def fetch(
     url: str = typer.Argument(..., help="Zhihu link(s) (article/answer/question) / 知乎链接（支持多条，含混杂文本）"),
-    output: Path = typer.Option(Path("./data"), "-o", "--output", help="Output directory / 输出目录"),
+    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
     limit: Optional[int] = typer.Option(None, "-n", "--limit", help="Limit answer count (question pages only) / 限制回答数量 (仅限问题页)"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
-    headless: bool = typer.Option(True, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
+    headless: bool = typer.Option(DEFAULT_BROWSER_HEADLESS, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
 ) -> None:
     """
     Scrape one or more Zhihu links. Automatically extracts URLs from text.
@@ -165,10 +182,10 @@ def fetch(
 @app.command("batch")
 def batch(
     input_file: Path = typer.Argument(..., help="URL list file (one link per line) / URL列表文件 (每行一个链接)"),
-    output: Path = typer.Option(Path("./data"), "-o", "--output", help="Output directory / 输出目录"),
+    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
     concurrency: int = typer.Option(4, "-c", "--concurrency", help="Concurrency count (recommend 4-8) / 并发数 (建议 4-8)"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
-    headless: bool = typer.Option(True, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
+    headless: bool = typer.Option(DEFAULT_BROWSER_HEADLESS, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
 ) -> None:
     """
     Batch scrape multiple Zhihu links.
@@ -215,10 +232,10 @@ def batch(
 @app.command("monitor")
 def monitor(
     collection_id: str = typer.Argument(..., help="Zhihu collection ID (e.g., 78170682) / 知乎收藏夹ID (如 78170682)"),
-    output: Path = typer.Option(Path("./data"), "-o", "--output", help="Output directory / 输出目录"),
+    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
     concurrency: int = typer.Option(4, "-c", "--concurrency", help="Concurrency count / 并发数"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
-    headless: bool = typer.Option(True, "-b", "--headless", help="Headless mode / 无头模式"),
+    headless: bool = typer.Option(DEFAULT_BROWSER_HEADLESS, "-b", "--headless", help="Headless mode / 无头模式"),
 ) -> None:
     """
     Incrementally monitor and scrape new content from Zhihu collections.
@@ -287,7 +304,7 @@ def monitor(
 def query_db(
     keyword: str = typer.Argument(..., help="Keyword to search / 要搜索的关键词"),
     limit: int = typer.Option(10, "-l", "--limit", help="Maximum number of results / 最大显示结果数量"),
-    data_dir: str = typer.Option("./data", "-d", "--data-dir", help="Data directory (default ./data) / 数据目录（默认 ./data）"),
+    data_dir: str = typer.Option(str(DEFAULT_OUTPUT_DIR), "-d", "--data-dir", help="Data directory / 数据目录"),
 ) -> None:
     """
     Search scraped Zhihu content in local SQLite database.
@@ -409,7 +426,7 @@ def check() -> None:
 
     Checks:
     1. config.yaml exists
-    2. cookies.json valid
+    2. configured cookie file valid
     3. Playwright browser available
     """
     rprint("🔍 System check... / 系统检查...\n")
@@ -422,9 +439,11 @@ def check() -> None:
         rprint("❌ config.yaml missing / 不存在")
 
     # Check cookies / 检查 cookies
-    cookies_path = Path(__file__).parent.parent / "cookies.json"
-    has_cookie = cookies_path.exists() and "YOUR_COOKIE_HERE" not in cookies_path.read_text()
-    rprint(f"{'✅' if has_cookie else '⚠️'} cookies.json {'valid / 有效' if has_cookie else 'not configured or invalid / 未配置或无效'}")
+    from core.cookie_manager import has_real_cookie_values
+
+    cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
+    has_cookie = has_real_cookie_values(cookies_path)
+    rprint(f"{'✅' if has_cookie else '⚠️'} {cookies_path.name} {'valid / 有效' if has_cookie else 'not configured or invalid / 未配置或无效'}")
 
     # Check playwright / 检查 playwright
     try:
@@ -588,7 +607,7 @@ async def _fetch_and_save(
             source_url = item.get("url") or url
             item_key = sanitize_filename(f"{item.get('type', 'item')}-{item.get('id', 'unknown')}", max_length=80)
 
-            folder_name = f"[{item_date}] {title} ({item_key})"
+            folder_name = build_output_folder_name(item_date, title, author, item_key)
             folder = output_dir / folder_name
             folder.mkdir(parents=True, exist_ok=True)
 
