@@ -26,7 +26,7 @@
 
 </div>
 
-> 仅供学术研究和个人学习使用。请遵守知乎服务条款，并确保 `cookies.json` 只保留在本地。
+> 仅供学术研究和个人学习使用。请遵守知乎服务条款。仓库中的 `cookies.json` 是占位模板，需要你自行填入真实值。
 
 ## 一句话理解
 
@@ -58,7 +58,7 @@ cd zhihu-scraper
 
 ### 3. 准备 Cookie
 
-本地 `cookies.json` 至少建议包含：
+仓库根目录已经提供 `cookies.json` 模板，直接打开并填入：
 
 ```json
 [
@@ -72,7 +72,7 @@ cd zhihu-scraper
 1. 登录 `https://www.zhihu.com`
 2. 打开开发者工具
 3. 在 `Application -> Cookies` 或 `Network -> Request Headers` 找到 `z_c0` / `d_c0`
-4. 保存到本地 `cookies.json`
+4. 打开项目根目录的 `cookies.json`，把占位值替换成你自己的值
 
 ### 4. 先跑一条
 
@@ -236,6 +236,6 @@ playwright install chromium
 
 专栏风控比回答更强，通常需要更新 Cookie、重新登录，或等待会话恢复。
 
-### 为什么 `cookies.json` 不能进 Git
+### 仓库里的 `cookies.json` 为什么不能直接用
 
-它本质上是登录凭据。哪怕后续删除文件，只要进过 commit 历史，就已经算泄漏。
+因为仓库里提交的是占位模板，`YOUR_Z_C0_HERE` 和 `YOUR_D_C0_HERE` 不是真实 Cookie。你需要手动替换成自己的登录态。

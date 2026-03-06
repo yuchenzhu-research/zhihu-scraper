@@ -52,7 +52,6 @@ logs/
 *.db-wal
 
 # Cookie 与账号池属于敏感信息
-cookies.json
 cookie_pool/
 
 # 监控状态与本地产物

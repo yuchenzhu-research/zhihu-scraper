@@ -26,7 +26,7 @@
 
 </div>
 
-> For academic research and personal learning only. Please respect Zhihu's Terms of Service, and keep `cookies.json` local.
+> For academic research and personal learning only. Please respect Zhihu's Terms of Service. The committed `cookies.json` is only a placeholder template and must be filled with your own values.
 
 ## In One Line
 
@@ -58,7 +58,7 @@ cd zhihu-scraper
 
 ### 3. Prepare Cookies
 
-Your local `cookies.json` should ideally contain at least:
+The repository already includes a `cookies.json` template. Open it and fill in:
 
 ```json
 [
@@ -72,7 +72,7 @@ How to get them:
 1. Sign in at `https://www.zhihu.com`
 2. Open browser developer tools
 3. Find `z_c0` and `d_c0` in `Application -> Cookies` or `Network -> Request Headers`
-4. Save them into local `cookies.json`
+4. Open the root-level `cookies.json` and replace the placeholders with your own values
 
 ### 4. Run Your First Fetch
 
@@ -236,6 +236,6 @@ That is a Zhihu visibility restriction, not a scraper-side omission.
 
 Columns are more aggressively protected. In practice you may need fresh cookies, a new login session, or time for the session to cool down.
 
-### Why must `cookies.json` stay local
+### Why does the repository `cookies.json` not work as-is
 
-Because it is effectively a login credential. Once it enters commit history, it should be treated as leaked.
+Because the committed file is only a template. `YOUR_Z_C0_HERE` and `YOUR_D_C0_HERE` are placeholders, so you need to replace them with your own logged-in cookie values.
