@@ -249,6 +249,7 @@ data/
 - `index.md` 适合直接阅读和二次编辑
 - `images/` 保存文内图片资源
 - `zhihu.db` 便于本地搜索和后续整理
+- 仓库内需要长期保留的示例导出请放到 `examples/outputs/`
 
 ## 本地开发
 

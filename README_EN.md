@@ -247,6 +247,7 @@ In practice:
 - `index.md` is the reading-friendly artifact
 - `images/` stores local media assets
 - `zhihu.db` supports local search and later organization
+- Long-lived showcase exports should go under `examples/outputs/`
 
 ## Local Development
 

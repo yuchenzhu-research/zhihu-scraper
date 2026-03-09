@@ -25,6 +25,7 @@ env/
 # IDE & AI Agents
 .vscode/
 .idea/
+.claude/
 .cursor/
 .cursorrules
 .agent/
@@ -68,6 +69,7 @@ debug_*/
 
 .venv_tls_test/     # TLS测试沙箱
 MediaCrawler/
+mediacrawler/
 # ========================================
 # docs/
 # !.gitkeep
