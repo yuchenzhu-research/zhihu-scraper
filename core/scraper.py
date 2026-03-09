@@ -447,26 +447,26 @@ class ZhihuCreatorDownloader:
 
         creator_profile = self.api_client.get_creator_profile(self.url_token)
         items: List[dict] = []
+        answer_result = {"items": [], "stats": self._make_empty_sync_stats(answer_limit)}
+        article_result = {"items": [], "stats": self._make_empty_sync_stats(article_limit)}
 
         if answer_limit > 0:
-            items.extend(
-                await self._paginate_creator_items(
-                    label="回答",
-                    target_limit=answer_limit,
-                    fetch_page=lambda offset, limit: self.api_client.get_creator_answers_page(self.url_token, limit=limit, offset=offset),
-                    normalize_item=self._normalize_creator_answer,
-                )
+            answer_result = await self._paginate_creator_items(
+                label="回答",
+                target_limit=answer_limit,
+                fetch_page=lambda offset, limit: self.api_client.get_creator_answers_page(self.url_token, limit=limit, offset=offset),
+                normalize_item=self._normalize_creator_answer,
             )
+            items.extend(answer_result["items"])
 
         if article_limit > 0:
-            items.extend(
-                await self._paginate_creator_items(
-                    label="专栏",
-                    target_limit=article_limit,
-                    fetch_page=lambda offset, limit: self.api_client.get_creator_articles_page(self.url_token, limit=limit, offset=offset),
-                    normalize_item=self._normalize_creator_article,
-                )
+            article_result = await self._paginate_creator_items(
+                label="专栏",
+                target_limit=article_limit,
+                fetch_page=lambda offset, limit: self.api_client.get_creator_articles_page(self.url_token, limit=limit, offset=offset),
+                normalize_item=self._normalize_creator_article,
             )
+            items.extend(article_result["items"])
 
         return {
             "creator": {
@@ -482,8 +482,15 @@ class ZhihuCreatorDownloader:
                 "voteup_count": creator_profile.get("voteup_count", 0),
                 "answer_count": creator_profile.get("answer_count", 0),
                 "articles_count": creator_profile.get("articles_count", 0),
+                "question_count": creator_profile.get("question_count", 0),
+                "video_count": creator_profile.get("zvideo_count", 0),
+                "column_count": creator_profile.get("columns_count", 0),
             },
             "items": items,
+            "sync": {
+                "answers": answer_result["stats"],
+                "articles": article_result["stats"],
+            },
         }
 
     async def _paginate_creator_items(
@@ -493,7 +500,7 @@ class ZhihuCreatorDownloader:
         target_limit: int,
         fetch_page: Callable[[int, int], dict],
         normalize_item: Callable[[dict], dict],
-    ) -> List[dict]:
+    ) -> Dict[str, Any]:
         """
         Generic creator pagination loop with conservative throttling.
         通用作者分页抓取循环，带保守节流。
@@ -503,6 +510,8 @@ class ZhihuCreatorDownloader:
         offset = 0
         page_index = 0
         items: List[dict] = []
+        reached_end = False
+        stopped_early = False
 
         print(f"👤 开始抓取作者 {self.url_token} 的前 {target_limit} 条{label}...")
 
@@ -516,11 +525,13 @@ class ZhihuCreatorDownloader:
                 if items:
                     print(f"⚠️ {message}")
                     print(f"🛑 为降低风险，本次提前停止，保留已抓到的 {len(items)} 条{label}。")
+                    stopped_early = True
                     break
                 raise Exception(message)
 
             page_items = page.get("data", [])
             if not page_items:
+                reached_end = True
                 break
 
             for raw_item in page_items:
@@ -534,6 +545,7 @@ class ZhihuCreatorDownloader:
                 break
 
             if page.get("paging", {}).get("is_end", len(page_items) < current_page_size):
+                reached_end = True
                 break
 
             if humanizer.config.enabled:
@@ -547,7 +559,32 @@ class ZhihuCreatorDownloader:
                     print(f"⏳ 等待 {delay:.1f} 秒后抓取下一页{label}...")
                 await asyncio.sleep(delay)
 
-        return items
+        return {
+            "items": items,
+            "stats": {
+                "requested_limit": target_limit,
+                "saved_count": len(items),
+                "pages_fetched": page_index,
+                "last_offset": offset,
+                "reached_end": reached_end,
+                "stopped_early": stopped_early,
+            },
+        }
+
+    @staticmethod
+    def _make_empty_sync_stats(target_limit: int) -> Dict[str, Any]:
+        """
+        Build default sync stats for disabled or empty content types.
+        为禁用或空内容类型构建默认同步统计。
+        """
+        return {
+            "requested_limit": target_limit,
+            "saved_count": 0,
+            "pages_fetched": 0,
+            "last_offset": 0,
+            "reached_end": target_limit == 0,
+            "stopped_early": False,
+        }
 
     def _normalize_creator_answer(self, data: dict) -> dict:
         """

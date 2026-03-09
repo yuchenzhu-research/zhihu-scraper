@@ -724,6 +724,7 @@ async def _fetch_creator_and_save(
     result = await downloader.fetch_items(answer_limit=answer_limit, article_limit=article_limit)
     creator_info = result.get("creator", {})
     items = result.get("items", [])
+    sync_info = result.get("sync", {})
 
     if not items:
         rprint("[yellow]⚠️  No creator content obtained / 未获取到作者内容[/yellow]")
@@ -747,7 +748,7 @@ async def _fetch_creator_and_save(
         source_url_fallback=f"https://www.zhihu.com/people/{creator_info.get('url_token', creator)}",
     )
 
-    _write_creator_metadata(creator_root, creator_info, saved_records)
+    _write_creator_metadata(creator_root, creator_info, saved_records, sync_info)
 
 
 async def _save_items(
@@ -836,6 +837,7 @@ def _write_creator_metadata(
     creator_root: Path,
     creator_info: Dict[str, Any],
     saved_records: List[Dict[str, Any]],
+    sync_info: Optional[Dict[str, Any]] = None,
 ) -> None:
     """
     Write creator metadata files under the creator directory.
@@ -846,6 +848,14 @@ def _write_creator_metadata(
     fetched_at = datetime.now().isoformat(timespec="seconds")
     answer_records = [record for record in saved_records if record["item"].get("type") == "answer"]
     article_records = [record for record in saved_records if record["item"].get("type") == "article"]
+    sync_info = sync_info or {}
+    answer_sync = sync_info.get("answers", {})
+    article_sync = sync_info.get("articles", {})
+    recent_records = sorted(
+        saved_records,
+        key=lambda record: record["item"].get("date", ""),
+        reverse=True,
+    )[:5]
 
     creator_payload = {
         "user_id": creator_info.get("user_id", ""),
@@ -860,10 +870,28 @@ def _write_creator_metadata(
         "voteup_count": creator_info.get("voteup_count", 0),
         "answer_count": creator_info.get("answer_count", 0),
         "articles_count": creator_info.get("articles_count", 0),
+        "question_count": creator_info.get("question_count", 0),
+        "video_count": creator_info.get("video_count", 0),
+        "column_count": creator_info.get("column_count", 0),
         "fetched_at": fetched_at,
+        "last_sync_at": fetched_at,
         "saved_answers": len(answer_records),
         "saved_articles": len(article_records),
         "local_root": str(creator_root),
+        "sync": {
+            "answers": answer_sync,
+            "articles": article_sync,
+        },
+        "recent_items": [
+            {
+                "id": record["item"].get("id", ""),
+                "type": record["item"].get("type", ""),
+                "title": record["item"].get("title", ""),
+                "date": record["item"].get("date", ""),
+                "markdown_path": str(record["markdown_path"].relative_to(creator_root)),
+            }
+            for record in recent_records
+        ],
         "items": [
             {
                 "id": record["item"].get("id", ""),
@@ -889,7 +917,8 @@ def _write_creator_metadata(
         f"> **User ID**: `{creator_payload['user_id'] or 'unknown'}`  ",
         f"> **URL Token**: `{creator_payload['url_token']}`  ",
         f"> **Zhihu Profile / 作者主页**: [{creator_payload['profile_url']}]({creator_payload['profile_url']})  ",
-        f"> **Fetched At / 抓取时间**: {creator_payload['fetched_at']}",
+        f"> **Fetched At / 抓取时间**: {creator_payload['fetched_at']}  ",
+        f"> **Last Sync / 最近同步**: {creator_payload['last_sync_at']}",
         "",
     ]
 
@@ -919,27 +948,63 @@ def _write_creator_metadata(
         f"- Total upvotes / 总获赞: {creator_payload['voteup_count']}",
         f"- Zhihu answers / 知乎回答数: {creator_payload['answer_count']}",
         f"- Zhihu articles / 知乎专栏数: {creator_payload['articles_count']}",
+        f"- Zhihu questions / 提问数: {creator_payload['question_count']}",
+        f"- Zhihu videos / 视频数: {creator_payload['video_count']}",
+        f"- Zhihu columns / 专栏数: {creator_payload['column_count']}",
         f"- Saved answers / 已保存回答: {creator_payload['saved_answers']}",
         f"- Saved articles / 已保存专栏: {creator_payload['saved_articles']}",
         f"- Local root / 本地目录: `{creator_payload['local_root']}`",
         "",
-        "## Items / 内容列表",
+        "## Sync Status / 同步状态",
         "",
-        "| Type | Title | Date | Markdown | Source |",
-        "|---|---|---|---|---|",
+        f"- Answers: requested {answer_sync.get('requested_limit', 0)}, saved {answer_sync.get('saved_count', 0)}, pages {answer_sync.get('pages_fetched', 0)}, last_offset {answer_sync.get('last_offset', 0)}, reached_end {answer_sync.get('reached_end', False)}, stopped_early {answer_sync.get('stopped_early', False)}",
+        f"- Articles: requested {article_sync.get('requested_limit', 0)}, saved {article_sync.get('saved_count', 0)}, pages {article_sync.get('pages_fetched', 0)}, last_offset {article_sync.get('last_offset', 0)}, reached_end {article_sync.get('reached_end', False)}, stopped_early {article_sync.get('stopped_early', False)}",
+        "",
+        "## Recent Items / 最近内容",
+        "",
     ])
 
-    for record in saved_records:
-        item = record["item"]
-        item_type = item.get("type", "")
-        title = item.get("title", "").replace("|", "\\|")
-        item_date = item.get("date", "")
-        markdown_rel = record["markdown_path"].relative_to(creator_root)
-        source_url = item.get("url", "")
-        lines.append(
-            f"| {item_type} | {title} | {item_date} | "
-            f"[index.md]({markdown_rel.as_posix()}) | [source]({source_url}) |"
-        )
+    if creator_payload["recent_items"]:
+        lines.extend([
+            "| Type | Title | Date | Markdown |",
+            "|---|---|---|---|",
+        ])
+        for item in creator_payload["recent_items"]:
+            lines.append(
+                f"| {item['type']} | {item['title'].replace('|', '\\|')} | {item['date']} | "
+                f"[index.md]({item['markdown_path']}) |"
+            )
+        lines.append("")
+
+    lines.extend([
+        "## Items / 内容列表",
+        "",
+    ])
+
+    for section_title, records in (
+        ("### Answers / 回答", answer_records),
+        ("### Articles / 专栏", article_records),
+    ):
+        lines.extend([section_title, ""])
+        if not records:
+            lines.extend(["- None / 暂无", ""])
+            continue
+
+        lines.extend([
+            "| Title | Date | Markdown | Source |",
+            "|---|---|---|---|",
+        ])
+        for record in records:
+            item = record["item"]
+            title = item.get("title", "").replace("|", "\\|")
+            item_date = item.get("date", "")
+            markdown_rel = record["markdown_path"].relative_to(creator_root)
+            source_url = item.get("url", "")
+            lines.append(
+                f"| {title} | {item_date} | "
+                f"[index.md]({markdown_rel.as_posix()}) | [source]({source_url}) |"
+            )
+        lines.append("")
 
     creator_readme_path = creator_root / "README.md"
     creator_readme_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

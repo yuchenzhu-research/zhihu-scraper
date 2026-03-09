@@ -239,7 +239,8 @@ class ZhihuAPIClient:
         """
         include = (
             "id,name,headline,description,url_token,avatar_url,avatar_url_template,"
-            "answer_count,articles_count,follower_count,following_count,voteup_count"
+            "answer_count,articles_count,question_count,zvideo_count,columns_count,"
+            "follower_count,following_count,voteup_count"
         )
         path = f"/api/v4/members/{url_token}?include={urllib.parse.quote(include)}"
         data = self.fetch_api(path)
