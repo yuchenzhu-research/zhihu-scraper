@@ -6,9 +6,9 @@
 **A local-first Zhihu extraction tool: protocol-first by default, Playwright as fallback when needed, and direct outputs to Markdown, image assets, and SQLite.**
 
 <p>
-  <img src="https://img.shields.io/static/v1?label=build&message=placeholder&color=8B949E&style=flat-square" alt="Build Badge" />
-  <img src="https://img.shields.io/static/v1?label=version&message=v3.0.0&color=2F81F7&style=flat-square" alt="Version Badge" />
-  <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=3FB950&style=flat-square" alt="License Badge" />
+  <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
+  <img src="https://img.shields.io/github/v/release/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="Version Badge" />
+  <img src="https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="License Badge" />
   <img src="https://img.shields.io/static/v1?label=python&message=3.10%2B&color=3776AB&style=flat-square&logo=python&logoColor=white" alt="Python Badge" />
 </p>
 
@@ -291,39 +291,58 @@ Notes:
 
 ```mermaid
 flowchart LR
-    subgraph A["CLI Layer"]
-        A1["cli/app.py"]
-        A2["cli/interactive.py"]
+    subgraph A["Command Layer"]
+        A1["fetch / batch / interactive"]
+        A2["creator"]
+        A3["monitor"]
     end
 
-    subgraph B["Fetch Layer"]
-        B1["core/scraper.py"]
-        B2["core/api_client.py"]
-        B3["core/browser_fallback.py"]
+    subgraph B["Scraper Layer"]
+        B1["ZhihuDownloader"]
+        B2["ZhihuCreatorDownloader"]
+        B3["CollectionMonitor"]
     end
 
-    subgraph C["Data Layer"]
-        C1["core/converter.py"]
-        C2["core/db.py"]
-        C3["core/monitor.py"]
+    subgraph C["Access Layer"]
+        C1["ZhihuAPIClient"]
+        C2["Browser Fallback (article only)"]
+        C3["CookieManager"]
+        C4["Config + Humanizer"]
     end
 
-    subgraph D["Runtime Layer"]
-        D1["core/config.py"]
-        D2["core/cookie_manager.py"]
+    subgraph D["Persist Layer"]
+        D1["_save_items"]
+        D2["ZhihuConverter"]
+        D3["download_images"]
+        D4["ZhihuDatabase"]
+    end
+
+    subgraph E["Outputs"]
+        E1["data/entries"]
+        E2["data/creators/<url_token>"]
+        E3["creator.json / creator README"]
+        E4["zhihu.db"]
     end
 
     A1 --> B1
-    A2 --> B1
-    B1 --> B2
-    B1 --> B3
+    A2 --> B2
+    A3 --> B3
+    B3 --> B1
     B1 --> C1
-    C1 --> C2
-    A1 --> C3
-    B2 --> D2
-    B3 --> D2
-    A1 --> D1
-    A2 --> D1
+    B2 --> C1
+    B1 -. article blocked .-> C2
+    C1 --> C3
+    C1 --> C4
+    C2 --> C3
+    B1 --> D1
+    B2 --> D1
+    D1 --> D2
+    D1 --> D3
+    D1 --> D4
+    D1 --> E1
+    D1 --> E2
+    B2 --> E3
+    D4 --> E4
 ```
 
 ### Design Direction
@@ -367,7 +386,7 @@ What the codebase is actually using today:
 - [ ] More formal proxy configuration
 - [ ] GUI interface
 - [ ] LLM-based summarization / tagging / clustering
-- [ ] More complete test coverage and CI
+- [ ] Broader test coverage and stronger CI checks
 
 ## Development
 
@@ -416,4 +435,3 @@ Because it is sensitive credential material. The repository should only contain 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-

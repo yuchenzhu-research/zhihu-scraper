@@ -6,9 +6,9 @@
 **一个面向本地归档的知乎内容抓取工具：优先走协议层，必要时降级 Playwright，输出直接落地为 Markdown、图片资源和 SQLite。**
 
 <p>
-  <img src="https://img.shields.io/static/v1?label=build&message=placeholder&color=8B949E&style=flat-square" alt="Build Badge" />
-  <img src="https://img.shields.io/static/v1?label=version&message=v3.0.0&color=2F81F7&style=flat-square" alt="Version Badge" />
-  <img src="https://img.shields.io/static/v1?label=license&message=MIT&color=3FB950&style=flat-square" alt="License Badge" />
+  <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
+  <img src="https://img.shields.io/github/v/release/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="Version Badge" />
+  <img src="https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="License Badge" />
   <img src="https://img.shields.io/static/v1?label=python&message=3.10%2B&color=3776AB&style=flat-square&logo=python&logoColor=white" alt="Python Badge" />
 </p>
 
@@ -291,39 +291,58 @@ data/
 
 ```mermaid
 flowchart LR
-    subgraph A["CLI Layer / 命令入口层"]
-        A1["cli/app.py"]
-        A2["cli/interactive.py"]
+    subgraph A["Command Layer / 命令入口层"]
+        A1["fetch / batch / interactive"]
+        A2["creator"]
+        A3["monitor"]
     end
 
-    subgraph B["Fetch Layer / 抓取层"]
-        B1["core/scraper.py"]
-        B2["core/api_client.py"]
-        B3["core/browser_fallback.py"]
+    subgraph B["Scraper Layer / 抓取层"]
+        B1["ZhihuDownloader"]
+        B2["ZhihuCreatorDownloader"]
+        B3["CollectionMonitor"]
     end
 
-    subgraph C["Data Layer / 数据层"]
-        C1["core/converter.py"]
-        C2["core/db.py"]
-        C3["core/monitor.py"]
+    subgraph C["Access Layer / 访问层"]
+        C1["ZhihuAPIClient"]
+        C2["Browser Fallback (article only)"]
+        C3["CookieManager"]
+        C4["Config + Humanizer"]
     end
 
-    subgraph D["Runtime Layer / 运行时"]
-        D1["core/config.py"]
-        D2["core/cookie_manager.py"]
+    subgraph D["Persist Layer / 保存层"]
+        D1["_save_items"]
+        D2["ZhihuConverter"]
+        D3["download_images"]
+        D4["ZhihuDatabase"]
+    end
+
+    subgraph E["Outputs / 输出"]
+        E1["data/entries"]
+        E2["data/creators/<url_token>"]
+        E3["creator.json / creator README"]
+        E4["zhihu.db"]
     end
 
     A1 --> B1
-    A2 --> B1
-    B1 --> B2
-    B1 --> B3
+    A2 --> B2
+    A3 --> B3
+    B3 --> B1
     B1 --> C1
-    C1 --> C2
-    A1 --> C3
-    B2 --> D2
-    B3 --> D2
-    A1 --> D1
-    A2 --> D1
+    B2 --> C1
+    B1 -. article blocked .-> C2
+    C1 --> C3
+    C1 --> C4
+    C2 --> C3
+    B1 --> D1
+    B2 --> D1
+    D1 --> D2
+    D1 --> D3
+    D1 --> D4
+    D1 --> E1
+    D1 --> E2
+    B2 --> E3
+    D4 --> E4
 ```
 
 ### 当前架构的核心取向
@@ -369,7 +388,7 @@ flowchart LR
 - [ ] 更正式的代理配置层
 - [ ] GUI 图形界面
 - [ ] 基于 LLM 的内容摘要 / 标签 / 聚类分析
-- [ ] 更完整的测试与 CI
+- [ ] 更完整的测试覆盖与更强的 CI 检查
 
 ## 本地开发 Development
 
@@ -418,4 +437,3 @@ python3 cli/app.py manual
 ## 许可协议 License
 
 本项目采用 [MIT License](LICENSE)。
-
