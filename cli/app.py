@@ -115,6 +115,21 @@ def build_output_folder_name(item_date: str, title: str, author: str, item_key: 
     return f"{rendered} ({item_key})"
 
 
+def print_question_limit_warning(limit: int) -> None:
+    """
+    Print risk warning for large question-page fetches.
+    对大数量问题页抓取打印风险提示。
+    """
+    if limit > 50:
+        rprint("[bold yellow]⚠️ Large batch detected / 大批量抓取提示[/bold yellow]")
+        rprint("   请求超过 50 条回答时，会触发多页连续请求，触发风控的概率会明显上升。")
+        rprint("   Requests above 50 answers increase anti-bot risk due to multi-page API access.")
+    elif limit > 20:
+        rprint("[yellow]⚠️ Multi-page fetch enabled / 已启用多页抓取[/yellow]")
+        rprint("   超过 20 条回答会进入分页抓取，并在页间自动插入随机等待。")
+        rprint("   Requests over 20 answers will use pagination with random waits between pages.")
+
+
 # ============================================================
 # Command Definitions (命令定义)
 # ============================================================
@@ -146,6 +161,9 @@ def fetch(
         rprint("[red]❌ No valid Zhihu links found in input / 未在输入中找到有效链接[/red]")
         raise SystemExit(1)
 
+    if limit is not None and limit < 1:
+        raise typer.BadParameter("Question-page limit must be at least 1 / 问题页抓取数量至少为 1")
+
     rprint(f"🔍 Found {len(urls)} link(s) / 识别到 {len(urls)} 个链接")
     log.info("fetch_started", count=len(urls), limit=limit)
 
@@ -163,6 +181,7 @@ def fetch(
             # Prepare scraping configuration / 准备抓取配置
             scrape_config = {}
             if limit and "/question/" in target_url and "/answer/" not in target_url:
+                print_question_limit_warning(limit)
                 scrape_config = {"start": 0, "limit": limit}
 
             # Execute scraping / 执行抓取

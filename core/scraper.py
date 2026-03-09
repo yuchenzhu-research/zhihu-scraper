@@ -40,6 +40,7 @@ import httpx
 from pathlib import Path
 import re
 from datetime import datetime
+from random import uniform
 
 from .config import get_logger, get_humanizer
 from .api_client import ZhihuAPIClient
@@ -203,7 +204,7 @@ class ZhihuDownloader:
     async def _extract_question(self, start: int = 0, limit: int = 3, **kwargs) -> List[dict]:
         """提取问题下的多个回答。
 
-        利用 API 分页直接获取，支持一次获取多条回答。
+        利用 API 分页直接获取，支持一次获取多页回答。
 
         Args:
             start: 起始偏移量 (默认 0)
@@ -214,36 +215,77 @@ class ZhihuDownloader:
              raise Exception(f"无法从问题 URL 提取 ID: {self.url}")
 
         question_id = match.group(1)
+        target_limit = max(1, limit)
+        current_offset = max(0, start)
+        page_size = 20
+        humanizer = get_humanizer()
 
-        # 知乎 API 单次最多返回 20 条，建议 limit <= 20
-        # 如果需要更多回答，需要循环分页
-        print(f"🎯 目标: API 抓取问题 {question_id} 的前 {limit} 个回答 (从第 {start} 条开始)")
+        print(f"🎯 目标: API 分页抓取问题 {question_id} 的前 {target_limit} 个回答 (从第 {current_offset} 条开始)")
 
-        try:
-            answers_data = self.api_client.get_question_answers(question_id, limit=limit, offset=start)
-        except Exception as e:
-            raise Exception(f"问题 {question_id} 回答列表 API 抓取失败: {e}")
+        results: List[dict] = []
+        page_index = 0
 
-        results = []
-        for data in answers_data:
-            author = data.get("author", {}).get("name", "未知作者")
-            title = data.get("question", {}).get("title", "未知问题")
-            html = data.get("content", "")
-            upvotes = data.get("voteup_count", 0)
+        while len(results) < target_limit:
+            current_page_size = min(page_size, target_limit - len(results))
 
-            created_sec = data.get("created_time", 0)
-            date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+            try:
+                page = self.api_client.get_question_answers_page(
+                    question_id,
+                    limit=current_page_size,
+                    offset=current_offset,
+                )
+            except Exception as e:
+                message = f"问题 {question_id} 第 {page_index + 1} 页回答列表 API 抓取失败: {e}"
+                if results:
+                    print(f"⚠️ {message}")
+                    print(f"🛑 为降低风险，本次提前停止，保留已抓到的 {len(results)} 个回答。")
+                    break
+                raise Exception(message)
 
-            results.append({
-                "id": str(data.get("id", "")),
-                "type": "answer",
-                "url": f"https://www.zhihu.com/question/{question_id}/answer/{data.get('id', '')}",
-                "title": title.strip(),
-                "author": author.strip(),
-                "html": html,
-                "date": date_str,
-                "upvotes": upvotes
-            })
+            answers_data = page.get("data", [])
+            if not answers_data:
+                break
+
+            for data in answers_data:
+                author = data.get("author", {}).get("name", "未知作者")
+                title = data.get("question", {}).get("title", "未知问题")
+                html = data.get("content", "")
+                upvotes = data.get("voteup_count", 0)
+
+                created_sec = data.get("created_time", 0)
+                date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+
+                results.append({
+                    "id": str(data.get("id", "")),
+                    "type": "answer",
+                    "url": f"https://www.zhihu.com/question/{question_id}/answer/{data.get('id', '')}",
+                    "title": title.strip(),
+                    "author": author.strip(),
+                    "html": html,
+                    "date": date_str,
+                    "upvotes": upvotes,
+                })
+
+            page_index += 1
+            current_offset += len(answers_data)
+            print(f"📄 第 {page_index} 页完成，本页 {len(answers_data)} 条，累计 {len(results)}/{target_limit} 条。")
+
+            if len(results) >= target_limit:
+                break
+
+            if page.get("paging", {}).get("is_end", len(answers_data) < current_page_size):
+                break
+
+            if humanizer.config.enabled:
+                if page_index % 3 == 0:
+                    delay = uniform(15.0, 30.0)
+                    print(f"⏸️ 已连续抓取 {page_index} 页，额外休息 {delay:.1f} 秒后继续...")
+                else:
+                    min_delay = max(3.0, humanizer.config.min_delay)
+                    max_delay = max(min_delay, humanizer.config.max_delay, 8.0)
+                    delay = uniform(min_delay, max_delay)
+                    print(f"⏳ 等待 {delay:.1f} 秒后抓取下一页...")
+                await asyncio.sleep(delay)
 
         print(f"✅ 成功命中 {len(results)} 个回答。")
         return results

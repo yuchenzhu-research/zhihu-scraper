@@ -193,12 +193,12 @@ class ZhihuAPIClient:
             self.log.error("article_fetch_failed", error=str(e))
             raise
 
-    def get_question_answers(self, question_id: str, limit: int = 3, offset: int = 0) -> list:
+    def get_question_answers_page(self, question_id: str, limit: int = 3, offset: int = 0) -> dict:
         """
-        Get paginated list of answers under a question
-        (replaces previous logic of scrolling to bottom)
-        获取问题下的所有回答列表分页 (用于替代以前狂滚鼠标底部的逻辑)
+        Get one paginated page of answers under a question.
+        获取问题回答列表的一页数据，并保留分页信息。
         """
+        page_limit = max(1, min(limit, 20))
         include = (
             "data[*].is_normal,admin_closed_comment,reward_info,is_collapsed,annotation_action,"
             "annotation_detail,collapse_reason,is_sticky,collapsed_by,suggest_edit,comment_count,"
@@ -209,11 +209,28 @@ class ZhihuAPIClient:
             "data[*].mark_infos[*].url;data[*].author.follower_count,vip_info,badge[*].topics;"
             "data[*].settings.table_of_content.enabled"
         )
-        path = f"/api/v4/questions/{question_id}/answers?include={urllib.parse.quote(include)}&limit={limit}&offset={offset}&platform=desktop&sort_by=default"
+        path = f"/api/v4/questions/{question_id}/answers?include={urllib.parse.quote(include)}&limit={page_limit}&offset={offset}&platform=desktop&sort_by=default"
         data = self.fetch_api(path)
         if not data or "data" not in data:
-            return []
-        return data["data"]
+            return {"data": [], "paging": {"is_end": True}}
+
+        paging = data.get("paging") or {}
+        return {
+            "data": data.get("data", []),
+            "paging": {
+                "is_end": bool(paging.get("is_end", len(data.get("data", [])) < page_limit)),
+                "totals": paging.get("totals"),
+                "next": paging.get("next"),
+            },
+        }
+
+    def get_question_answers(self, question_id: str, limit: int = 3, offset: int = 0) -> list:
+        """
+        Get paginated list of answers under a question.
+        获取问题下的一批回答列表数据。
+        """
+        page = self.get_question_answers_page(question_id, limit=limit, offset=offset)
+        return page.get("data", [])
 
     def get_collection_page(self, collection_id: str, limit: int = 20, offset: int = 0) -> dict:
         """
