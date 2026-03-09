@@ -135,38 +135,23 @@ python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10
 
 ## 常用命令
 
-| 命令 | 作用 | 示例 |
-|---|---|---|
-| `fetch` | 抓单条链接，或从文本中提取多条链接 | `./zhihu fetch "URL"` |
-| `creator` | 抓作者主页下的回答和专栏 | `./zhihu creator "https://www.zhihu.com/people/xxx"` |
-| `batch` | 批量抓文件中的链接 | `./zhihu batch urls.txt -c 4` |
-| `monitor` | 增量监控收藏夹 | `./zhihu monitor 78170682` |
-| `query` | 搜索本地数据库 | `./zhihu query "Transformer"` |
-| `interactive` | 启动交互界面 | `./zhihu interactive` |
-| `config` | 查看当前配置 | `./zhihu config --show` |
-| `check` | 检查依赖和运行环境 | `./zhihu check` |
-
-推荐的上手顺序：
-
-1. 用 `check` 看环境是否完整
-2. 用 `fetch` 跑一条回答或专栏
-3. 再用 `batch` 或 `monitor` 进入批量场景
-
-常见写法对照：
+详细说明统一看：
 
 ```bash
-./zhihu check
-python3 cli/app.py check
-
-./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
-python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
-
-./zhihu creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
-python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
-
-./zhihu interactive
-python3 cli/app.py interactive
+python3 cli/app.py manual
 ```
+
+命令速查：
+
+- `fetch`
+- `creator`
+- `batch`
+- `monitor`
+- `query`
+- `interactive`
+- `config --show`
+- `check`
+- `manual`
 
 ## 架构设计
 

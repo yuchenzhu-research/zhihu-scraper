@@ -135,38 +135,21 @@ Creator-mode results are written to `data/creators/<url_token>/`, separate from 
 
 ## Common Commands
 
-| Command | Purpose | Example |
-|---|---|---|
-| `fetch` | Fetch one URL or extract multiple URLs from text | `./zhihu fetch "URL"` |
-| `creator` | Fetch answers and articles from a creator profile | `./zhihu creator "https://www.zhihu.com/people/xxx"` |
-| `batch` | Fetch URLs from a file | `./zhihu batch urls.txt -c 4` |
-| `monitor` | Incrementally monitor a collection | `./zhihu monitor 78170682` |
-| `query` | Search the local database | `./zhihu query "Transformer"` |
-| `interactive` | Launch the interactive UI | `./zhihu interactive` |
-| `config` | Show current configuration | `./zhihu config --show` |
-| `check` | Validate dependencies and runtime environment | `./zhihu check` |
+For detailed usage, run:
 
-Suggested adoption path:
+`python3 cli/app.py manual`
 
-1. Run `check` to validate the environment
-2. Use `fetch` on a single answer or column page
-3. Move to `batch` or `monitor` for larger jobs
+Command quick reference:
 
-Common command pairs:
-
-```bash
-./zhihu check
-python3 cli/app.py check
-
-./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
-python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
-
-./zhihu creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
-python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
-
-./zhihu interactive
-python3 cli/app.py interactive
-```
+- `fetch`
+- `creator`
+- `batch`
+- `monitor`
+- `query`
+- `interactive`
+- `config --show`
+- `check`
+- `manual`
 
 ## Architecture
 
