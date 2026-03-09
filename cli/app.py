@@ -5,6 +5,7 @@ Provides modern command-line interface using Typer with auto-completion support.
 
 Core Functions:
 - fetch: Scrape single Zhihu link (article/answer/question)
+- creator: Scrape answers and articles from a Zhihu creator profile
 - batch: Batch scrape multiple links
 - monitor: Incremental monitoring of collections
 - query: Search scraped content in SQLite database
@@ -26,6 +27,7 @@ app.py — CLI 增强模块
 
 核心功能：
 - fetch: 抓取单个知乎链接 (文章/回答/问题)
+- creator: 抓取知乎作者主页下的回答和专栏
 - batch: 批量抓取多个链接
 - monitor: 增量监控收藏夹
 - query: 在 SQLite 数据库中检索已抓取的内容
@@ -53,7 +55,7 @@ from rich.text import Text
 
 from core.config import get_config, get_logger, get_humanizer, resolve_project_path
 from core.utils import sanitize_filename, extract_urls
-from core.scraper import ZhihuDownloader
+from core.scraper import ZhihuDownloader, ZhihuCreatorDownloader
 from core.converter import ZhihuConverter
 from core.errors import handle_error
 
@@ -128,6 +130,17 @@ def print_question_limit_warning(limit: int) -> None:
         rprint("[yellow]⚠️ Multi-page fetch enabled / 已启用多页抓取[/yellow]")
         rprint("   超过 20 条回答会进入分页抓取，并在页间自动插入随机等待。")
         rprint("   Requests over 20 answers will use pagination with random waits between pages.")
+
+
+def print_creator_limit_warning(answers: int, articles: int) -> None:
+    """
+    Print warning when creator mode will trigger multi-page requests.
+    当 creator 模式会触发多页请求时打印提示。
+    """
+    if answers > 20 or articles > 20:
+        rprint("[yellow]⚠️ Creator mode will use pagination / 作者模式将启用分页抓取[/yellow]")
+        rprint("   大于 20 条时会进行多页 API 请求，并自动加入随机等待。")
+        rprint("   Requests above 20 items use paginated API access with built-in random delays.")
 
 
 # ============================================================
@@ -246,6 +259,51 @@ def batch(
 
     rprint(f"\n[bold]📊 Batch completed / 批量完成: {success} success / 成功, {failed} failed / 失败[/bold]")
     log.info("batch_completed", success=success, failed=failed)
+
+
+@app.command("creator")
+def creator(
+    creator: str = typer.Argument(..., help="Zhihu creator profile URL or token / 知乎用户主页 URL 或 token"),
+    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
+    answers: int = typer.Option(10, "--answers", help="Maximum number of answers / 最大回答数量"),
+    articles: int = typer.Option(5, "--articles", help="Maximum number of articles / 最大专栏数量"),
+    no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
+) -> None:
+    """
+    Scrape answers and articles from a Zhihu creator profile.
+    抓取知乎作者主页下的回答和专栏文章。
+
+    Examples:
+        zhihu creator https://www.zhihu.com/people/hu-xi-jin
+        zhihu creator hu-xi-jin --answers 20 --articles 10
+    """
+    if answers < 0 or articles < 0:
+        raise typer.BadParameter("Creator limits must be 0 or greater / 作者抓取数量必须大于等于 0")
+    if answers == 0 and articles == 0:
+        raise typer.BadParameter("At least one content type must be enabled / 至少抓取一种内容类型")
+
+    log.info("creator_started", creator=creator, answers=answers, articles=articles)
+    rprint(f"[bold]👤 Creator mode / 作者模式: {creator}[/bold]")
+
+    try:
+        from core.api_client import ZhihuAPIClient
+
+        temp_client = ZhihuAPIClient()
+        if not temp_client._cookies_dict and cfg.zhihu.cookies_required:
+            rprint("[yellow]⚠️  No valid Cookie detected, creator mode may be incomplete / 未检测到有效 Cookie，作者模式可能不完整[/yellow]")
+
+        print_creator_limit_warning(answers, articles)
+
+        asyncio.run(_fetch_creator_and_save(
+            creator=creator,
+            output_dir=output,
+            answer_limit=answers,
+            article_limit=articles,
+            download_images=not no_images,
+        ))
+    except Exception as e:
+        handle_error(e, log)
+        raise SystemExit(1)
 
 
 @app.command("monitor")
@@ -607,8 +665,6 @@ async def _fetch_and_save(
         headless: Headless mode (not effective in API mode) / 无头模式 (API 模式下不生效)
         collection_id: Collection ID (for database record association) / 收藏夹 ID (关联数据库记录)
     """
-    from datetime import datetime
-
     output_dir.mkdir(parents=True, exist_ok=True)
 
     downloader = ZhihuDownloader(url)
@@ -620,13 +676,66 @@ async def _fetch_and_save(
         rprint("[yellow]⚠️  No content obtained / 未获取到内容[/yellow]")
         return
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    items = data if isinstance(data, list) else [data]
+    await _save_items(
+        items=items,
+        output_dir=output_dir,
+        download_images=download_images,
+        source_url_fallback=url,
+        collection_id=collection_id,
+    )
+
+
+async def _fetch_creator_and_save(
+    creator: str,
+    output_dir: Path,
+    answer_limit: int,
+    article_limit: int,
+    download_images: bool = True,
+) -> None:
+    """
+    Fetch creator content and save it using the standard local output pipeline.
+    抓取作者内容，并复用标准本地输出流程保存。
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    downloader = ZhihuCreatorDownloader(creator)
+    result = await downloader.fetch_items(answer_limit=answer_limit, article_limit=article_limit)
+    creator_info = result.get("creator", {})
+    items = result.get("items", [])
+
+    if not items:
+        rprint("[yellow]⚠️  No creator content obtained / 未获取到作者内容[/yellow]")
+        return
+
+    creator_name = creator_info.get("name", creator_info.get("url_token", creator))
+    rprint(f"[cyan]👤 Creator / 作者[/cyan]: {creator_name} ({creator_info.get('url_token', 'unknown')})")
+
+    await _save_items(
+        items=items,
+        output_dir=output_dir,
+        download_images=download_images,
+        source_url_fallback=f"https://www.zhihu.com/people/{creator_info.get('url_token', creator)}",
+    )
+
+
+async def _save_items(
+    *,
+    items: List[Dict[str, Any]],
+    output_dir: Path,
+    download_images: bool,
+    source_url_fallback: str,
+    collection_id: Optional[str] = None,
+) -> None:
+    """
+    Save normalized content items to Markdown, images, and SQLite.
+    将标准化内容保存到 Markdown、图片目录和 SQLite。
+    """
+    from datetime import datetime
+
     image_cfg = cfg.crawler.images
     images_subdir = cfg.output.images_subdir or "images"
-
-    # Handle single or multiple results (question page returns multiple answers)
-    # 处理单个或多个结果 (问题页返回多个回答列表)
-    items = data if isinstance(data, list) else [data]
+    today = datetime.now().strftime("%Y-%m-%d")
 
     from core.db import ZhihuDatabase
 
@@ -636,7 +745,7 @@ async def _fetch_and_save(
             title = sanitize_filename(item["title"])
             author = sanitize_filename(item["author"])
             item_date = item.get("date") or today
-            source_url = item.get("url") or url
+            source_url = item.get("url") or source_url_fallback
             item_key = sanitize_filename(f"{item.get('type', 'item')}-{item.get('id', 'unknown')}", max_length=80)
 
             folder_name = build_output_folder_name(item_date, title, author, item_key)

@@ -107,6 +107,25 @@ def extract_id_from_url(url: str) -> Optional[str]:
     return None
 
 
+def extract_creator_token(value: str) -> Optional[str]:
+    """
+    Extract Zhihu creator token from a profile URL or accept a raw token.
+    从知乎用户主页 URL 中提取用户 token，或直接接受裸 token。
+    """
+    value = value.strip()
+    if not value:
+        return None
+
+    if re.fullmatch(r"[A-Za-z0-9._-]+", value):
+        return value
+
+    match = re.search(r"(?:https?://)?www\.zhihu\.com/people/([^/?#]+)", value)
+    if match:
+        return match.group(1)
+
+    return None
+
+
 # ============================================================
 # Filename Sanitization / 文件名清洗
 # ============================================================

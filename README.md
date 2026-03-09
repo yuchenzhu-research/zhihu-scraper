@@ -115,6 +115,13 @@ python3 cli/app.py fetch "https://www.zhihu.com/question/28696373" -n 10
 - 分页之间会插入随机等待，降低连续请求过快带来的风控风险
 - `-n 50` 以上会在 CLI 中给出更明显的风险提示
 
+作者主页也可以直接批量抓：
+
+```bash
+./zhihu creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
+python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
+```
+
 ## 支持范围
 
 | 内容类型 | 无 Cookie | 有 Cookie | 说明 |
@@ -129,6 +136,7 @@ python3 cli/app.py fetch "https://www.zhihu.com/question/28696373" -n 10
 | 命令 | 作用 | 示例 |
 |---|---|---|
 | `fetch` | 抓单条链接，或从文本中提取多条链接 | `./zhihu fetch "URL"` |
+| `creator` | 抓作者主页下的回答和专栏 | `./zhihu creator "https://www.zhihu.com/people/xxx"` |
 | `batch` | 批量抓文件中的链接 | `./zhihu batch urls.txt -c 4` |
 | `monitor` | 增量监控收藏夹 | `./zhihu monitor 78170682` |
 | `query` | 搜索本地数据库 | `./zhihu query "Transformer"` |
@@ -150,6 +158,9 @@ python3 cli/app.py check
 
 ./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+
+./zhihu creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
+python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
 
 ./zhihu interactive
 python3 cli/app.py interactive

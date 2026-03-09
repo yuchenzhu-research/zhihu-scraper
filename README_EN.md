@@ -115,6 +115,13 @@ Notes:
 - Random waits are inserted between pages to reduce anti-bot risk
 - Above `-n 50`, the CLI shows a stronger risk warning
 
+Creator profiles can also be fetched in batches:
+
+```bash
+./zhihu creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
+python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
+```
+
 ## Support Matrix
 
 | Content Type | Without Cookie | With Cookie | Notes |
@@ -129,6 +136,7 @@ Notes:
 | Command | Purpose | Example |
 |---|---|---|
 | `fetch` | Fetch one URL or extract multiple URLs from text | `./zhihu fetch "URL"` |
+| `creator` | Fetch answers and articles from a creator profile | `./zhihu creator "https://www.zhihu.com/people/xxx"` |
 | `batch` | Fetch URLs from a file | `./zhihu batch urls.txt -c 4` |
 | `monitor` | Incrementally monitor a collection | `./zhihu monitor 78170682` |
 | `query` | Search the local database | `./zhihu query "Transformer"` |
@@ -150,6 +158,9 @@ python3 cli/app.py check
 
 ./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+
+./zhihu creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
+python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
 
 ./zhihu interactive
 python3 cli/app.py interactive

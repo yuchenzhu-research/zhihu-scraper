@@ -35,7 +35,7 @@ scraper.py — 知乎页面抓取 & 图片下载模块 (v3.0 纯协议引擎 API
 """
 
 import asyncio
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Dict, Any, Callable
 import httpx
 from pathlib import Path
 import re
@@ -44,6 +44,7 @@ from random import uniform
 
 from .config import get_logger, get_humanizer
 from .api_client import ZhihuAPIClient
+from .utils import extract_creator_token
 
 class ZhihuDownloader:
     """
@@ -422,3 +423,171 @@ class ZhihuDownloader:
         await client.aclose()
 
         return url_to_local
+
+
+class ZhihuCreatorDownloader:
+    """
+    Fetch answers and articles from a Zhihu creator profile.
+    抓取知乎作者主页下的回答与专栏。
+    """
+
+    def __init__(self, creator: str) -> None:
+        self.creator = creator.strip()
+        self.url_token = extract_creator_token(self.creator)
+        self.api_client = ZhihuAPIClient()
+        self.log = get_logger()
+
+    async def fetch_items(self, answer_limit: int = 10, article_limit: int = 5) -> Dict[str, Any]:
+        """
+        Fetch creator profile and selected content types.
+        抓取作者资料和指定类型内容。
+        """
+        if not self.url_token:
+            raise Exception(f"无法从作者输入中提取知乎用户标识: {self.creator}")
+
+        creator_profile = self.api_client.get_creator_profile(self.url_token)
+        items: List[dict] = []
+
+        if answer_limit > 0:
+            items.extend(
+                await self._paginate_creator_items(
+                    label="回答",
+                    target_limit=answer_limit,
+                    fetch_page=lambda offset, limit: self.api_client.get_creator_answers_page(self.url_token, limit=limit, offset=offset),
+                    normalize_item=self._normalize_creator_answer,
+                )
+            )
+
+        if article_limit > 0:
+            items.extend(
+                await self._paginate_creator_items(
+                    label="专栏",
+                    target_limit=article_limit,
+                    fetch_page=lambda offset, limit: self.api_client.get_creator_articles_page(self.url_token, limit=limit, offset=offset),
+                    normalize_item=self._normalize_creator_article,
+                )
+            )
+
+        return {
+            "creator": {
+                "name": creator_profile.get("name", self.url_token),
+                "url_token": creator_profile.get("url_token", self.url_token),
+                "headline": creator_profile.get("headline", ""),
+                "answer_count": creator_profile.get("answer_count", 0),
+                "articles_count": creator_profile.get("articles_count", 0),
+            },
+            "items": items,
+        }
+
+    async def _paginate_creator_items(
+        self,
+        *,
+        label: str,
+        target_limit: int,
+        fetch_page: Callable[[int, int], dict],
+        normalize_item: Callable[[dict], dict],
+    ) -> List[dict]:
+        """
+        Generic creator pagination loop with conservative throttling.
+        通用作者分页抓取循环，带保守节流。
+        """
+        humanizer = get_humanizer()
+        page_size = 20
+        offset = 0
+        page_index = 0
+        items: List[dict] = []
+
+        print(f"👤 开始抓取作者 {self.url_token} 的前 {target_limit} 条{label}...")
+
+        while len(items) < target_limit:
+            current_page_size = min(page_size, target_limit - len(items))
+
+            try:
+                page = fetch_page(offset, current_page_size)
+            except Exception as e:
+                message = f"作者 {self.url_token} 第 {page_index + 1} 页{label}抓取失败: {e}"
+                if items:
+                    print(f"⚠️ {message}")
+                    print(f"🛑 为降低风险，本次提前停止，保留已抓到的 {len(items)} 条{label}。")
+                    break
+                raise Exception(message)
+
+            page_items = page.get("data", [])
+            if not page_items:
+                break
+
+            for raw_item in page_items:
+                items.append(normalize_item(raw_item))
+
+            page_index += 1
+            offset += len(page_items)
+            print(f"📄 {label}第 {page_index} 页完成，本页 {len(page_items)} 条，累计 {len(items)}/{target_limit} 条。")
+
+            if len(items) >= target_limit:
+                break
+
+            if page.get("paging", {}).get("is_end", len(page_items) < current_page_size):
+                break
+
+            if humanizer.config.enabled:
+                if page_index % 3 == 0:
+                    delay = uniform(15.0, 30.0)
+                    print(f"⏸️ 已连续抓取 {page_index} 页{label}，额外休息 {delay:.1f} 秒后继续...")
+                else:
+                    min_delay = max(3.0, humanizer.config.min_delay)
+                    max_delay = max(min_delay, humanizer.config.max_delay, 8.0)
+                    delay = uniform(min_delay, max_delay)
+                    print(f"⏳ 等待 {delay:.1f} 秒后抓取下一页{label}...")
+                await asyncio.sleep(delay)
+
+        return items
+
+    def _normalize_creator_answer(self, data: dict) -> dict:
+        """
+        Convert creator answer API response into the internal item format.
+        将作者回答 API 结果转换为内部统一结构。
+        """
+        answer_id = str(data.get("id", ""))
+        question = data.get("question", {}) or {}
+        question_id = question.get("id", "")
+        author = data.get("author", {}).get("name", "未知作者")
+        created_sec = data.get("created_time", 0)
+        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+
+        return {
+            "id": answer_id,
+            "type": "answer",
+            "url": f"https://www.zhihu.com/question/{question_id}/answer/{answer_id}" if question_id else f"https://www.zhihu.com/answer/{answer_id}",
+            "title": (question.get("title") or "未知问题").strip(),
+            "author": author.strip(),
+            "html": data.get("content", ""),
+            "date": date_str,
+            "upvotes": data.get("voteup_count", 0),
+            "creator_url_token": self.url_token,
+        }
+
+    def _normalize_creator_article(self, data: dict) -> dict:
+        """
+        Convert creator article API response into the internal item format.
+        将作者专栏 API 结果转换为内部统一结构。
+        """
+        article_id = str(data.get("id", ""))
+        author = data.get("author", {}).get("name", "未知作者")
+        created_sec = data.get("created", 0) or data.get("updated", 0)
+        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
+        html = data.get("content", "")
+        image_url = data.get("image_url") or data.get("thumbnail")
+        if image_url:
+            html = f'<img src="{image_url}" alt="TitleImage"><br>{html}'
+
+        return {
+            "id": article_id,
+            "type": "article",
+            "url": f"https://zhuanlan.zhihu.com/p/{article_id}",
+            "title": (data.get("title") or "未知专栏标题").strip(),
+            "author": author.strip(),
+            "html": html,
+            "date": date_str,
+            "upvotes": data.get("voteup_count", 0),
+            "creator_url_token": self.url_token,
+        }
