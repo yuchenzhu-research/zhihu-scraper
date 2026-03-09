@@ -122,6 +122,8 @@ Creator profiles can also be fetched in batches:
 python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
 ```
 
+Creator-mode results are written to `data/creators/<url_token>/`, separate from normal `fetch` outputs.
+
 ## Support Matrix
 
 | Content Type | Without Cookie | With Cookie | Notes |
@@ -241,14 +243,24 @@ By default, results are written to `data/`:
 
 ```text
 data/
-├── [2026-03-06] Title (answer-1234567890)/
-│   ├── index.md
-│   └── images/
+├── entries/
+│   └── [2026-03-06] Title (answer-1234567890)/
+│       ├── index.md
+│       └── images/
+├── creators/
+│   └── hu-xi-jin/
+│       ├── creator.json
+│       ├── README.md
+│       └── [2026-03-06] Title (answer-1234567890)/
+│           ├── index.md
+│           └── images/
 └── zhihu.db
 ```
 
 In practice:
 
+- `entries/` stores normal `fetch` / `batch` / `monitor` outputs
+- `creators/<url_token>/` stores creator-mode content plus local creator metadata and an index page
 - `index.md` is the reading-friendly artifact
 - `images/` stores local media assets
 - `zhihu.db` supports local search and later organization

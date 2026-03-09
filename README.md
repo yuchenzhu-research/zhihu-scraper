@@ -122,6 +122,8 @@ python3 cli/app.py fetch "https://www.zhihu.com/question/28696373" -n 10
 python3 cli/app.py creator "https://www.zhihu.com/people/hu-xi-jin" --answers 10 --articles 5
 ```
 
+作者模式的结果会单独落到 `data/creators/<url_token>/`，不会和普通 `fetch` 的结果混在一起。
+
 ## 支持范围
 
 | 内容类型 | 无 Cookie | 有 Cookie | 说明 |
@@ -241,14 +243,24 @@ browser_data/  浏览器运行数据，默认不提交
 
 ```text
 data/
-├── [2026-03-06] 标题 (answer-1234567890)/
-│   ├── index.md
-│   └── images/
+├── entries/
+│   └── [2026-03-06] 标题 (answer-1234567890)/
+│       ├── index.md
+│       └── images/
+├── creators/
+│   └── hu-xi-jin/
+│       ├── creator.json
+│       ├── README.md
+│       └── [2026-03-06] 标题 (answer-1234567890)/
+│           ├── index.md
+│           └── images/
 └── zhihu.db
 ```
 
 其中：
 
+- `entries/` 保存普通 `fetch` / `batch` / `monitor` 抓下来的内容
+- `creators/<url_token>/` 保存作者模式的内容、作者信息和本地索引页
 - `index.md` 适合直接阅读和二次编辑
 - `images/` 保存文内图片资源
 - `zhihu.db` 便于本地搜索和后续整理
