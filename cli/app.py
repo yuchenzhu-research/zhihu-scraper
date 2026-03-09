@@ -51,6 +51,7 @@ import asyncio
 import json
 import typer
 from rich import print as rprint
+from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
@@ -76,6 +77,7 @@ cfg = get_config()
 log = get_logger()
 DEFAULT_OUTPUT_DIR = resolve_project_path(cfg.output.directory)
 DEFAULT_BROWSER_HEADLESS = cfg.zhihu.browser.headless
+console = Console()
 
 
 # ============================================================
@@ -166,6 +168,105 @@ def print_creator_limit_warning(answers: int, articles: int) -> None:
 # ============================================================
 # Command Definitions (命令定义)
 # ============================================================
+
+@app.command("manual")
+def manual() -> None:
+    """
+    Show the built-in terminal manual with paging support.
+    显示内置终端说明书，支持分页查看。
+    """
+    manual_text = f"""
+# Zhihu Scraper Manual / 使用说明书
+
+退出这份说明书：
+- 大多数终端里按 `q`
+- 如果分页器没接管，也可以按 `Ctrl+C`
+
+两种启动方式：
+- 包装脚本：`./zhihu <command> ...`
+- Python 入口：`python3 cli/app.py <command> ...`
+
+常用命令：
+
+1. 环境检查
+`./zhihu check`
+`python3 cli/app.py check`
+
+2. 抓单条内容
+`./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"`
+`python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"`
+
+3. 抓问题页最近多条回答
+`./zhihu fetch "https://www.zhihu.com/question/28696373" -n 10`
+`python3 cli/app.py fetch "https://www.zhihu.com/question/28696373" -n 10`
+
+问题页说明：
+- `-n 20` 以内通常是一页
+- `-n 20` 以上自动分页
+- 页间会自动随机等待
+- `-n 50` 以上风险会明显升高
+
+4. 作者模式
+`./zhihu creator "https://www.zhihu.com/people/iterator"`
+`python3 cli/app.py creator "https://www.zhihu.com/people/iterator"`
+
+作者模式默认：
+- 最近 `10` 条回答
+- 最近 `5` 篇专栏
+- 默认下载图片
+- 输出到 `{DEFAULT_OUTPUT_DIR}`
+
+作者模式常用参数：
+- `--answers 20`
+- `--articles 10`
+- `-i` / `--no-images`
+- `-o ./mydata`
+
+5. 批量抓取
+`./zhihu batch urls.txt -c 4`
+`python3 cli/app.py batch urls.txt -c 4`
+
+6. 收藏夹监控
+`./zhihu monitor 78170682`
+`python3 cli/app.py monitor 78170682`
+
+7. 查询数据库
+`./zhihu query "Transformer"`
+`python3 cli/app.py query "Transformer"`
+
+8. 交互模式
+`./zhihu interactive`
+`python3 cli/app.py interactive`
+
+注意：
+- 交互模式当前支持回答 / 专栏 / 问题页
+- 交互模式暂不支持直接粘贴 `people/...` 作者主页
+- 作者主页请使用 `creator` 命令
+
+默认输出目录：
+- `data/entries/`：普通 `fetch` / `batch` / `monitor`
+- `data/creators/<url_token>/`：作者模式
+- `data/zhihu.db`：统一数据库
+
+作者目录里会生成：
+- `creator.json`：作者信息与同步状态
+- `README.md`：作者本地索引页
+
+命令速查：
+- `fetch`
+- `creator`
+- `batch`
+- `monitor`
+- `query`
+- `interactive`
+- `config --show`
+- `check`
+- `manual`
+""".strip()
+
+    with console.pager(styles=True):
+        console.print(Text(manual_text, justify="left"))
+
 
 @app.command("fetch")
 def fetch(
