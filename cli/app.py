@@ -188,7 +188,7 @@ def _input_positive_int(prompt: str, default: str) -> int:
     value = questionary.text(
         prompt,
         default=default,
-        validate=lambda text: text.isdigit() and int(text) > 0 or "Please enter a positive integer / 请输入正整数",
+        validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数",
         style=_launcher_style(),
     ).ask()
     return int(value or default)
@@ -201,7 +201,7 @@ def _input_non_negative_int(prompt: str, default: str) -> int:
     value = questionary.text(
         prompt,
         default=default,
-        validate=lambda text: text.isdigit() or "Please enter a non-negative integer / 请输入非负整数",
+        validate=lambda text: text.isdigit() or "请输入非负整数",
         style=_launcher_style(),
     ).ask()
     return int(value or default)
@@ -214,20 +214,20 @@ def _collect_fetch_options(url: str) -> Dict[str, Any]:
     limit: Optional[int] = None
     if "/question/" in url and "/answer/" not in url:
         limit = _input_positive_int(
-            "How many answers to fetch from the question page? / 问题页抓取多少条回答？",
+            "问题页抓取多少条回答？",
             "10",
         )
 
     selections = questionary.checkbox(
-        "Extra options / 附加选项:",
+        "附加设置：",
         choices=[
-            questionary.Choice("Download images / 下载图片", value="images", checked=True),
+            questionary.Choice("下载图片", value="images", checked=True),
         ],
         style=_launcher_style(),
     ).ask() or []
 
     if "zhuanlan.zhihu.com" in url:
-        rprint("[dim]ℹ️ Column articles will automatically use browser backup if normal fetch is blocked / 专栏被拦截时会自动启用浏览器补救。[/dim]")
+        rprint("[dim]ℹ️ 如果专栏普通抓取失败，程序会自动启用浏览器补救。[/dim]")
 
     return {
         "limit": limit,
@@ -241,16 +241,16 @@ def _render_launcher_header() -> None:
     from core.cookie_manager import has_real_cookie_values
 
     cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
-    cookie_status = "READY / 已就绪" if has_real_cookie_values(cookies_path) else "COOKIE NEEDED / 需要 Cookie"
-    browser_status = "HEADLESS" if cfg.zhihu.browser.headless else "VISIBLE"
+    cookie_status = "已就绪" if has_real_cookie_values(cookies_path) else "需要 Cookie"
+    browser_status = "后台运行" if cfg.zhihu.browser.headless else "显示窗口"
     content = Text.assemble(
-        ("Zhihu Scraper", "bold cyan"),
-        ("  ·  Local-first menu launcher / 本地优先首页入口\n", "white"),
-        ("Output / 输出: ", "bold magenta"),
+        ("知乎爬虫", "bold cyan"),
+        ("  ·  知乎抓取首页\n", "white"),
+        ("输出目录: ", "bold magenta"),
         (f"{DEFAULT_OUTPUT_DIR}", "white"),
-        ("  |  Cookie / 登录态: ", "bold magenta"),
+        ("  |  登录状态: ", "bold magenta"),
         (cookie_status, "white"),
-        ("  |  Browser / 浏览器: ", "bold magenta"),
+        ("  |  浏览器补救: ", "bold magenta"),
         (browser_status, "white"),
     )
     console.print(Panel(content, border_style="cyan", expand=False))
@@ -263,27 +263,27 @@ def _run_onboard_flow(*, from_command: bool = False) -> None:
 
     console.print(Panel(
         Text(
-            "Onboard / 首次使用引导\n\n"
-            "1. Ensure dependencies are installed with ./install.sh\n"
-            "2. Fill your cookies in cookies.json\n"
-            "3. Run environment check\n"
-            "4. Start from the home menu or interactive capture",
+            "首次使用向导\n\n"
+            "1. 先运行 ./install.sh 安装环境\n"
+            "2. 在 cookies.json 中填入自己的 Cookie\n"
+            "3. 执行一次环境检查\n"
+            "4. 然后从首页菜单开始使用",
             justify="left",
         ),
         border_style="magenta",
-        title="🚀 Onboard",
+        title="🚀 首次使用向导",
         expand=False,
     ))
 
     cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
     cookie_ready = has_real_cookie_values(cookies_path)
-    rprint(f"📄 Config / 配置: [cyan]{Path(__file__).parent.parent / 'config.yaml'}[/]")
-    rprint(f"🍪 Cookies / 登录态: [cyan]{cookies_path}[/] {'✅' if cookie_ready else '⚠️'}")
-    rprint("🧰 Installer / 安装入口: [cyan]./install.sh[/]")
-    rprint("🔁 Recreate env / 重建环境: [cyan]./install.sh --recreate[/]")
+    rprint(f"📄 配置文件: [cyan]{Path(__file__).parent.parent / 'config.yaml'}[/]")
+    rprint(f"🍪 Cookie 文件: [cyan]{cookies_path}[/] {'✅' if cookie_ready else '⚠️'}")
+    rprint("🧰 安装入口: [cyan]./install.sh[/]")
+    rprint("🔁 重建环境: [cyan]./install.sh --recreate[/]")
 
     should_check = questionary.confirm(
-        "Run environment check now? / 现在执行环境检查吗？",
+        "现在执行环境检查吗？",
         default=True,
         style=_launcher_style(),
     ).ask()
@@ -291,7 +291,7 @@ def _run_onboard_flow(*, from_command: bool = False) -> None:
         check()
 
     should_open_home = questionary.confirm(
-        "Open the home menu now? / 现在进入首页菜单吗？",
+        "现在进入首页菜单吗？",
         default=not from_command,
         style=_launcher_style(),
     ).ask()
@@ -315,18 +315,18 @@ def _run_launcher() -> None:
 
     while True:
         choice = questionary.select(
-            "Choose an action / 请选择操作:",
+            "请选择操作：",
             choices=[
-                questionary.Choice("Quick Fetch / 快速抓取", value="fetch"),
-                questionary.Choice("Creator / 作者主页抓取", value="creator"),
-                questionary.Choice("Batch / 批量抓取", value="batch"),
-                questionary.Choice("Monitor / 收藏夹监控", value="monitor"),
-                questionary.Choice("Query / 搜索本地数据库", value="query"),
-                questionary.Choice("Interactive / 炫酷交互界面", value="interactive"),
-                questionary.Choice("Onboard / 首次使用引导", value="onboard"),
-                questionary.Choice("Check / 环境检查", value="check"),
-                questionary.Choice("Manual / 查看说明书", value="manual"),
-                questionary.Choice("Exit / 退出", value="exit"),
+                questionary.Choice("快速抓取", value="fetch"),
+                questionary.Choice("作者抓取", value="creator"),
+                questionary.Choice("批量抓取", value="batch"),
+                questionary.Choice("收藏夹监控", value="monitor"),
+                questionary.Choice("搜索本地数据库", value="query"),
+                questionary.Choice("炫酷交互界面", value="interactive"),
+                questionary.Choice("首次使用向导", value="onboard"),
+                questionary.Choice("环境检查", value="check"),
+                questionary.Choice("查看说明书", value="manual"),
+                questionary.Choice("退出", value="exit"),
             ],
             use_shortcuts=False,
             style=_launcher_style(),
@@ -337,7 +337,7 @@ def _run_launcher() -> None:
 
         if choice == "fetch":
             url = questionary.text(
-                "Paste a Zhihu link or mixed text / 输入知乎链接或混合文本:",
+                "输入知乎链接或一段包含链接的文字：",
                 style=_launcher_style(),
             ).ask()
             if not url:
@@ -355,17 +355,17 @@ def _run_launcher() -> None:
 
         if choice == "creator":
             creator_input = questionary.text(
-                "Creator profile URL or token / 作者主页 URL 或 token:",
+                "输入作者主页 URL 或 url_token：",
                 style=_launcher_style(),
             ).ask()
             if not creator_input:
                 continue
-            answers = _input_non_negative_int("How many answers? / 抓多少条回答？", "10")
-            articles = _input_non_negative_int("How many articles? / 抓多少篇专栏？", "5")
+            answers = _input_non_negative_int("抓多少条回答？", "10")
+            articles = _input_non_negative_int("抓多少篇专栏？", "5")
             selections = questionary.checkbox(
-                "Extra options / 附加选项:",
+                "附加设置：",
                 choices=[
-                    questionary.Choice("Download images / 下载图片", value="images", checked=True),
+                    questionary.Choice("下载图片", value="images", checked=True),
                 ],
                 style=_launcher_style(),
             ).ask() or []
@@ -381,17 +381,17 @@ def _run_launcher() -> None:
 
         if choice == "batch":
             input_file = questionary.path(
-                "Path to URL list file / URL 列表文件路径:",
+                "输入 URL 列表文件路径：",
                 only_files=True,
                 style=_launcher_style(),
             ).ask()
             if not input_file:
                 continue
-            concurrency = _input_positive_int("Concurrency / 并发数:", "4")
+            concurrency = _input_positive_int("并发数：", "4")
             selections = questionary.checkbox(
-                "Extra options / 附加选项:",
+                "附加设置：",
                 choices=[
-                    questionary.Choice("Download images / 下载图片", value="images", checked=True),
+                    questionary.Choice("下载图片", value="images", checked=True),
                 ],
                 style=_launcher_style(),
             ).ask() or []
@@ -407,16 +407,16 @@ def _run_launcher() -> None:
 
         if choice == "monitor":
             collection_id = questionary.text(
-                "Collection ID / 收藏夹 ID:",
+                "输入收藏夹 ID：",
                 style=_launcher_style(),
             ).ask()
             if not collection_id:
                 continue
-            concurrency = _input_positive_int("Concurrency / 并发数:", "4")
+            concurrency = _input_positive_int("并发数：", "4")
             selections = questionary.checkbox(
-                "Extra options / 附加选项:",
+                "附加设置：",
                 choices=[
-                    questionary.Choice("Download images / 下载图片", value="images", checked=True),
+                    questionary.Choice("下载图片", value="images", checked=True),
                 ],
                 style=_launcher_style(),
             ).ask() or []
@@ -432,12 +432,12 @@ def _run_launcher() -> None:
 
         if choice == "query":
             keyword = questionary.text(
-                "Keyword to search / 搜索关键词:",
+                "输入搜索关键词：",
                 style=_launcher_style(),
             ).ask()
             if not keyword:
                 continue
-            limit = _input_positive_int("Result limit / 结果数量:", "10")
+            limit = _input_positive_int("结果数量：", "10")
             run_action(query_db, keyword=keyword, limit=limit, data_dir=str(DEFAULT_OUTPUT_DIR))
             continue
 
