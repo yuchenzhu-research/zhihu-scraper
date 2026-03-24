@@ -17,6 +17,16 @@
 </p>
 
 <p>
+  <strong>Status:</strong> active ·
+  <strong>Install:</strong> <code>./install.sh</code> ·
+  <strong>Manual:</strong> <code>./zhihu manual</code>
+</p>
+
+<p>
+  <code>fetch</code> · <code>creator</code> · <code>monitor</code> · <code>Markdown</code> · <code>images</code> · <code>SQLite</code>
+</p>
+
+<p>
   <a href="#快速开始-quick-start">快速开始</a> ·
   <a href="#核心特性-features">核心特性</a> ·
   <a href="#示例输出-examples">示例输出</a> ·
@@ -59,6 +69,21 @@
 
 这些能力会放在后面的 [路线图](#开发路线图-roadmap)。
 
+## 30 秒判断 Fit
+
+| 适合 | 不适合 |
+|---|---|
+| 想把知乎内容保存成本地 Markdown | 想做大规模在线爬虫平台 |
+| 想保留图片、本地目录和 SQLite | 想立刻得到 JSON / CSV / MySQL 导出 |
+| 想用命令行或终端菜单快速归档内容 | 想直接使用完整 GUI |
+| 想抓回答、专栏、作者页、收藏夹 | 想抓话题页和全站搜索结果 |
+
+## 一眼看懂 At a Glance
+
+| 输入 | 抓取链路 | 输出 |
+|---|---|---|
+| 回答 / 专栏 / 问题 / 作者 / 收藏夹 | 协议优先，专栏受限时自动补救 | `index.md + images/ + zhihu.db` |
+
 ## 快速开始 Quick Start
 
 目标：**3 分钟内完成第一次成功抓取。**
@@ -88,6 +113,16 @@ cd zhihu-scraper
 安装完成后，推荐直接从首页菜单进入：
 
 ```bash
+./zhihu
+```
+
+一次性最短路径：
+
+```bash
+git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
+cd zhihu-scraper
+./install.sh
+cp cookies.example.json cookies.json
 ./zhihu
 ```
 
@@ -162,6 +197,17 @@ README 只保留首页级说明。完整命令说明统一在内置手册中：
 | 话题抓取 | 规划中 | 尚未开放 CLI |
 | JSON / CSV / MySQL 导出 | 规划中 | 当前主输出为 Markdown + SQLite |
 
+## 推荐入口 Recommended Paths
+
+| 你想做什么 | 推荐命令 |
+|---|---|
+| 第一次进入项目 | `./zhihu` |
+| 抓一条链接 | `./zhihu fetch "<url>"` |
+| 抓作者主页 | `./zhihu creator "<people url>"` |
+| 批量抓取 | `./zhihu batch urls.txt` |
+| 环境检查 | `./zhihu check` |
+| 查看完整说明书 | `./zhihu manual` |
+
 ## 使用方式 Usage
 
 项目提供两条等价入口：
@@ -191,12 +237,12 @@ python3 cli/app.py <command> ...
 
 ## 示例输出 Examples
 
-仓库里保留了两份可直接打开的样例输出：
+仓库里保留了两份可以直接打开的样例输出：
 
-- 超链接展示：
-  [examples/outputs/[2026-03-24] 【深度学习数学基础】序章 + 目录（已完结，共30章） (article-25643286963)/index.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md)
-- 图片与数学公式展示：
-  [examples/outputs/[2026-03-24] 线性代数(Linear Algebra)学习笔记 (article-641433373)/index.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md)
+| 展示项 | 你能看到什么 | 打开 |
+|---|---|---|
+| 超链接保留 | 目录页、外部链接、多层超链接 | [深度学习数学基础](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
+| 图片与数学公式 | 本地图片引用、块公式、长文混排 | [线性代数学习笔记](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
 
 更详细的说明见：
 

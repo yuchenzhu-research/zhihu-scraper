@@ -17,6 +17,16 @@
 </p>
 
 <p>
+  <strong>Status:</strong> active ·
+  <strong>Install:</strong> <code>./install.sh</code> ·
+  <strong>Manual:</strong> <code>./zhihu manual</code>
+</p>
+
+<p>
+  <code>fetch</code> · <code>creator</code> · <code>monitor</code> · <code>Markdown</code> · <code>images</code> · <code>SQLite</code>
+</p>
+
+<p>
   <a href="#quick-start">Quick Start</a> ·
   <a href="#features">Features</a> ·
   <a href="#examples">Examples</a> ·
@@ -59,6 +69,21 @@ What it does not officially provide yet:
 
 Those belong in the [Roadmap](#roadmap), not in the present-tense feature list.
 
+## 30-Second Fit Check
+
+| Good fit | Not a fit |
+|---|---|
+| You want Zhihu content saved as local Markdown | You want a hosted scraping platform |
+| You want images, folders, and SQLite preserved together | You need JSON / CSV / MySQL export right now |
+| You prefer CLI or terminal-menu workflows | You want a full GUI today |
+| You want answers, columns, creator pages, and collections | You want topic pages and site-wide search scraping |
+
+## At a Glance
+
+| Input | Fetch path | Output |
+|---|---|---|
+| answer / article / question / creator / collection | protocol-first, automatic rescue for blocked articles | `index.md + images/ + zhihu.db` |
+
 ## Quick Start
 
 Goal: **complete your first successful fetch within 3 minutes.**
@@ -88,6 +113,16 @@ If your local environment is broken or messy, rebuild it:
 After installation, start from the home menu:
 
 ```bash
+./zhihu
+```
+
+Shortest end-to-end path:
+
+```bash
+git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
+cd zhihu-scraper
+./install.sh
+cp cookies.example.json cookies.json
 ./zhihu
 ```
 
@@ -162,6 +197,17 @@ This README is intentionally homepage-level. Detailed command help lives in:
 | Topic scraping | Planned | No CLI path yet |
 | JSON / CSV / MySQL export | Planned | Current primary outputs are Markdown + SQLite |
 
+## Recommended Paths
+
+| What you want to do | Recommended command |
+|---|---|
+| Start from the home menu | `./zhihu` |
+| Fetch one link | `./zhihu fetch "<url>"` |
+| Fetch a creator profile | `./zhihu creator "<people url>"` |
+| Run batch capture | `./zhihu batch urls.txt` |
+| Check your environment | `./zhihu check` |
+| Open the full manual | `./zhihu manual` |
+
 ## Usage
 
 The project provides two equivalent entry styles:
@@ -193,10 +239,10 @@ Full arguments and examples are centralized in:
 
 The repository keeps two ready-to-open showcase exports:
 
-- hyperlink preservation:
-  [examples/outputs/[2026-03-24] 【深度学习数学基础】序章 + 目录（已完结，共30章） (article-25643286963)/index.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md)
-- images and math formulas:
-  [examples/outputs/[2026-03-24] 线性代数(Linear Algebra)学习笔记 (article-641433373)/index.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md)
+| Showcase | What to look at | Open |
+|---|---|---|
+| Hyperlink preservation | table of contents, external links, nested links | [Deep Learning Math Basics](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
+| Images and math formulas | local image references, block math, long-form mixed layout | [Linear Algebra Notes](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
 
 More detail:
 
