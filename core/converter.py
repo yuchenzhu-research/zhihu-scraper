@@ -46,19 +46,23 @@ class ZhihuConverter:
 
     def __init__(self, img_map: Optional[Dict[str, str]] = None):
         self._img_map = img_map or {}
-        self._math_store: dict[str, str] = {}
+        self._math_store: dict[str, dict[str, object]] = {}
         self._math_counter = 0
 
     # ── Formula Store (公式仓库) ─────────────────────────────────────────────
 
-    def _store_math(self, formula: str, is_block: bool) -> str:
+    def _store_math(self, formula: str, is_block: bool, *, in_quote: bool = False) -> str:
         """
         Store formula in instance warehouse and return placeholder
         将公式存入实例仓库，返回占位符
         """
         prefix = self._BLOCK_PH if is_block else self._INLINE_PH
         key = f"{prefix}{self._math_counter}E"
-        self._math_store[key] = formula
+        self._math_store[key] = {
+            "formula": formula,
+            "is_block": is_block,
+            "in_quote": in_quote,
+        }
         self._math_counter += 1
         return key
 
@@ -166,10 +170,13 @@ class ZhihuConverter:
             tex = span.get("data-tex", "")
             if not tex:
                 continue
-            is_block = tex.startswith(r"\[") and tex.endswith(r"\]")
-            if is_block:
-                tex = tex[2:-2].strip()
-            placeholder = self._store_math(tex, is_block)
+            is_block = self._is_block_formula(span, tex)
+            tex = self._normalize_formula(tex, is_block)
+            placeholder = self._store_math(
+                tex,
+                is_block,
+                in_quote=span.find_parent("blockquote") is not None,
+            )
             marker = soup.new_tag("var")
             marker.string = placeholder
             span.replace_with(marker)
@@ -180,12 +187,17 @@ class ZhihuConverter:
             formula = img.get("data-formula", "")
             if not formula:
                 continue
-            is_block = (
+            is_block = self._is_block_formula(img, formula) or (
                 img.parent
                 and img.parent.name in ("p", "div", "figure")
                 and len(img.parent.get_text(strip=True)) == 0
             )
-            placeholder = self._store_math(formula, is_block)
+            formula = self._normalize_formula(formula, is_block)
+            placeholder = self._store_math(
+                formula,
+                is_block,
+                in_quote=img.find_parent("blockquote") is not None,
+            )
             marker = soup.new_tag("var")
             marker.string = placeholder
             img.replace_with(marker)
@@ -286,11 +298,21 @@ class ZhihuConverter:
 
         # Restore formulas (with KaTeX compatibility fix)
         # 还原公式 (并做 KaTeX 兼容性处理)
-        for key, formula in self._math_store.items():
+        for key, meta in self._math_store.items():
+            formula = str(meta["formula"])
             fixed_formula = self._fix_katex_array(formula)
-            if key.startswith(self._BLOCK_PH):
-                md = md.replace(key, f"\n\n$$\n{fixed_formula}\n$$\n\n")
-            elif key.startswith(self._INLINE_PH):
+            if bool(meta["is_block"]):
+                if bool(meta["in_quote"]):
+                    replacement = (
+                        "\n> $$\n"
+                        f"> {fixed_formula}\n"
+                        "> $$\n"
+                        "> "
+                    )
+                else:
+                    replacement = f"\n\n$$\n{fixed_formula}\n$$\n\n"
+                md = md.replace(key, replacement)
+            else:
                 md = md.replace(key, f"${fixed_formula}$")
 
         # Compress again
@@ -317,6 +339,40 @@ class ZhihuConverter:
         # Match *{digit}{single_char} and expand
         # 匹配 *{数字}{单字符} 并展开
         return re.sub(r'\*\{(\d+)\}\{(.)\}', expand_repeat, formula)
+
+    @staticmethod
+    def _is_block_formula(node: Tag, formula: str) -> bool:
+        """
+        Detect display-style formulas in Zhihu HTML.
+        知乎有些块级公式不会包在 \\[ ... \\] 里，而是直接给 data-tex。
+        这里补一层启发式判断，避免整段块公式被误判成行内公式。
+        """
+        tex = formula.strip()
+        if tex.startswith(r"\[") and tex.endswith(r"\]"):
+            return True
+        if re.search(r"\\begin\{[a-zA-Z*]+\}", tex):
+            return True
+        if tex.endswith(r"\\"):
+            return True
+        parent = node.parent if node else None
+        if parent and parent.name in ("p", "div", "figure"):
+            text = parent.get_text(" ", strip=True)
+            if text == node.get_text(" ", strip=True):
+                return True
+        return False
+
+    @staticmethod
+    def _normalize_formula(formula: str, is_block: bool) -> str:
+        """
+        Normalize formula text before restoring into Markdown.
+        对恢复前的公式文本做清洗，避免把知乎富文本里的尾部换行标记原样写进 Markdown。
+        """
+        tex = formula.strip()
+        if tex.startswith(r"\[") and tex.endswith(r"\]"):
+            tex = tex[2:-2].strip()
+        if is_block:
+            tex = re.sub(r"(?:\\\\)+\s*$", "", tex)
+        return tex
 
 
 # ── markdownify Internal Bridge Class (不对外暴露) ──────────────────────
