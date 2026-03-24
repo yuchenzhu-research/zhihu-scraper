@@ -3,7 +3,7 @@
 # Zhihu-Scraper
 ### 知乎爬虫 | Local-First Zhihu Scraper
 
-**一个面向本地归档的知乎内容抓取工具：优先走协议层，必要时降级 Playwright，输出直接落地为 Markdown、图片资源和 SQLite。**
+<p><strong>一个面向本地归档的知乎内容抓取工具：优先走协议层，必要时降级 Playwright，输出直接落地为 Markdown、图片资源和 SQLite。</strong></p>
 
 <p>
   <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
@@ -32,7 +32,7 @@
 >
 > 本项目仅用于学习、研究、个人知识归档与技术交流。请遵守知乎服务条款、robots 约束以及当地法律法规。**严禁将其用于未授权的数据采集、商业倒卖、批量撞库、账号滥用等非法用途。**
 
-## 项目简介 Overview
+## 项目简介 / Overview
 
 `Zhihu-Scraper` 不是一个重平台、重后端的在线爬虫系统，而是一个**本地优先（Local-First）**的知乎内容归档工具。
 
