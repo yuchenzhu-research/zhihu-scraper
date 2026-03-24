@@ -100,7 +100,8 @@ class ZhihuDownloader:
         humanizer = get_humanizer()
 
         self.log.info("start_fetching", url=self.url, page_type=self.page_type)
-        print(f"🌍 访问 [API 模式]: {self.url}")
+        access_mode = "协议模式" if self.page_type == "article" else "API 模式"
+        print(f"🌍 访问 [{access_mode}]: {self.url}")
 
         # 模拟部分延时，以避免瞬时高频请求
         await humanizer.page_load()
@@ -118,8 +119,9 @@ class ZhihuDownloader:
         """提取专栏文章数据。
 
         流程说明：
-        1. 尝试 API 直接获取文章 JSON 数据
-        2. 如果 API 返回 403 或解析失败，自动降级到 Playwright 浏览器渲染
+        1. 尝试协议层 HTML 直取，并解析 `js-initialData`
+        2. 首轮失败时自动轮换 Cookie 重试一次
+        3. 若仍失败，再自动降级到 Playwright 浏览器渲染
         """
         # 从 URL 提取 Article ID
         # e.g., https://zhuanlan.zhihu.com/p/123456
@@ -129,12 +131,15 @@ class ZhihuDownloader:
 
         article_id = match.group(1)
         try:
+            print("📰 专栏阶段 1/3: 协议层 HTML 直取")
             data = self.api_client.get_article(article_id)
         except Exception as e:
-            print(f"⚠️ API 请求专栏失败 ({e})")
-            print(f"🔄 正在启动 Playwright 无头浏览器智能降级回退机制...")
+            self.log.warning("article_protocol_failed", article_id=article_id, error=str(e))
+            print(f"⚠️ 协议路径未能提取专栏 ({e})")
+            print("🔁 已尝试 HTML 直取，并在失败后轮换 Cookie 重试一次")
+            print("🔄 专栏阶段 3/3: 正在启动 Playwright 无头浏览器智能降级回退机制...")
 
-            # Fallback 策略���使用 Playwright 渲染页面
+            # Fallback 策略：使用 Playwright 渲染页面
             from .browser_fallback import extract_zhuanlan_html
             from .cookie_manager import cookie_manager
 

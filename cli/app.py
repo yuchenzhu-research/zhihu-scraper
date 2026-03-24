@@ -225,6 +225,7 @@ COMMAND REFERENCE
   - `-b, --headless` browser headless switch for fallback path
 
   Behavior:
+  - article path: protocol HTML fetch first, then one cookie-rotation retry, then Playwright fallback if still blocked
   - `-n <= 20`: usually single page
   - `-n > 20`: auto pagination with random waits
   - `-n > 50`: higher anti-bot risk warning
@@ -380,6 +381,7 @@ ARCHITECTURE (LAYER MAP)
 
 CURRENT LIMITS
   - interactive mode does not accept creator profile URLs (`people/...`)
+  - article path is protocol-first, but some columns still need Playwright fallback under active WAF
   - browser fallback is strongest on article path; answer/question stay API-first
   - query uses SQLite keyword matching, not advanced ranking search
 

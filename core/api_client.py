@@ -13,6 +13,7 @@ api_client.py — 纯协议层知乎 API 客户端 (v3.0 核弹)
 """
 
 import json
+import re
 import urllib.parse
 from pathlib import Path
 from typing import Optional, Dict
@@ -97,6 +98,69 @@ class ZhihuAPIClient:
             self.log.warning("get_signature_failed", path=api_path, error=str(e))
             return {}
 
+    def _build_article_headers(self, referer: str) -> Dict[str, str]:
+        """
+        Build document-style headers for Zhihu column HTML requests.
+        为知乎专栏 HTML 请求构建更接近真实导航行为的请求头。
+        """
+        return {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Referer": referer,
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "same-origin",
+            "Upgrade-Insecure-Requests": "1",
+        }
+
+    def _warmup_article_origin(self) -> None:
+        """
+        Warm up the zhuanlan origin before fetching a specific article page.
+        在抓具体专栏页之前，先对专栏域名做一次轻量预热。
+        """
+        warmup_url = "https://zhuanlan.zhihu.com/"
+        warmup_headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Referer": "https://www.zhihu.com/",
+            "Upgrade-Insecure-Requests": "1",
+        }
+        try:
+            response = self.session.get(
+                warmup_url,
+                headers=warmup_headers,
+                timeout=10.0,
+            )
+            self.log.info("article_html_warmup", status=response.status_code, url=warmup_url)
+        except Exception as e:
+            self.log.warning("article_html_warmup_failed", error=str(e), url=warmup_url)
+
+    def _parse_article_payload(self, article_id: str, html: str) -> Optional[dict]:
+        """
+        Parse `js-initialData` from a Zhihu column HTML document.
+        从知乎专栏 HTML 中解析 `js-initialData`。
+        """
+        match = re.search(r'id="js-initialData" type="text/json">([^<]+)</script>', html)
+        if not match:
+            return None
+
+        data = json.loads(match.group(1))
+        entities = data.get("initialState", {}).get("entities", {})
+        articles = entities.get("articles", {})
+        if str(article_id) not in articles:
+            return None
+
+        art = articles[str(article_id)]
+        return {
+            "title": art.get("title", ""),
+            "content": art.get("content", ""),
+            "author": {"name": art.get("author", {}).get("name", "未知作者")},
+            "voteup_count": art.get("voteupCount", 0),
+            "created": art.get("created", 0),
+            "image_url": art.get("imageUrl", ""),
+        }
+
     def fetch_api(self, path: str) -> Optional[dict]:
         """
         General API fetch method that encapsulates signature and exception handling
@@ -159,39 +223,79 @@ class ZhihuAPIClient:
 
     def get_article(self, article_id: str) -> dict:
         """
-        Get detailed data for column articles (fallback to SSR json parsing, prevent 403)
-        获取专栏文章的详细数据 (回退到 SSR json 解析，防 403)
+        Get detailed data for column articles via protocol HTML fetch.
+        The flow is:
+        1. warm up the zhuanlan origin
+        2. fetch article HTML and parse `js-initialData`
+        3. if the first attempt fails, rotate cookies and retry once
+
+        通过协议层 HTML 请求获取专栏文章数据。
+        流程为：
+        1. 预热专栏域名
+        2. 获取文章 HTML 并解析 `js-initialData`
+        3. 首轮失败时轮换 Cookie 并重试一次
         """
         url = f"https://zhuanlan.zhihu.com/p/{article_id}"
-        self.log.info("article_request", url=url)
-        try:
-            response = self.session.get(url, timeout=15.0)
-            if response.status_code == 200:
-                import re
-                match = re.search(r'id="js-initialData" type="text/json">([^<]+)</script>', response.text)
-                if match:
-                    data = json.loads(match.group(1))
-                    entities = data.get("initialState", {}).get("entities", {})
-                    articles = entities.get("articles", {})
-                    if str(article_id) in articles:
-                        art = articles[str(article_id)]
-                        # Normalize format to match API response expectations in scraper.py
-                        # Normalize format to match API response expectations in scraper.py
-                        return {
-                            "title": art.get("title", ""),
-                            "content": art.get("content", ""),
-                            "author": {"name": art.get("author", {}).get("name", "未知作者")},
-                            "voteup_count": art.get("voteupCount", 0),
-                            "created": art.get("created", 0),
-                            "image_url": art.get("imageUrl", "")
-                        }
+        referer = "https://zhuanlan.zhihu.com/"
+        last_error = "未知错误"
 
-            # If failed or blocked
-            self.log.error("article_forbidden", status=response.status_code)
-            raise Exception("请求专栏遭到知乎安全盾拦截，未找到文章数据。")
-        except Exception as e:
-            self.log.error("article_fetch_failed", error=str(e))
-            raise
+        for attempt in (1, 2):
+            self.log.info("article_html_attempt", article_id=article_id, attempt=attempt, url=url)
+            self._warmup_article_origin()
+            try:
+                response = self.session.get(
+                    url,
+                    headers=self._build_article_headers(referer),
+                    timeout=15.0,
+                )
+            except Exception as e:
+                last_error = f"HTML 请求异常: {e}"
+                self.log.error(
+                    "article_html_request_failed",
+                    article_id=article_id,
+                    attempt=attempt,
+                    error=str(e),
+                )
+            else:
+                if response.status_code == 200:
+                    parsed = self._parse_article_payload(article_id, response.text)
+                    if parsed:
+                        self.log.info(
+                            "article_html_success",
+                            article_id=article_id,
+                            attempt=attempt,
+                            title=parsed.get("title", "")[:80],
+                        )
+                        return parsed
+
+                    last_error = "HTML 返回 200，但未解析到 js-initialData 文章实体"
+                    self.log.warning(
+                        "article_html_missing_payload",
+                        article_id=article_id,
+                        attempt=attempt,
+                        html_snippet=response.text[:200],
+                    )
+                else:
+                    last_error = f"HTML 请求返回 HTTP {response.status_code}"
+                    log_event = "article_forbidden" if response.status_code == 403 else "article_html_unexpected_status"
+                    self.log.error(
+                        log_event,
+                        article_id=article_id,
+                        attempt=attempt,
+                        status=response.status_code,
+                    )
+
+            if attempt == 1:
+                rotated = cookie_manager.rotate_session()
+                self._init_session()
+                self.log.warning(
+                    "article_cookie_rotated_retry",
+                    article_id=article_id,
+                    rotated=bool(rotated),
+                )
+
+        self.log.error("article_fetch_failed", article_id=article_id, error=last_error)
+        raise Exception(f"专栏协议抓取失败：{last_error}")
 
     def get_question_answers_page(self, question_id: str, limit: int = 3, offset: int = 0) -> dict:
         """

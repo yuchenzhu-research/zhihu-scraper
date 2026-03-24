@@ -437,7 +437,13 @@ Guest mode can fetch some public content, but both visibility and stability are 
 
 ### Why are column articles more fragile?
 
-Columns are more aggressively protected, which is exactly why the project reserves a Playwright fallback path for them.
+Columns are more aggressively protected. The real fetch chain is now:
+
+- protocol HTML fetch first
+- one automatic cookie-rotation retry if the first attempt fails
+- Playwright fallback only if the protocol path is still blocked
+
+So a successful column fetch does not always mean the protocol path won outright; in many cases it means protocol-first with browser fallback as backup.
 
 ### Why doesn't the README document every command flag in full?
 
