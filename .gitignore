@@ -44,6 +44,8 @@ _agents/
 data/**
 !data/
 !data/README.md
+examples/outputs/**
+!examples/outputs/
 
 # 浏览器 profile / 日志 / 本地数据库
 browser_data/
