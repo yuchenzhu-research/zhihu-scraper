@@ -136,6 +136,13 @@ class ZhihuConverter:
             if "stylesheet" in rel:
                 link.decompose()
 
+        # 0.5) Convert Zhihu link cards into plain anchors before removing cards.
+        # 先把知乎链接卡片提炼成普通链接，否则后续清洗会把整块卡片删掉。
+        for card in list(soup.select(".LinkCard, .RichText-LinkCard, .FileLinkCard")):
+            replacement = self._extract_link_card(soup, card)
+            if replacement is not None:
+                card.replace_with(replacement)
+
         # 1) Remove interference elements: videos / cards / buttons / etc.
         # 移除视频 / 卡片 / 按钮等干扰元素
         for selector in (
@@ -203,6 +210,50 @@ class ZhihuConverter:
                     code["class"] = [f"language-{lang}"]
 
         return str(soup)
+
+    def _extract_link_card(self, soup: BeautifulSoup, card: Tag) -> Optional[Tag]:
+        """
+        Convert a Zhihu rich link card into a simple paragraph anchor.
+        将知乎富链接卡片转换成一个简单的段落链接。
+        """
+        href = ""
+        anchor = card if card.name == "a" and card.get("href") else card.find("a", href=True)
+        if anchor and anchor.get("href"):
+            href = anchor.get("href", "").strip()
+        if not href:
+            raw_text = card.get_text(" ", strip=True)
+            match = re.search(r"https?://[^\s]+|www\.[^\s]+", raw_text)
+            if match:
+                href = match.group(0).strip()
+
+        if not href:
+            return None
+
+        if href.startswith("//"):
+            href = f"https:{href}"
+        elif href.startswith("/"):
+            href = urljoin("https://www.zhihu.com", href)
+        elif href.startswith("www."):
+            href = f"https://{href}"
+
+        title = ""
+        for selector in (".LinkCard-title", ".FileLinkCard-name", ".ZhidaLinkCard-footer-text"):
+            node = card.select_one(selector)
+            if node:
+                title = node.get_text(" ", strip=True)
+                if title:
+                    break
+
+        if not title:
+            title = anchor.get_text(" ", strip=True) if anchor else ""
+        if not title:
+            title = href
+
+        paragraph = soup.new_tag("p")
+        link = soup.new_tag("a", href=href)
+        link.string = title
+        paragraph.append(link)
+        return paragraph
 
     # ── markdownify Bridge (markdownify 桥接) ─────────────────────────────────────
 
