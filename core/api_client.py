@@ -241,6 +241,8 @@ class ZhihuAPIClient:
 
         for attempt in (1, 2):
             self.log.info("article_html_attempt", article_id=article_id, attempt=attempt, url=url)
+            if attempt == 2:
+                print("🔁 专栏阶段 2/3: 已轮换 Cookie，正在重试协议路径...")
             self._warmup_article_origin()
             try:
                 response = self.session.get(

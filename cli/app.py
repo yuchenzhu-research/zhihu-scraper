@@ -222,15 +222,17 @@ def _collect_fetch_options(url: str) -> Dict[str, Any]:
         "Extra options / 附加选项:",
         choices=[
             questionary.Choice("Download images / 下载图片", value="images", checked=True),
-            questionary.Choice("Headless browser fallback / 无头浏览器回退", value="headless", checked=DEFAULT_BROWSER_HEADLESS),
         ],
         style=_launcher_style(),
     ).ask() or []
 
+    if "zhuanlan.zhihu.com" in url:
+        rprint("[dim]ℹ️ Column articles will automatically use browser backup if normal fetch is blocked / 专栏被拦截时会自动启用浏览器补救。[/dim]")
+
     return {
         "limit": limit,
         "no_images": "images" not in selections,
-        "headless": "headless" in selections,
+        "headless": DEFAULT_BROWSER_HEADLESS,
     }
 
 
@@ -390,7 +392,6 @@ def _run_launcher() -> None:
                 "Extra options / 附加选项:",
                 choices=[
                     questionary.Choice("Download images / 下载图片", value="images", checked=True),
-                    questionary.Choice("Headless browser fallback / 无头浏览器回退", value="headless", checked=DEFAULT_BROWSER_HEADLESS),
                 ],
                 style=_launcher_style(),
             ).ask() or []
@@ -400,7 +401,7 @@ def _run_launcher() -> None:
                 output=DEFAULT_OUTPUT_DIR,
                 concurrency=concurrency,
                 no_images="images" not in selections,
-                headless="headless" in selections,
+                headless=DEFAULT_BROWSER_HEADLESS,
             )
             continue
 
@@ -416,7 +417,6 @@ def _run_launcher() -> None:
                 "Extra options / 附加选项:",
                 choices=[
                     questionary.Choice("Download images / 下载图片", value="images", checked=True),
-                    questionary.Choice("Headless browser fallback / 无头浏览器回退", value="headless", checked=DEFAULT_BROWSER_HEADLESS),
                 ],
                 style=_launcher_style(),
             ).ask() or []
@@ -426,7 +426,7 @@ def _run_launcher() -> None:
                 output=DEFAULT_OUTPUT_DIR,
                 concurrency=concurrency,
                 no_images="images" not in selections,
-                headless="headless" in selections,
+                headless=DEFAULT_BROWSER_HEADLESS,
             )
             continue
 
