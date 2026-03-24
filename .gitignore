@@ -70,6 +70,7 @@ debug_*/
 .venv_tls_test/     # TLS测试沙箱
 MediaCrawler/
 mediacrawler/
+references/openclaw/
 # ========================================
 # docs/
 # !.gitkeep
