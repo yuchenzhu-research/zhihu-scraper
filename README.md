@@ -74,6 +74,12 @@ cd zhihu-scraper
 ./install.sh
 ```
 
+如果你想**显式重建**损坏或混乱的本地环境：
+
+```bash
+./install.sh --recreate
+```
+
 这条命令会自动完成：
 
 - 创建本地 `.venv`
@@ -389,6 +395,7 @@ flowchart LR
 
 - 依赖声明以 `pyproject.toml` 为准
 - `install.sh` 是官方一键安装入口
+- `./install.sh --recreate` 可强制重建 `.venv`
 - 普通用户不需要先自己跑 `pip` 或 `playwright`
 - 根目录 `./zhihu` 会优先复用本地 `.venv`
 

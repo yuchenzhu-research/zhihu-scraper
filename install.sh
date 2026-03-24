@@ -4,6 +4,7 @@
 # =============================================================================
 # 官方安装入口:
 #   ./install.sh
+#   ./install.sh --recreate
 #
 # 依赖来源:
 #   pyproject.toml (single source of truth)
@@ -18,6 +19,30 @@
 # =============================================================================
 
 set -euo pipefail
+
+usage() {
+    echo "用法:"
+    echo "  ./install.sh            # 复用已有 .venv 并安装/更新依赖"
+    echo "  ./install.sh --recreate # 删除并重建 .venv 后重新安装"
+}
+
+RECREATE_VENV=false
+for arg in "$@"; do
+    case "$arg" in
+        --recreate)
+            RECREATE_VENV=true
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "❌ 未知参数: $arg"
+            usage
+            exit 1
+            ;;
+    esac
+done
 
 echo "========================================"
 echo "  🕷️ zhihu-scraper 一键安装"
@@ -45,6 +70,11 @@ cd "$PROJECT_DIR"
 
 echo ""
 echo "📌 配置虚拟环境..."
+if [ "$RECREATE_VENV" = true ] && [ -d "$VENV_DIR" ]; then
+    echo "   🗑️  按要求重建 .venv ..."
+    rm -rf "$VENV_DIR"
+fi
+
 if [ ! -d "$VENV_DIR" ]; then
     echo "   🔧 创建 .venv ..."
     "$PYTHON_BIN" -m venv "$VENV_DIR"
@@ -108,6 +138,7 @@ echo ""
 echo "说明:"
 echo "  - 依赖由 pyproject.toml 统一声明"
 echo "  - install.sh 是官方一键安装入口"
+echo "  - 如需一键重建环境: ./install.sh --recreate"
 echo "  - 根目录 ./zhihu 会优先使用本地 .venv"
 echo ""
 echo "========================================"

@@ -187,6 +187,7 @@ SYNOPSIS
 INSTALL MODEL
   - `pyproject.toml` is the dependency source of truth
   - `./install.sh` is the official one-shot installer
+  - `./install.sh --recreate` rebuilds `.venv` from scratch
   - `./zhihu` prefers the local `.venv` automatically when available
 
 PAGER
@@ -384,6 +385,7 @@ CURRENT LIMITS
 
 QUICK START
   - `./install.sh`
+  - `./install.sh --recreate`  # when the local environment is broken
   - `./zhihu check`
   - `./zhihu manual`
 """.strip()

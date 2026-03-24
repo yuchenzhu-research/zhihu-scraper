@@ -74,6 +74,12 @@ cd zhihu-scraper
 ./install.sh
 ```
 
+If you want to **explicitly rebuild** a broken or messy local environment:
+
+```bash
+./install.sh --recreate
+```
+
 This command will automatically:
 
 - create a local `.venv`
@@ -387,6 +393,7 @@ That means:
 
 - dependency declarations live in `pyproject.toml`
 - `install.sh` is the official one-shot installer
+- `./install.sh --recreate` force-rebuilds `.venv`
 - normal users do not need to manually run `pip` or `playwright` first
 - the root-level `./zhihu` wrapper will prefer the local `.venv`
 
