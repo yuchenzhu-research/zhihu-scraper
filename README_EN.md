@@ -3,7 +3,7 @@
 # Zhihu-Scraper
 ### Local-First Zhihu Scraper | 知乎爬虫
 
-<p><strong>A local-first Zhihu extraction tool: protocol-first by default, Playwright as fallback when needed, and direct outputs to Markdown, image assets, and SQLite.</strong></p>
+<p><strong>A local-first Zhihu archival tool: protocol-first by default, Playwright only when needed, with direct outputs to Markdown, image assets, and SQLite.</strong></p>
 
 <p>
   <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
@@ -19,9 +19,9 @@
 <p>
   <a href="#quick-start">Quick Start</a> ·
   <a href="#features">Features</a> ·
+  <a href="#examples">Examples</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#roadmap">Roadmap</a> ·
   <a href="#faq">FAQ</a>
 </p>
 
@@ -30,43 +30,48 @@
 > [!WARNING]
 > **Disclaimer**
 >
-> This project is for learning, research, personal archival, and technical exploration only. Please comply with Zhihu's Terms of Service, robots restrictions, and local laws. **Do not use it for unauthorized scraping, resale, credential abuse, large-scale account operations, or any illegal activity.**
+> This project is for learning, research, personal archiving, and technical exploration only. Please comply with Zhihu's Terms of Service, robots restrictions, and local laws. **Do not use it for unauthorized scraping, resale, credential abuse, large-scale automation, or any illegal activity.**
 
 ## Overview
 
-`Zhihu-Scraper` is not a heavy hosted scraping platform. It is a **local-first archival tool** for Zhihu content.
+`Zhihu-Scraper` is a **local-first** Zhihu archival tool, not a hosted scraping platform.
 
-What it currently does well:
+It focuses on one practical job:
 
-- Fetch **single answers**
-- Fetch **column articles**
-- Fetch the latest **N answers from a question page**
-- Fetch **answers and articles from a creator profile**
-- Incrementally monitor **collections**
-- Save outputs as **Markdown + images + SQLite**
+- fetch Zhihu content
+- convert it into readable Markdown
+- keep both images and a local database
 
-What it does **not** officially provide yet:
+What it is good at today:
 
-- Topic-level scraping
+- saving single answers
+- saving column articles
+- fetching the latest N answers from a question page
+- fetching recent answers and articles from a creator profile
+- incrementally monitoring collections
+
+What it does not officially provide yet:
+
+- topic-level scraping
 - JSON / CSV / MySQL export
 - GUI interface
-- LLM-based content analysis
+- LLM-based analysis
 
-Those belong in the [Roadmap](#roadmap), not in the current feature list.
+Those belong in the [Roadmap](#roadmap), not in the present-tense feature list.
 
 ## Quick Start
 
-The goal is to get your first successful fetch within **3 minutes**.
+Goal: **complete your first successful fetch within 3 minutes.**
 
 ### 1. Requirements
 
-- **Python 3.10+**
-- Optional: **Playwright** for the browser fallback path
-- Optional: a local **Chrome** installation
+- Python 3.10+
+- Optional: Playwright
+- Optional: local Chrome
 
 ### 2. Install
 
-The recommended path is the official one-shot installer:
+The recommended path is the built-in installer:
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
@@ -74,85 +79,45 @@ cd zhihu-scraper
 ./install.sh
 ```
 
-If you want to **explicitly rebuild** a broken or messy local environment:
+If your local environment is broken or messy, rebuild it:
 
 ```bash
 ./install.sh --recreate
 ```
 
-This command will automatically:
-
-- create a local `.venv`
-- install the full dependency set from `pyproject.toml`
-- install Playwright Chromium
-- create a local `cookies.json` template
-- run one environment check
-
-If you prefer manual installation, use the local Python module entrypoints explicitly:
-
-```bash
-python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[full]"
-.venv/bin/python -m playwright install chromium
-```
-
-After installation, the recommended entrypoint is the home menu:
+After installation, start from the home menu:
 
 ```bash
 ./zhihu
 ```
 
-Menu controls:
-
-- arrow keys to move
-- `Enter` to confirm
-- `Space` to toggle checkbox options
-- `Ctrl+C` to exit the current screen
-
 ### 3. Configure Cookies
 
-Start by copying the template:
+Copy the template:
 
 ```bash
 cp cookies.example.json cookies.json
 ```
 
-Then fill in your own `z_c0` and `d_c0` values:
-
-```json
-[
-  {
-    "name": "z_c0",
-    "value": "YOUR_Z_C0_HERE",
-    "domain": ".zhihu.com",
-    "path": "/"
-  },
-  {
-    "name": "d_c0",
-    "value": "YOUR_D_C0_HERE",
-    "domain": ".zhihu.com",
-    "path": "/"
-  }
-]
-```
+Then fill in your own `z_c0` and `d_c0`.
 
 ### 4. Hello World
 
-The simplest possible fetch:
+The simplest fetch:
 
 ```bash
 ./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-If you prefer calling the local virtualenv Python explicitly:
+If you prefer explicit Python entrypoints:
 
 ```bash
 .venv/bin/python cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-### 5. Open the Full Built-In Manual
+### 5. Open the Full Manual
 
-This README is intentionally homepage-level. Full command details live in the terminal manual:
+This README is intentionally homepage-level. Detailed command help lives in:
 
 ```bash
 ./zhihu manual
@@ -161,102 +126,41 @@ This README is intentionally homepage-level. Full command details live in the te
 ## Features
 
 - 🚀 **Async pipeline**
-  - Batch jobs, question pagination, and image downloads all run through asynchronous paths.
+  Batch jobs, question pagination, and image downloads all use asynchronous paths.
 
 - 🧠 **Protocol-first**
-  - The main path is API / protocol based. Browser automation is not the default runtime model.
+  The default path stays on API / HTML protocol access whenever possible.
 
-- 🛟 **Automatic Playwright fallback**
-  - Column articles can fall back to Playwright when the API path is blocked.
+- 🛟 **Article rescue path**
+  Column articles first try the protocol path, then one cookie-rotation retry, then Playwright if still blocked.
 
 - 👤 **Creator mode**
-  - Accepts either a creator profile URL or a raw `url_token`, then fetches recent answers and articles in batch.
+  Accepts a creator profile URL or raw `url_token`, then fetches recent answers and articles.
 
 - 📚 **Archive-friendly outputs**
-  - Results are written directly as `index.md + images/ + zhihu.db`, which works well for long-term local knowledge bases.
+  Results are written directly as `index.md + images/ + zhihu.db`.
 
 - 🔁 **Cookie rotation**
-  - Supports both `cookies.json` and `cookie_pool/*.json`, allowing session rotation under pressure.
+  Supports both `cookies.json` and `cookie_pool/*.json`.
 
-- 📡 **Incremental monitoring**
-  - Collections can be monitored incrementally with a persistent progress pointer.
+- 📡 **Incremental collection monitoring**
+  Monitors new items while keeping a stable progress pointer.
 
 - 🎛️ **Two entry styles**
-  - Both `./zhihu ...` and `python3 cli/app.py ...` are supported.
+  Both `./zhihu` and `python3 cli/app.py` are supported.
 
 ## Coverage
 
 | Type | Status | Notes |
 |---|---|---|
 | Single answer | Supported | Most stable path |
-| Column article | Supported | Can fall back to Playwright |
+| Column article | Supported | May fall back to Playwright |
 | Question page answers | Supported | Includes pagination and risk warnings |
 | Creator answers | Supported | Via `creator` mode |
 | Creator articles | Supported | Via `creator` mode |
 | Collection monitoring | Supported | Via `monitor` mode |
 | Topic scraping | Planned | No CLI path yet |
 | JSON / CSV / MySQL export | Planned | Current primary outputs are Markdown + SQLite |
-
-## Configuration
-
-### Cookie Configuration
-
-Cookies are one of the most important runtime prerequisites for this project.
-
-- Default local file: `cookies.json`
-- Template file: `cookies.example.json`
-- You can also change the cookie path in `config.yaml`:
-
-```yaml
-zhihu:
-  cookies:
-    file: "cookies.json"
-    required: true
-```
-
-### Cookie Pool
-
-If you maintain multiple sessions, place them like this:
-
-```text
-cookie_pool/
-├── account_a.json
-├── account_b.json
-└── account_c.json
-```
-
-The program loads both `cookies.json` and `cookie_pool/*.json` for rotation.
-
-### Proxy Configuration
-
-One important clarification:
-
-> [!IMPORTANT]
-> **This repository does not currently expose a stable proxy field in `config.yaml`.**
->
-> In other words, the README should not present "built-in proxy support" as a finished feature.
-
-If your environment requires a proxy, the more reliable current approach is:
-
-- Configure the proxy in your **system or shell environment**
-- Then run this tool normally
-
-For example:
-
-```bash
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
-python3 cli/app.py check
-```
-
-This is still an advanced path for now. A cleaner future direction is to expose proxy configuration explicitly in `config.yaml`.
-
-### Security Notes
-
-> [!CAUTION]
-> - Keep `cookies.json` local only. **Do not commit it**
-> - If a cookie has ever leaked, do not keep using it. Re-login and replace it
-> - If you maintain multiple accounts, prefer `cookie_pool/` over putting everything into one file
 
 ## Usage
 
@@ -267,7 +171,7 @@ The project provides two equivalent entry styles:
 python3 cli/app.py <command> ...
 ```
 
-Common command index:
+Common commands:
 
 - `fetch`
 - `creator`
@@ -279,11 +183,24 @@ Common command index:
 - `check`
 - `manual`
 
-Detailed arguments and examples are intentionally centralized in:
+Full arguments and examples are centralized in:
 
 ```bash
 ./zhihu manual
 ```
+
+## Examples
+
+The repository keeps two ready-to-open showcase exports:
+
+- hyperlink preservation:
+  [examples/outputs/[2026-03-24] 【深度学习数学基础】序章 + 目录（已完结，共30章） (article-25643286963)/index.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md)
+- images and math formulas:
+  [examples/outputs/[2026-03-24] 线性代数(Linear Algebra)学习笔记 (article-641433373)/index.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md)
+
+More detail:
+
+- [examples/README.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/README.md)
 
 ## Output Layout
 
@@ -305,110 +222,88 @@ data/
 └── zhihu.db
 ```
 
-Notes:
-
 - `entries/`: normal `fetch / batch / monitor` outputs
 - `creators/<url_token>/`: creator-mode outputs
-- `creator.json`: creator metadata and sync status
+- `creator.json`: creator metadata and sync state
 - `README.md`: local creator index page
 - `zhihu.db`: shared SQLite database
+
+## Configuration
+
+### Cookies
+
+The default cookie file is:
+
+```text
+cookies.json
+```
+
+The template file is:
+
+```text
+cookies.example.json
+```
+
+If you manage multiple sessions, place them under:
+
+```text
+cookie_pool/
+```
+
+### Proxy
+
+> [!IMPORTANT]
+> This repository does not currently expose a stable proxy field in `config.yaml`.
+
+If your environment requires a proxy, the reliable current path is to configure it in your shell or system environment first, then run the tool.
+
+```bash
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
+./zhihu check
+```
+
+### Security Notes
+
+> [!CAUTION]
+> - Do not commit `cookies.json`
+> - If a cookie ever leaked, replace it
+> - Prefer `cookie_pool/` for multi-account setups
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph A["Command Layer"]
-        A1["fetch / batch / interactive"]
-        A2["creator"]
-        A3["monitor"]
-    end
-
-    subgraph B["Scraper Layer"]
-        B1["ZhihuDownloader"]
-        B2["ZhihuCreatorDownloader"]
-        B3["CollectionMonitor"]
-    end
-
-    subgraph C["Access Layer"]
-        C1["ZhihuAPIClient"]
-        C2["Browser Fallback (article only)"]
-        C3["CookieManager"]
-        C4["Config + Humanizer"]
-    end
-
-    subgraph D["Persist Layer"]
-        D1["_save_items"]
-        D2["ZhihuConverter"]
-        D3["download_images"]
-        D4["ZhihuDatabase"]
-    end
-
-    subgraph E["Outputs"]
-        E1["data/entries"]
-        E2["data/creators/<url_token>"]
-        E3["creator.json / creator README"]
-        E4["zhihu.db"]
-    end
-
-    A1 --> B1
-    A2 --> B2
-    A3 --> B3
-    B3 --> B1
-    B1 --> C1
-    B2 --> C1
-    B1 -. article blocked .-> C2
-    C1 --> C3
-    C1 --> C4
-    C2 --> C3
-    B1 --> D1
-    B2 --> D1
-    D1 --> D2
-    D1 --> D3
-    D1 --> D4
-    D1 --> E1
-    D1 --> E2
-    B2 --> E3
-    D4 --> E4
+    A["CLI / Menu<br/>./zhihu · manual · commands"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
+    B --> C["Protocol Access<br/>ZhihuAPIClient + CookieManager"]
+    B -. article blocked .-> D["Browser Fallback<br/>Playwright"]
+    B --> E["Persist Layer<br/>Markdown + images + SQLite"]
+    E --> F["Outputs<br/>data/entries · data/creators · zhihu.db"]
 ```
 
-### Design Direction
+Current design direction:
 
 - **CLI-first**
-  - This is a command-line-first project, not a hosted scraping service
+  This is a command-line tool, not a hosted service.
 
 - **Protocol-first**
-  - The default path stays on API / protocol access whenever possible
+  Browser automation is a rescue path, not the default model.
 
 - **Files + DB**
-  - One output optimized for humans to read
-  - One output optimized for programs to query
+  One output optimized for humans, one for programs.
 
 ## Tech Stack
 
-What the codebase is actually using today:
-
-- **Python 3.10+**
-- **Typer** for CLI commands
-- **Rich / Questionary** for terminal UX
-- **curl_cffi / HTTPX** for protocol access and async downloads
-- **Playwright** for browser fallback
-- **PyYAML / structlog** for configuration and logging
-- **SQLite** for local persistence
+- Python 3.10+
+- Typer
+- Rich / Questionary
+- curl_cffi / HTTPX
+- Playwright
+- PyYAML / structlog
+- SQLite
 
 > [!NOTE]
-> Your project direction mentions **Pydantic**, **JSON / CSV / MySQL export**, and **topic scraping**, but those are not fully implemented in the current repository yet. They belong in the roadmap, not in the present-tense feature section.
-
-## Installation Model
-
-This repository uses `pyproject.toml` as the **single source of truth** for dependencies, rather than treating `requirements.txt` as the primary installation model.
-
-That means:
-
-- dependency declarations live in `pyproject.toml`
-- `install.sh` is the official one-shot installer
-- `./install.sh --recreate` force-rebuilds `.venv`
-- normal users do not need to manually run `pip` or `playwright` first
-- the root-level `./zhihu` wrapper will prefer the local `.venv`
+> The broader direction mentions Pydantic, JSON / CSV / MySQL export, and topic scraping, but those are not fully implemented in the current repository yet. They belong in the roadmap, not in the present-tense feature section.
 
 ## Roadmap
 
@@ -421,60 +316,45 @@ That means:
 - [ ] Topic scraping
 - [ ] JSON / CSV export
 - [ ] MySQL persistence
-- [ ] More formal proxy configuration
+- [ ] Formal proxy configuration
 - [ ] GUI interface
 - [ ] LLM-based summarization / tagging / clustering
-- [ ] Broader test coverage and stronger CI checks
-
-## Development
-
-Install development dependencies:
-
-```bash
-.venv/bin/python -m pip install -e ".[dev]"
-```
-
-Useful checks:
-
-```bash
-.venv/bin/python -m compileall cli core
-./zhihu check
-./zhihu manual
-```
+- [ ] Broader test coverage and stronger CI
 
 ## FAQ
 
 ### Why does it still run without cookies, but with incomplete results?
 
-Guest mode can fetch some public content, but both visibility and stability are weaker. Question pages, creator pages, and collection monitoring rely much more on logged-in sessions.
+Guest mode can fetch some public content, but both visibility and stability are weaker. Question pages, creator pages, and collection monitoring depend much more on logged-in sessions.
 
 ### Why are column articles more fragile?
 
-Columns are more aggressively protected. The real fetch chain is now:
+Columns are more aggressively protected. The real fetch chain is:
 
-- protocol HTML fetch first
-- one automatic cookie-rotation retry if the first attempt fails
-- Playwright fallback only if the protocol path is still blocked
+1. protocol HTML fetch first
+2. one automatic cookie-rotation retry
+3. Playwright only if the protocol path is still blocked
 
-So a successful column fetch does not always mean the protocol path won outright; in many cases it means protocol-first with browser fallback as backup.
+### Why doesn't the README document every flag in full?
 
-### Why doesn't the README document every command flag in full?
+Because the homepage should do three things well:
 
-Because the homepage should focus on three things:
+- get a new user running quickly
+- explain capability boundaries
+- point to the full manual
 
-- getting a new user running within minutes
-- clarifying capability boundaries
-- pointing to the full built-in manual
-
-All detailed command documentation is intentionally centralized in:
+Detailed command help is intentionally centralized in:
 
 ```bash
 ./zhihu manual
 ```
 
-### Why can't `cookies.json` be committed to the repository?
+### How do I operate the home menu?
 
-Because it is sensitive credential material. The repository should only contain the template file `cookies.example.json`.
+- arrow keys to move
+- `Enter` to confirm
+- `Space` to toggle checkboxes
+- `Ctrl+C` to exit the current screen
 
 ## License
 
