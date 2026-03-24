@@ -126,6 +126,16 @@ class ZhihuConverter:
         """
         soup = BeautifulSoup(html, "html.parser")
 
+        # 0) Remove style/script-like nodes completely before markdownify.
+        # markdownify 的 strip 只会去标签，不会自动丢弃 style 里的 CSS 文本，
+        # 所以这里必须先彻底删除整棵节点。
+        for tag in soup.find_all(["style", "script", "noscript"]):
+            tag.decompose()
+        for link in soup.find_all("link"):
+            rel = [item.lower() for item in (link.get("rel") or []) if isinstance(item, str)]
+            if "stylesheet" in rel:
+                link.decompose()
+
         # 1) Remove interference elements: videos / cards / buttons / etc.
         # 移除视频 / 卡片 / 按钮等干扰元素
         for selector in (
