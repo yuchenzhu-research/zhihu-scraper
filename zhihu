@@ -1,29 +1,12 @@
-#!/usr/bin/env python3
-"""
-知乎爬虫入口
+#!/usr/bin/env bash
+set -euo pipefail
 
-用法:
-    zhihu                # 首页菜单 (推荐)
-    zhihu interactive    # 交互式界面 (推荐)
-    zhihu fetch "url"    # 抓取单个链接
-    zhihu query "关键词"  # 搜索本地数据库
+PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
+APP_ENTRY="$PROJECT_ROOT/cli/app.py"
 
-从源码运行:
-    python3 -m cli.app               # 首页菜单
-    python3 -m cli.app interactive
-"""
-import sys
-from pathlib import Path
+if [[ -x "$VENV_PYTHON" ]]; then
+  exec "$VENV_PYTHON" "$APP_ENTRY" "$@"
+fi
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python"
-
-if VENV_PYTHON.exists() and Path(sys.executable).resolve() != VENV_PYTHON.resolve():
-    import os
-    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(PROJECT_ROOT / "zhihu"), *sys.argv[1:]])
-
-from cli.app import main
-
-if __name__ == "__main__":
-    sys.argv[0] = "zhihu"
-    main()
+exec python3 "$APP_ENTRY" "$@"

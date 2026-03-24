@@ -1099,21 +1099,14 @@ def check() -> None:
 async def _check_playwright() -> None:
     """Check if playwright is available / 检查 playwright 是否可用"""
     from playwright.async_api import async_playwright
-
-    browser_cfg = cfg.zhihu.browser
-    launch_args = browser_cfg.args or [
-        "--disable-blink-features=AutomationControlled",
-        "--no-sandbox",
-    ]
-    launch_kwargs = {
-        "headless": browser_cfg.headless,
-        "args": launch_args,
-    }
-    if browser_cfg.channel:
-        launch_kwargs["channel"] = browser_cfg.channel
+    from core.browser_fallback import _launch_browser_with_fallback
 
     async with async_playwright() as pw:
-        browser = await pw.chromium.launch(**launch_kwargs)
+        browser = await _launch_browser_with_fallback(
+            pw,
+            cfg.zhihu.browser,
+            headless=cfg.zhihu.browser.headless,
+        )
         await browser.close()
 
 

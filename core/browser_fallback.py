@@ -15,8 +15,33 @@ browser_fallback.py — 针对强风控路由的智能降维回退机制
 ================================================================================
 """
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from .config import get_config, get_logger
+
+
+async def _launch_browser_with_fallback(playwright: Any, browser_cfg: Any, *, headless: bool):
+    """
+    Try configured browser channel first, then fall back to bundled Chromium.
+    先按配置的浏览器通道启动，失败后再回退到 Playwright 自带 Chromium。
+    """
+    log = get_logger()
+    launch_args = browser_cfg.args or [
+        "--disable-blink-features=AutomationControlled",
+        "--no-sandbox",
+    ]
+    launch_kwargs = {
+        "headless": headless,
+        "args": launch_args,
+    }
+
+    channel = (browser_cfg.channel or "").strip()
+    if channel:
+        try:
+            return await playwright.chromium.launch(**{**launch_kwargs, "channel": channel})
+        except Exception as e:
+            log.warning("browser_channel_launch_failed", channel=channel, error=str(e))
+
+    return await playwright.chromium.launch(**launch_kwargs)
 
 
 async def extract_zhuanlan_html(
@@ -51,20 +76,7 @@ async def extract_zhuanlan_html(
     log.info("trigger_browser_fallback", url=url)
 
     async with async_playwright() as p:
-        launch_args = browser_cfg.args or [
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-        ]
-        launch_kwargs = {
-            "headless": headless,
-            "args": launch_args,
-        }
-        if browser_cfg.channel:
-            launch_kwargs["channel"] = browser_cfg.channel
-
-        # Use real Chrome browser type to reduce risk
-        # 使用真实的 Chrome 浏览器类型降低风险
-        browser = await p.chromium.launch(**launch_kwargs)
+        browser = await _launch_browser_with_fallback(p, browser_cfg, headless=headless)
 
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
