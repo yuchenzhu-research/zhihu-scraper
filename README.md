@@ -66,21 +66,28 @@
 
 ### 2. 安装
 
-如果你只想先跑基础协议模式：
+推荐使用官方一键安装入口：
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
-pip install -e .
+./install.sh
 ```
 
-如果你希望连同浏览器降级能力一起安装：
+这条命令会自动完成：
+
+- 创建本地 `.venv`
+- 通过 `pyproject.toml` 安装完整依赖
+- 安装 Playwright Chromium
+- 生成本地 `cookies.json` 模板
+- 运行一次环境检查
+
+如果你想手动安装，推荐显式使用本地 Python 模块入口：
 
 ```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-pip install -e ".[full]"
-playwright install chromium
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[full]"
+.venv/bin/python -m playwright install chromium
 ```
 
 ### 3. 配置 Cookie
@@ -115,13 +122,13 @@ cp cookies.example.json cookies.json
 最简单的一次抓取：
 
 ```bash
-python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-如果你更喜欢包装脚本，也可以这样：
+如果你想显式使用本地虚拟环境里的 Python：
 
 ```bash
-./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+.venv/bin/python cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
 ### 5. 查看完整命令手册
@@ -129,7 +136,7 @@ python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848
 README 只保留首页级说明。所有命令细节统一在终端手册里：
 
 ```bash
-python3 cli/app.py manual
+./zhihu manual
 ```
 
 ## 核心特性 Features
@@ -256,7 +263,7 @@ python3 cli/app.py <command> ...
 详细参数与示例统一在内置手册：
 
 ```bash
-python3 cli/app.py manual
+./zhihu manual
 ```
 
 ## 输出结构 Output Layout
@@ -374,6 +381,17 @@ flowchart LR
 > [!NOTE]
 > 你在项目规划中提到的 **Pydantic**、**JSON / CSV / MySQL 导出**、**话题抓取**，当前仓库还没有正式落地，因此我把它们放进了路线图，而没有写成“现有能力”。
 
+## 安装模型 Installation Model
+
+这个仓库以 `pyproject.toml` 作为**单一依赖来源**，而不是以 `requirements.txt` 为主。
+
+也就是说：
+
+- 依赖声明以 `pyproject.toml` 为准
+- `install.sh` 是官方一键安装入口
+- 普通用户不需要先自己跑 `pip` 或 `playwright`
+- 根目录 `./zhihu` 会优先复用本地 `.venv`
+
 ## 开发路线图 Roadmap
 
 - [x] 单条回答抓取
@@ -395,15 +413,15 @@ flowchart LR
 安装开发依赖：
 
 ```bash
-pip install -e ".[dev]"
+.venv/bin/python -m pip install -e ".[dev]"
 ```
 
 常用命令：
 
 ```bash
-python3 -m compileall cli core
-python3 cli/app.py check
-python3 cli/app.py manual
+.venv/bin/python -m compileall cli core
+./zhihu check
+./zhihu manual
 ```
 
 ## 常见问题 FAQ
@@ -427,7 +445,7 @@ python3 cli/app.py manual
 命令细节已经统一放进：
 
 ```bash
-python3 cli/app.py manual
+./zhihu manual
 ```
 
 ### 4. 为什么不直接把 `cookies.json` 提交到仓库？

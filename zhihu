@@ -11,6 +11,15 @@
     python3 -m cli.app interactive
 """
 import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python"
+
+if VENV_PYTHON.exists() and Path(sys.executable).resolve() != VENV_PYTHON.resolve():
+    import os
+    os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(PROJECT_ROOT / "zhihu"), *sys.argv[1:]])
+
 from cli.app import app
 
 if __name__ == "__main__":

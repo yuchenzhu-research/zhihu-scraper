@@ -66,21 +66,28 @@ The goal is to get your first successful fetch within **3 minutes**.
 
 ### 2. Install
 
-If you only want the base protocol-first mode:
+The recommended path is the official one-shot installer:
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
-pip install -e .
+./install.sh
 ```
 
-If you also want browser fallback support:
+This command will automatically:
+
+- create a local `.venv`
+- install the full dependency set from `pyproject.toml`
+- install Playwright Chromium
+- create a local `cookies.json` template
+- run one environment check
+
+If you prefer manual installation, use the local Python module entrypoints explicitly:
 
 ```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-pip install -e ".[full]"
-playwright install chromium
+python3 -m venv .venv
+.venv/bin/python -m pip install -e ".[full]"
+.venv/bin/python -m playwright install chromium
 ```
 
 ### 3. Configure Cookies
@@ -115,13 +122,13 @@ Then fill in your own `z_c0` and `d_c0` values:
 The simplest possible fetch:
 
 ```bash
-python3 cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-If you prefer the wrapper script:
+If you prefer calling the local virtualenv Python explicitly:
 
 ```bash
-./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+.venv/bin/python cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
 ### 5. Open the Full Built-In Manual
@@ -129,7 +136,7 @@ If you prefer the wrapper script:
 This README is intentionally homepage-level. Full command details live in the terminal manual:
 
 ```bash
-python3 cli/app.py manual
+./zhihu manual
 ```
 
 ## Features
@@ -256,7 +263,7 @@ Common command index:
 Detailed arguments and examples are intentionally centralized in:
 
 ```bash
-python3 cli/app.py manual
+./zhihu manual
 ```
 
 ## Output Layout
@@ -372,6 +379,17 @@ What the codebase is actually using today:
 > [!NOTE]
 > Your project direction mentions **Pydantic**, **JSON / CSV / MySQL export**, and **topic scraping**, but those are not fully implemented in the current repository yet. They belong in the roadmap, not in the present-tense feature section.
 
+## Installation Model
+
+This repository uses `pyproject.toml` as the **single source of truth** for dependencies, rather than treating `requirements.txt` as the primary installation model.
+
+That means:
+
+- dependency declarations live in `pyproject.toml`
+- `install.sh` is the official one-shot installer
+- normal users do not need to manually run `pip` or `playwright` first
+- the root-level `./zhihu` wrapper will prefer the local `.venv`
+
 ## Roadmap
 
 - [x] Single answer fetching
@@ -393,15 +411,15 @@ What the codebase is actually using today:
 Install development dependencies:
 
 ```bash
-pip install -e ".[dev]"
+.venv/bin/python -m pip install -e ".[dev]"
 ```
 
 Useful checks:
 
 ```bash
-python3 -m compileall cli core
-python3 cli/app.py check
-python3 cli/app.py manual
+.venv/bin/python -m compileall cli core
+./zhihu check
+./zhihu manual
 ```
 
 ## FAQ
@@ -425,7 +443,7 @@ Because the homepage should focus on three things:
 All detailed command documentation is intentionally centralized in:
 
 ```bash
-python3 cli/app.py manual
+./zhihu manual
 ```
 
 ### Why can't `cookies.json` be committed to the repository?

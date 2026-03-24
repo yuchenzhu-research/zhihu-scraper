@@ -184,6 +184,11 @@ SYNOPSIS
   ./zhihu <command> [options]
   python3 cli/app.py <command> [options]
 
+INSTALL MODEL
+  - `pyproject.toml` is the dependency source of truth
+  - `./install.sh` is the official one-shot installer
+  - `./zhihu` prefers the local `.venv` automatically when available
+
 PAGER
   Exit manual / 退出说明书:
   - press `q` in most terminals / 大多数终端按 `q`
@@ -378,8 +383,9 @@ CURRENT LIMITS
   - query uses SQLite keyword matching, not advanced ranking search
 
 QUICK START
-  - `python3 cli/app.py check`
-  - `python3 cli/app.py manual`
+  - `./install.sh`
+  - `./zhihu check`
+  - `./zhihu manual`
 """.strip()
 
     with console.pager(styles=True):
@@ -766,7 +772,7 @@ def check() -> None:
         asyncio.run(_check_playwright())
         rprint("✅ Playwright OK / 正常")
     except ModuleNotFoundError:
-        rprint(Text("⚠️ Playwright not installed / 未安装。专栏降级模式暂不可用，可执行 pip install -e '.[full]'", justify="left"))
+        rprint(Text("⚠️ Playwright not installed / 未安装。专栏降级模式暂不可用，建议先执行 ./install.sh", justify="left"))
     except Exception as e:
         rprint(f"❌ Playwright error / 错误: {e}")
 
