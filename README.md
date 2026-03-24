@@ -96,6 +96,19 @@ python3 -m venv .venv
 .venv/bin/python -m playwright install chromium
 ```
 
+安装完成后，推荐直接进入首页菜单：
+
+```bash
+./zhihu
+```
+
+菜单操作方式：
+
+- 方向键移动
+- `Enter` 确认
+- `Space` 勾选复选项
+- `Ctrl+C` 退出当前界面
+
 ### 3. 配置 Cookie
 
 先从模板复制一份本地 Cookie 文件：

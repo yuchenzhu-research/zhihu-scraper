@@ -3,11 +3,13 @@
 知乎爬虫入口
 
 用法:
+    zhihu                # 首页菜单 (推荐)
     zhihu interactive    # 交互式界面 (推荐)
     zhihu fetch "url"    # 抓取单个链接
     zhihu query "关键词"  # 搜索本地数据库
 
 从源码运行:
+    python3 -m cli.app               # 首页菜单
     python3 -m cli.app interactive
 """
 import sys
@@ -20,8 +22,8 @@ if VENV_PYTHON.exists() and Path(sys.executable).resolve() != VENV_PYTHON.resolv
     import os
     os.execv(str(VENV_PYTHON), [str(VENV_PYTHON), str(PROJECT_ROOT / "zhihu"), *sys.argv[1:]])
 
-from cli.app import app
+from cli.app import main
 
 if __name__ == "__main__":
     sys.argv[0] = "zhihu"
-    app()
+    main()

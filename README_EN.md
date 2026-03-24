@@ -96,6 +96,19 @@ python3 -m venv .venv
 .venv/bin/python -m playwright install chromium
 ```
 
+After installation, the recommended entrypoint is the home menu:
+
+```bash
+./zhihu
+```
+
+Menu controls:
+
+- arrow keys to move
+- `Enter` to confirm
+- `Space` to toggle checkbox options
+- `Ctrl+C` to exit the current screen
+
 ### 3. Configure Cookies
 
 Start by copying the template:
