@@ -271,10 +271,8 @@ def _render_launcher_header() -> None:
     """Print compact launcher banner / 打印精简首页横幅"""
     cfg = _get_cfg()
     default_output_dir = _get_default_output_dir()
-    from core.cookie_manager import has_real_cookie_values
-
-    cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
-    cookie_status = "已就绪" if has_real_cookie_values(cookies_path) else "需要 Cookie"
+    from core.cookie_manager import has_available_cookie_sources
+    cookie_status = "已就绪" if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir) else "需要 Cookie"
     browser_status = "后台运行" if cfg.zhihu.browser.headless else "显示窗口"
     content = Text.assemble(
         ("知乎爬虫", "bold cyan"),
@@ -292,14 +290,16 @@ def _render_launcher_header() -> None:
 def _run_onboard_flow(*, from_command: bool = False) -> None:
     """Minimal onboarding flow inspired by guided CLIs / 最小 onboarding 引导"""
     import questionary
-    from core.cookie_manager import has_real_cookie_values
+    from core.cookie_manager import has_available_cookie_sources, resolve_cookie_file_path
 
     cfg = _get_cfg()
+    configured_cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
+    active_cookie_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
     console.print(Panel(
         Text(
             "首次使用向导\n\n"
             "1. 先运行 ./install.sh 安装环境\n"
-            "2. 在 cookies.json 中填入自己的 Cookie\n"
+            f"2. 在 {configured_cookie_path} 中填入自己的 Cookie\n"
             "3. 执行一次环境检查\n"
             "4. 然后从首页菜单开始使用",
             justify="left",
@@ -309,10 +309,11 @@ def _run_onboard_flow(*, from_command: bool = False) -> None:
         expand=False,
     ))
 
-    cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
-    cookie_ready = has_real_cookie_values(cookies_path)
+    cookie_ready = has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
     rprint(f"📄 配置文件: [cyan]{Path(__file__).parent.parent / 'config.yaml'}[/]")
-    rprint(f"🍪 Cookie 文件: [cyan]{cookies_path}[/] {'✅' if cookie_ready else '⚠️'}")
+    rprint(f"🍪 Cookie 文件: [cyan]{configured_cookie_path}[/] {'✅' if cookie_ready else '⚠️'}")
+    if active_cookie_path != configured_cookie_path:
+        rprint(f"↩️ 兼容旧路径: [cyan]{active_cookie_path}[/]")
     rprint("🧰 安装入口: [cyan]./install.sh[/]")
     rprint("🔁 重建环境: [cyan]./install.sh --recreate[/]")
 
@@ -1101,18 +1102,28 @@ def config_cmd(
 
     if show:
         cfg = _get_cfg()
+        from core.cookie_manager import resolve_cookie_file_path, resolve_cookie_pool_dir
+
+        configured_cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
+        active_cookie_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
+        active_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
+        log_path = resolve_project_path(cfg.logging.file) if cfg.logging.file else "disabled / 已关闭"
         rprint(Panel(
             Text(f"""
 [b]配置路径 (Config Path):[/] {Path(__file__).parent.parent / "config.yaml"}
 
 [b]输出目录 (Output Directory):[/] {cfg.output.directory}
+[b]Cookie文件 (Cookie File):[/] {configured_cookie_path}
+[b]当前生效Cookie (Active Cookie):[/] {active_cookie_path}
+[b]Cookie池目录 (Cookie Pool):[/] {active_pool_dir}
+[b]日志文件 (Log File):[/] {log_path}
 [b]日志级别 (Log Level):[/] {cfg.logging.level}
 [b]浏览器 (Browser):[/] {"Headless / 无头" if cfg.zhihu.browser.headless else "Visible / 有头"}
 [b]重试次数 (Retry Attempts):[/] {cfg.crawler.retry.max_attempts}
 [b]图片并发 (Image Concurrency):[/] {cfg.crawler.images.concurrency}
 [b]Cookie轮换 (Cookie Rotation):[/] {"Enabled / 启用" if hasattr(cfg, 'zhihu') and cfg.zhihu.cookies_required else "Disabled / 禁用"}
             """.strip(), justify="left"),
-            title="🛠��� Current Configuration / 当前配置",
+            title="🛠️ Current Configuration / 当前配置",
             border_style="cyan"
         ))
 
@@ -1139,11 +1150,14 @@ def check() -> None:
         rprint("❌ config.yaml missing / 不存在")
 
     # Check cookies / 检查 cookies
-    from core.cookie_manager import has_real_cookie_values
+    from core.cookie_manager import count_available_cookie_sources, has_real_cookie_values, resolve_cookie_file_path, resolve_cookie_pool_dir
 
-    cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
-    has_cookie = has_real_cookie_values(cookies_path)
-    rprint(f"{'✅' if has_cookie else '⚠️'} {cookies_path.name} {'valid / 有效' if has_cookie else 'not configured or invalid / 未配置或无效'}")
+    cookies_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
+    cookie_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
+    primary_cookie_ready = has_real_cookie_values(cookies_path)
+    available_sources = count_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
+    rprint(f"{'✅' if primary_cookie_ready else '⚠️'} 主 Cookie 文件 / Primary cookie file: {cookies_path}")
+    rprint(f"{'✅' if available_sources else '⚠️'} 可用号源数 / Available sessions: {available_sources} (pool: {cookie_pool_dir})")
 
     # Check playwright / 检查 playwright
     try:

@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 import yaml
 import structlog
 
+from .runtime_paths import DEFAULT_COOKIE_FILE, DEFAULT_COOKIE_POOL_DIR, DEFAULT_LOG_FILE
+
 # ============================================================
 # Configuration Data Classes (配置数据类)
 # ============================================================
@@ -57,7 +59,8 @@ class ZhihuConfig:
     """
     Zhihu-related configuration / 知乎相关配置
     """
-    cookies_file: str = "cookies.json"
+    cookies_file: str = str(DEFAULT_COOKIE_FILE)
+    cookies_pool_dir: str = str(DEFAULT_COOKIE_POOL_DIR)
     cookies_required: bool = True
     browser: BrowserConfig = field(default_factory=BrowserConfig)
     anti_detection: AntiDetectionConfig = field(default_factory=AntiDetectionConfig)
@@ -144,7 +147,7 @@ class LoggingConfig:
     """
     level: str = "INFO"
     format: str = "console"
-    file: Optional[str] = None
+    file: Optional[str] = str(DEFAULT_LOG_FILE)
     log_exceptions: bool = True
 
 @dataclass
@@ -165,9 +168,11 @@ class Config:
         """
         # Parse Zhihu configuration / 解析知乎配置
         zhihu_raw = raw.get("zhihu", {})
+        cookies_raw = zhihu_raw.get("cookies", {})
         zhihu = ZhihuConfig(
-            cookies_file=zhihu_raw.get("cookies", {}).get("file", "cookies.json"),
-            cookies_required=zhihu_raw.get("cookies", {}).get("required", True),
+            cookies_file=cookies_raw.get("file", str(DEFAULT_COOKIE_FILE)),
+            cookies_pool_dir=cookies_raw.get("pool_dir", str(DEFAULT_COOKIE_POOL_DIR)),
+            cookies_required=cookies_raw.get("required", True),
             browser=BrowserConfig(**zhihu_raw.get("browser", {})),
             anti_detection=AntiDetectionConfig(**zhihu_raw.get("anti_detection", {})),
             signature=SignatureConfig(**zhihu_raw.get("signature", {})),

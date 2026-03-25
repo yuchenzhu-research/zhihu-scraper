@@ -27,7 +27,7 @@ from rich import box
 from rich.live import Live
 
 from core.config import get_config, resolve_project_path
-from core.cookie_manager import has_real_cookie_values
+from core.cookie_manager import has_available_cookie_sources
 from core.utils import extract_urls
 from core.scraper import ZhihuDownloader
 from cli.app import _fetch_and_save
@@ -112,10 +112,9 @@ def _print_banner():
         header_content, border_style=THEME["accent"], box=box.ROUNDED, padding=(1, 2), width=70
     )
 
-    cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
     cookie_status = (
         f"[{THEME['success']}]VALID[/]"
-        if has_real_cookie_values(cookie_path)
+        if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
         else f"[{THEME['warn']}]MISSING[/]"
     )
 

@@ -122,7 +122,7 @@ cd zhihu-scraper
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 ./install.sh
-cp cookies.example.json cookies.json
+# 然后编辑 .local/cookies.json 填入你自己的 z_c0 / d_c0
 ./zhihu
 ```
 
@@ -131,8 +131,11 @@ cp cookies.example.json cookies.json
 复制模板：
 
 ```bash
-cp cookies.example.json cookies.json
+mkdir -p .local
+cp cookies.example.json .local/cookies.json
 ```
+
+更推荐直接运行 `./install.sh`，它会自动初始化 `.local/cookies.json` 模板。
 
 填入你自己的 `z_c0` 和 `d_c0`。
 
@@ -176,7 +179,7 @@ README 只保留首页级说明。完整命令说明统一在内置手册中：
   输出直接落地为 `index.md + images/ + zhihu.db`。
 
 - 🔁 **Cookie 轮换**
-  支持 `cookies.json` 与 `cookie_pool/*.json`。
+  支持 `.local/cookies.json` 与 `.local/cookie_pool/*.json`，并兼容历史上的 `cookies.json` 与 `cookie_pool/*.json`。
 
 - 📡 **收藏夹增量监控**
   支持监控新内容并保留进度指针。
@@ -241,12 +244,13 @@ python3 cli/app.py <command> ...
 
 | 展示项 | 你能看到什么 | 打开 |
 |---|---|---|
-| 超链接保留 | 目录页、外部链接、多层超链接 | [深度学习数学基础](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
-| 图片与数学公式 | 本地图片引用、块公式、长文混排 | [线性代数学习笔记](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
+| 超链接保留 | 目录页、外部链接、多层超链接 | [深度学习数学基础](examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
+| 图片与数学公式 | 本地图片引用、块公式、长文混排 | [线性代数学习笔记](examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
 
 更详细的说明见：
 
-- [examples/README.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/README.md)
+- [examples/README.md](examples/README.md)
+- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
 
 ## 输出结构 Output Layout
 
@@ -274,6 +278,10 @@ data/
 - `README.md`：作者目录的本地索引页
 - `zhihu.db`：统一 SQLite 数据库
 
+仓库正式目录与本地运行目录的边界说明见：
+
+- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
+
 ## 配置说明 Configuration
 
 ### Cookie
@@ -281,7 +289,7 @@ data/
 默认 Cookie 文件是：
 
 ```text
-cookies.json
+.local/cookies.json
 ```
 
 模板文件是：
@@ -293,7 +301,7 @@ cookies.example.json
 如果你有多组登录态，可以放到：
 
 ```text
-cookie_pool/
+.local/cookie_pool/
 ```
 
 ### 代理
@@ -312,9 +320,9 @@ export HTTPS_PROXY=http://127.0.0.1:7890
 ### 安全提示
 
 > [!CAUTION]
-> - 不要提交 `cookies.json`
+> - 不要提交 `.local/` 目录和 `cookies.json`
 > - 泄露过的 Cookie 不要继续复用
-> - 多账号建议放在 `cookie_pool/`，不要全塞进一个文件
+> - 多账号建议放在 `.local/cookie_pool/`，不要全塞进一个文件
 
 ## 架构概览 Architecture
 

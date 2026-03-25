@@ -46,6 +46,7 @@ data/**
 !data/README.md
 
 # 浏览器 profile / 日志 / 本地数据库
+.local/
 browser_data/
 logs/
 *.db
@@ -68,9 +69,8 @@ debug_*/
 .bak
 
 .venv_tls_test/     # TLS测试沙箱
+
+# 本地实验/参考仓库
 MediaCrawler/
 mediacrawler/
-references/openclaw/
-# ========================================
-# docs/
-# !.gitkeep
+references/

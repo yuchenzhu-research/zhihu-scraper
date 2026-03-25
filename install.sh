@@ -14,7 +14,7 @@
 # 2. 创建本地 .venv
 # 3. 用 .venv 里的 python 安装完整依赖
 # 4. 安装 Playwright Chromium
-# 5. 生成本地 cookies.json 模板
+# 5. 初始化本地 .local 运行目录与 Cookie 模板
 # 6. 运行一次环境检查
 # =============================================================================
 
@@ -55,6 +55,9 @@ NC='\033[0m'
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$PROJECT_DIR/.venv"
+LOCAL_DIR="$PROJECT_DIR/.local"
+COOKIE_FILE="$LOCAL_DIR/cookies.json"
+COOKIE_POOL_DIR="$LOCAL_DIR/cookie_pool"
 
 echo "📌 检测 Python 环境..."
 if ! command -v python3 >/dev/null 2>&1; then
@@ -100,15 +103,28 @@ echo "📌 安装 Playwright Chromium..."
 echo "   ✅ Playwright Chromium 已安装"
 
 echo ""
+echo "📌 初始化本地运行目录..."
+mkdir -p "$LOCAL_DIR" "$COOKIE_POOL_DIR"
+echo "   ✅ 已准备 .local/ 与 .local/cookie_pool/"
+
+echo ""
 echo "📌 检查本地 Cookie 模板..."
-if [ ! -f "cookies.json" ] && [ -f "cookies.example.json" ]; then
-    cp "cookies.example.json" "cookies.json"
-    echo "   ✅ 已从 cookies.example.json 创建本地 cookies.json"
+if [ ! -f "$COOKIE_FILE" ] && [ -f "cookies.example.json" ]; then
+    cp "cookies.example.json" "$COOKIE_FILE"
+    echo "   ✅ 已从 cookies.example.json 创建 .local/cookies.json"
 fi
 
-if [ ! -f "cookies.json" ]; then
-    echo "   ⚠️  未找到 cookies.json"
+if [ ! -f "$COOKIE_FILE" ] && [ -f "cookies.json" ]; then
+    echo "   ℹ️  检测到历史路径 cookies.json，当前版本仍兼容，但建议后续迁移到 .local/cookies.json"
+fi
+
+if [ ! -f "$COOKIE_FILE" ] && [ ! -f "cookies.json" ]; then
+    echo "   ⚠️  未找到 .local/cookies.json"
     echo "   💡 可先游客模式运行，但推荐补上 z_c0 / d_c0"
+elif [ -f "$COOKIE_FILE" ] && grep -q "YOUR_Z_C0_HERE" "$COOKIE_FILE"; then
+    echo "   ⚠️  .local/cookies.json 仍是占位符，请填入你自己的 z_c0 / d_c0"
+elif [ -f "$COOKIE_FILE" ]; then
+    echo "   ✅ .local/cookies.json 已配置"
 elif grep -q "YOUR_Z_C0_HERE" cookies.json; then
     echo "   ⚠️  cookies.json 仍是占位符，请填入你自己的 z_c0 / d_c0"
 else
@@ -140,5 +156,6 @@ echo "  - 依赖由 pyproject.toml 统一声明"
 echo "  - install.sh 是官方一键安装入口"
 echo "  - 如需一键重建环境: ./install.sh --recreate"
 echo "  - 根目录 ./zhihu 会优先使用本地 .venv"
+echo "  - 本地凭据、日志等运行文件建议统一放在 .local/"
 echo ""
 echo "========================================"

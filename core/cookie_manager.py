@@ -2,14 +2,16 @@
 cookie_manager.py - Multi-Account Cookie Pool Manager
 
 Responsible for loading, validating, and rotating multiple sets of Zhihu cookies.
-Supports cookies.json and cookie_pool/*.json formats.
+Prefers .local/cookies.json and .local/cookie_pool/*.json while keeping backward
+compatibility with legacy repository-root paths.
 Supports automatic random switching when encountering API 403 (rate limiting),
 greatly improving survival rate for batch tasks.
 
 ================================================================================
 cookie_manager.py — 多账号 Cookie 轮询池
 
-负责加载、验证和轮换多组知乎 Cookies。支持 `cookies.json` 和 `cookie_pool/*.json`。
+负责加载、验证和轮换多组知乎 Cookies。优先使用 `.local/cookies.json`
+和 `.local/cookie_pool/*.json`，同时兼容历史的仓库根目录路径。
 支持在遇到 API 403 (风控) 时随机切换号源池，大幅提升批量任务的存活率。
 ================================================================================
 """
@@ -20,6 +22,12 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 from .config import get_config, get_logger, resolve_project_path
+from .runtime_paths import (
+    DEFAULT_COOKIE_FILE,
+    DEFAULT_COOKIE_POOL_DIR,
+    LEGACY_COOKIE_FILE,
+    LEGACY_COOKIE_POOL_DIR,
+)
 
 
 PLACEHOLDER_COOKIE_VALUES = {
@@ -75,6 +83,81 @@ def has_real_cookie_values(path: Path) -> bool:
     return "z_c0" in session or "d_c0" in session
 
 
+def count_available_cookie_sources(
+    base_cookies_path: Optional[str] = None,
+    pool_dir: Optional[str] = None,
+) -> int:
+    """
+    Count valid cookie sources across the primary file and pool directory.
+    统计主 Cookie 文件与 Cookie 池目录中的有效号源数量。
+    """
+    total = 0
+
+    base_path = resolve_cookie_file_path(base_cookies_path)
+    if has_real_cookie_values(base_path):
+        total += 1
+
+    pool_path = resolve_cookie_pool_dir(pool_dir)
+    if pool_path.exists() and pool_path.is_dir():
+        for filepath in pool_path.glob("*.json"):
+            if has_real_cookie_values(filepath):
+                total += 1
+
+    return total
+
+
+def has_available_cookie_sources(
+    base_cookies_path: Optional[str] = None,
+    pool_dir: Optional[str] = None,
+) -> bool:
+    """
+    Check whether at least one valid cookie source is available.
+    检查是否至少存在一个有效 Cookie 号源。
+    """
+    return count_available_cookie_sources(base_cookies_path, pool_dir) > 0
+
+
+def _prefer_legacy_path(configured: Path, *, default_path: Path, legacy_path: Path) -> Path:
+    """
+    Keep old repo-root paths working when users upgrade in place.
+    在用户原地升级时，继续兼容旧的仓库根目录路径。
+    """
+    default_abs = resolve_project_path(default_path)
+    legacy_abs = resolve_project_path(legacy_path)
+
+    if configured == default_abs and not configured.exists() and legacy_abs.exists():
+        return legacy_abs
+    return configured
+
+
+def resolve_cookie_file_path(configured_path: Optional[str] = None) -> Path:
+    """
+    Resolve the active cookie file path with legacy fallback.
+    解析当前生效的 Cookie 文件路径，并兼容旧路径。
+    """
+    cfg = get_config()
+    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_file)
+    return _prefer_legacy_path(
+        configured,
+        default_path=DEFAULT_COOKIE_FILE,
+        legacy_path=LEGACY_COOKIE_FILE,
+    )
+
+
+def resolve_cookie_pool_dir(configured_path: Optional[str] = None) -> Path:
+    """
+    Resolve the active cookie pool directory with legacy fallback.
+    解析当前生效的 Cookie 池目录，并兼容旧路径。
+    """
+    cfg = get_config()
+    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_pool_dir)
+    return _prefer_legacy_path(
+        configured,
+        default_path=DEFAULT_COOKIE_POOL_DIR,
+        legacy_path=LEGACY_COOKIE_POOL_DIR,
+    )
+
+
 class CookieManager:
     """
     Chinese: 知乎多账号防风控 Cookie 管理器
@@ -82,10 +165,9 @@ class CookieManager:
     """
 
     def __init__(self, base_cookies_path: Optional[str] = None, pool_dir: Optional[str] = None):
-        cfg = get_config()
         self.log = get_logger()
-        self.base_path = resolve_project_path(base_cookies_path or cfg.zhihu.cookies_file)
-        self.pool_dir = resolve_project_path(pool_dir or "cookie_pool")
+        self.base_path = resolve_cookie_file_path(base_cookies_path)
+        self.pool_dir = resolve_cookie_pool_dir(pool_dir)
         self.sessions: List[Dict[str, str]] = []
         self._current_index = -1
 
@@ -98,21 +180,26 @@ class CookieManager:
         """
         self.sessions.clear()
 
-        # 1. Load default cookies.json
-        # 加载默认 cookies.json
+        # 1. Load primary cookie file
+        # 加载主 Cookie 文件
         base_session = self._parse_json_file(self.base_path)
         if base_session and self._is_valid_session(base_session):
             self.sessions.append(base_session)
 
-        # 2. Load cookie_pool/**/*.json
-        # 加载 cookie_pool/**/*.json
+        # 2. Load cookie pool directory
+        # 加载 Cookie 池目录
         if self.pool_dir.exists() and self.pool_dir.is_dir():
             for filepath in self.pool_dir.glob("*.json"):
                 session = self._parse_json_file(filepath)
                 if session and self._is_valid_session(session) and session not in self.sessions:
                     self.sessions.append(session)
 
-        self.log.info("cookie_manager_loaded", total_sessions=len(self.sessions))
+        self.log.info(
+            "cookie_manager_loaded",
+            total_sessions=len(self.sessions),
+            cookie_file=str(self.base_path),
+            cookie_pool_dir=str(self.pool_dir),
+        )
 
         # Shuffle to avoid always using the same account
         # 打乱基础顺序，确保不要总是固定死号使用同一个号

@@ -122,7 +122,7 @@ Shortest end-to-end path:
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 ./install.sh
-cp cookies.example.json cookies.json
+# then edit .local/cookies.json with your own z_c0 / d_c0
 ./zhihu
 ```
 
@@ -131,8 +131,11 @@ cp cookies.example.json cookies.json
 Copy the template:
 
 ```bash
-cp cookies.example.json cookies.json
+mkdir -p .local
+cp cookies.example.json .local/cookies.json
 ```
+
+Running `./install.sh` is preferred because it initializes `.local/cookies.json` for you.
 
 Then fill in your own `z_c0` and `d_c0`.
 
@@ -176,7 +179,7 @@ This README is intentionally homepage-level. Detailed command help lives in:
   Results are written directly as `index.md + images/ + zhihu.db`.
 
 - 🔁 **Cookie rotation**
-  Supports both `cookies.json` and `cookie_pool/*.json`.
+  Supports `.local/cookies.json` and `.local/cookie_pool/*.json`, while remaining compatible with legacy `cookies.json` and `cookie_pool/*.json`.
 
 - 📡 **Incremental collection monitoring**
   Monitors new items while keeping a stable progress pointer.
@@ -241,12 +244,13 @@ The repository keeps two ready-to-open showcase exports:
 
 | Showcase | What to look at | Open |
 |---|---|---|
-| Hyperlink preservation | table of contents, external links, nested links | [Deep Learning Math Basics](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
-| Images and math formulas | local image references, block math, long-form mixed layout | [Linear Algebra Notes](/Users/yuchenzhu/Desktop/github/zhihu/examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
+| Hyperlink preservation | table of contents, external links, nested links | [Deep Learning Math Basics](examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
+| Images and math formulas | local image references, block math, long-form mixed layout | [Linear Algebra Notes](examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
 
 More detail:
 
-- [examples/README.md](/Users/yuchenzhu/Desktop/github/zhihu/examples/README.md)
+- [examples/README.md](examples/README.md)
+- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
 
 ## Output Layout
 
@@ -274,6 +278,10 @@ data/
 - `README.md`: local creator index page
 - `zhihu.db`: shared SQLite database
 
+For the official repository layout and the local-only runtime boundary, see:
+
+- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
+
 ## Configuration
 
 ### Cookies
@@ -281,7 +289,7 @@ data/
 The default cookie file is:
 
 ```text
-cookies.json
+.local/cookies.json
 ```
 
 The template file is:
@@ -293,7 +301,7 @@ cookies.example.json
 If you manage multiple sessions, place them under:
 
 ```text
-cookie_pool/
+.local/cookie_pool/
 ```
 
 ### Proxy
@@ -312,9 +320,9 @@ export HTTPS_PROXY=http://127.0.0.1:7890
 ### Security Notes
 
 > [!CAUTION]
-> - Do not commit `cookies.json`
+> - Do not commit `.local/` or `cookies.json`
 > - If a cookie ever leaked, replace it
-> - Prefer `cookie_pool/` for multi-account setups
+> - Prefer `.local/cookie_pool/` for multi-account setups
 
 ## Architecture
 

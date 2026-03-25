@@ -8,7 +8,7 @@ Please comply with Zhihu's terms of service and robots.txt.
 zhihu-scraper integrates a pure protocol-layer network client that directly fetches from the v4 API.
 Anti-blocking core relies on:
 1. curl_cffi simulates real browser TLS fingerprints (chrome110/edge)
-2. Load multi-account Cookie pools from cookies.json or cookie_pool/
+2. Load multi-account Cookie pools from .local/cookies.json or .local/cookie_pool/
 3. Intelligent fallback to Playwright headless browser (only for heavily protected routes like Columns)
 
 Core scraping strategy:
@@ -25,7 +25,7 @@ scraper.py — 知乎页面抓取 & 图片下载模块 (v3.0 纯协议引擎 API
 集成纯协议层网络客户端，直接基于 v4 API 抓取。
 防封核心依赖于：
 1. curl_cffi 模拟真实浏览器 TLS 指纹 (chrome110/edge)
-2. 从 cookies.json 或 cookie_pool/ 加载多账号 Cookie 池
+2. 从 .local/cookies.json 或 .local/cookie_pool/ 加载多账号 Cookie 池
 3. 智能降级回退到 Playwright 无头浏览器 (仅专栏等强风控路由)
 
 核心抓取策略：
