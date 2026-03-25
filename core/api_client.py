@@ -21,7 +21,7 @@ from typing import Optional, Dict
 import execjs
 from curl_cffi import requests
 
-from .config import get_logger
+from .config import get_logger, summarize_text_for_logs
 from .cookie_manager import cookie_manager
 
 # Default global JS signature interpreter path
@@ -184,7 +184,11 @@ class ZhihuAPIClient:
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 403:
-                self.log.error("api_forbidden", status=403, text=response.text[:200])
+                self.log.error(
+                    "api_forbidden",
+                    status=403,
+                    response_preview=summarize_text_for_logs(response.text, kind="response"),
+                )
                 # Trigger rotation and notify upstream to retry
                 # 触发轮换并通知上游进行一次重试
                 cookie_manager.rotate_session()
@@ -275,7 +279,7 @@ class ZhihuAPIClient:
                         "article_html_missing_payload",
                         article_id=article_id,
                         attempt=attempt,
-                        html_snippet=response.text[:200],
+                        response_preview=summarize_text_for_logs(response.text, kind="html"),
                     )
                 else:
                     last_error = f"HTML 请求返回 HTTP {response.status_code}"

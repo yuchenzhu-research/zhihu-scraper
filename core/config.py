@@ -12,6 +12,8 @@ config.py — 配置管理模块
 ================================================================================
 """
 
+import hashlib
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from dataclasses import dataclass, field
@@ -333,6 +335,107 @@ def resolve_project_path(path: Union[str, Path]) -> Path:
 # Logging System (日志系统)
 # ============================================================
 
+_SENSITIVE_KEY_MARKERS = (
+    "cookie",
+    "token",
+    "secret",
+    "authorization",
+    "set-cookie",
+    "credential",
+    "session",
+)
+
+_CONTENT_KEY_MARKERS = (
+    "html",
+    "content",
+    "body",
+    "response_preview",
+    "response_text",
+    "page_preview",
+    "page_text",
+)
+
+_COOKIE_PAIR_RE = re.compile(r"(?i)\b(z_c0|d_c0)\s*=\s*([^;,\s]+)")
+_COOKIE_JSON_RE = re.compile(r'(?i)"(z_c0|d_c0)"\s*:\s*"([^"]+)"')
+_AUTHORIZATION_RE = re.compile(
+    r"(?i)\bauthorization\b(?:\s*[:=]\s*|\s+)(?:bearer\s+)?([A-Za-z0-9._~+/=-]+)"
+)
+_BEARER_RE = re.compile(r"(?i)\bbearer\s+([A-Za-z0-9._~+/=-]+)")
+
+
+def summarize_text_for_logs(value: str, *, kind: str = "text") -> str:
+    """
+    Replace raw payloads with a stable summary for logs.
+    将原始文本替换为适合日志记录的稳定摘要。
+    """
+    normalized = value or ""
+    digest = hashlib.sha256(normalized.encode("utf-8", errors="ignore")).hexdigest()[:12]
+    return f"<{kind}_redacted len={len(normalized)} sha256={digest}>"
+
+
+def _mask_inline_secrets(value: str) -> str:
+    """
+    Mask secret-like substrings embedded in generic messages.
+    屏蔽通用字符串里内嵌的敏感片段。
+    """
+    masked = _COOKIE_PAIR_RE.sub(lambda m: f"{m.group(1)}=<redacted>", value)
+    masked = _COOKIE_JSON_RE.sub(lambda m: f'"{m.group(1)}":"<redacted>"', masked)
+    masked = _AUTHORIZATION_RE.sub("authorization=<redacted>", masked)
+    masked = _BEARER_RE.sub("Bearer <redacted>", masked)
+    return masked
+
+
+def _looks_like_html(value: str) -> bool:
+    """
+    Heuristic check for HTML-like payloads.
+    启发式判断是否是 HTML 类内容。
+    """
+    lowered = value.lower()
+    return any(marker in lowered for marker in ("<!doctype", "<html", "<body", "</div>", "</script>", "<meta "))
+
+
+def _sanitize_log_value(key: str, value: Any) -> Any:
+    """
+    Recursively sanitize log values before rendering.
+    在日志渲染前递归脱敏。
+    """
+    normalized_key = key.lower()
+
+    if isinstance(value, dict):
+        return {sub_key: _sanitize_log_value(str(sub_key), sub_value) for sub_key, sub_value in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_log_value(normalized_key, item) for item in value]
+
+    if not isinstance(value, str):
+        return value
+
+    if value.startswith("<") and "_redacted len=" in value and " sha256=" in value and value.endswith(">"):
+        return value
+
+    masked = _mask_inline_secrets(value)
+
+    if any(marker in normalized_key for marker in _SENSITIVE_KEY_MARKERS):
+        return summarize_text_for_logs(masked, kind=normalized_key.replace("-", "_") or "secret")
+
+    if any(marker in normalized_key for marker in _CONTENT_KEY_MARKERS) or _looks_like_html(masked):
+        kind = "html" if _looks_like_html(masked) else "content"
+        return summarize_text_for_logs(masked, kind=kind)
+
+    if len(masked) > 300:
+        return masked[:300] + f"... <truncated len={len(masked)}>"
+
+    return masked
+
+
+def sanitize_event_dict(_: Any, __: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Structlog processor that redacts sensitive fields and large payloads.
+    Structlog 处理器：统一脱敏敏感字段和大文本载荷。
+    """
+    return {key: _sanitize_log_value(str(key), value) for key, value in event_dict.items()}
+
+
 def setup_logging(config: Union[Config, LoggingConfig]) -> None:
     """
     Initialize structured logging system
@@ -351,6 +454,7 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
+        sanitize_event_dict,
     ]
 
     if log_config.format == "json":

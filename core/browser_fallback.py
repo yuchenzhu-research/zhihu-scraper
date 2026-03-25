@@ -16,7 +16,7 @@ browser_fallback.py — 针对强风控路由的智能降维回退机制
 """
 
 from typing import Optional, Dict, Any
-from .config import get_config, get_logger
+from .config import get_config, get_logger, summarize_text_for_logs
 
 
 async def _launch_browser_with_fallback(playwright: Any, browser_cfg: Any, *, headless: bool):
@@ -171,9 +171,12 @@ async def extract_zhuanlan_html(
 
         except Exception as e:
             html_dump = await page.content()
-            log.error("browser_fallback_failed", error=str(e), html_snippet=html_dump[:500])
-            print("==== 页面内容 DEBUG ====")
-            print(html_dump[:1000])
+            log.error(
+                "browser_fallback_failed",
+                error=str(e),
+                page_preview=summarize_text_for_logs(html_dump, kind="html"),
+            )
+            print("⚠️ 页面调试内容已脱敏，仅记录摘要。")
             return None
         finally:
             await browser.close()
