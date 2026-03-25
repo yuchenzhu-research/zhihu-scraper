@@ -73,11 +73,10 @@ app = typer.Typer(
     no_args_is_help=False,
 )
 
-# Initialize configuration and logging / 初始化配置和日志
-cfg = get_config()
-log = get_logger()
-DEFAULT_OUTPUT_DIR = resolve_project_path(cfg.output.directory)
-DEFAULT_BROWSER_HEADLESS = cfg.zhihu.browser.headless
+# Runtime defaults must stay side-effect free at import time.
+# 运行时默认值不能在 import 阶段触发配置加载或 Cookie 读取。
+DEFAULT_OUTPUT_DIR = Path("data")
+DEFAULT_BROWSER_HEADLESS = True
 console = Console()
 
 
@@ -87,6 +86,37 @@ console = Console()
 
 # Note: sanitize_filename and extract_urls are now imported from core.utils
 # to avoid code duplication across CLI and interactive modules.
+
+def _get_cfg():
+    """Load runtime config lazily / 延迟加载运行时配置"""
+    return get_config()
+
+
+def _get_log():
+    """Get configured logger lazily / 延迟获取已配置日志器"""
+    _get_cfg()
+    return get_logger()
+
+
+def _get_default_output_dir() -> Path:
+    """Resolve output dir from runtime config / 从运行时配置解析输出目录"""
+    return resolve_project_path(_get_cfg().output.directory)
+
+
+def _get_default_browser_headless() -> bool:
+    """Resolve browser headless flag from runtime config / 从运行时配置解析无头模式"""
+    return _get_cfg().zhihu.browser.headless
+
+
+def _resolve_output_dir(output: Optional[Path]) -> Path:
+    """Resolve CLI output option with runtime fallback / 解析 CLI 输出目录并回落到运行时配置"""
+    return output if output is not None else _get_default_output_dir()
+
+
+def _resolve_headless(headless: Optional[bool]) -> bool:
+    """Resolve CLI headless option with runtime fallback / 解析 CLI 无头参数并回落到运行时配置"""
+    return _get_default_browser_headless() if headless is None else headless
+
 
 def print_result(
     title: str,
@@ -111,6 +141,7 @@ def build_output_folder_name(item_date: str, title: str, author: str, item_key: 
     Render output directory name from config template and append a stable unique suffix.
     根据配置模板生成输出目录名，并附加稳定唯一后缀。
     """
+    cfg = _get_cfg()
     folder_template = cfg.output.folder_format or "[{date}] {title}"
     try:
         rendered = folder_template.format(date=item_date, title=title, author=author)
@@ -232,12 +263,14 @@ def _collect_fetch_options(url: str) -> Dict[str, Any]:
     return {
         "limit": limit,
         "no_images": "images" not in selections,
-        "headless": DEFAULT_BROWSER_HEADLESS,
+        "headless": _get_default_browser_headless(),
     }
 
 
 def _render_launcher_header() -> None:
     """Print compact launcher banner / 打印精简首页横幅"""
+    cfg = _get_cfg()
+    default_output_dir = _get_default_output_dir()
     from core.cookie_manager import has_real_cookie_values
 
     cookies_path = resolve_project_path(cfg.zhihu.cookies_file)
@@ -247,7 +280,7 @@ def _render_launcher_header() -> None:
         ("知乎爬虫", "bold cyan"),
         ("  ·  知乎抓取首页\n", "white"),
         ("输出目录: ", "bold magenta"),
-        (f"{DEFAULT_OUTPUT_DIR}", "white"),
+        (f"{default_output_dir}", "white"),
         ("  |  登录状态: ", "bold magenta"),
         (cookie_status, "white"),
         ("  |  浏览器补救: ", "bold magenta"),
@@ -261,6 +294,7 @@ def _run_onboard_flow(*, from_command: bool = False) -> None:
     import questionary
     from core.cookie_manager import has_real_cookie_values
 
+    cfg = _get_cfg()
     console.print(Panel(
         Text(
             "首次使用向导\n\n"
@@ -302,6 +336,9 @@ def _run_onboard_flow(*, from_command: bool = False) -> None:
 def _run_launcher() -> None:
     """Default home menu / 默认首页菜单"""
     import questionary
+
+    default_output_dir = _get_default_output_dir()
+    default_headless = _get_default_browser_headless()
 
     def run_action(func, **kwargs) -> None:
         try:
@@ -346,7 +383,7 @@ def _run_launcher() -> None:
             run_action(
                 fetch,
                 url=url,
-                output=DEFAULT_OUTPUT_DIR,
+                output=default_output_dir,
                 limit=options["limit"],
                 no_images=options["no_images"],
                 headless=options["headless"],
@@ -372,7 +409,7 @@ def _run_launcher() -> None:
             run_action(
                 creator,
                 creator=creator_input,
-                output=DEFAULT_OUTPUT_DIR,
+                output=default_output_dir,
                 answers=answers,
                 articles=articles,
                 no_images="images" not in selections,
@@ -398,10 +435,10 @@ def _run_launcher() -> None:
             run_action(
                 batch,
                 input_file=Path(input_file),
-                output=DEFAULT_OUTPUT_DIR,
+                output=default_output_dir,
                 concurrency=concurrency,
                 no_images="images" not in selections,
-                headless=DEFAULT_BROWSER_HEADLESS,
+                headless=default_headless,
             )
             continue
 
@@ -423,10 +460,10 @@ def _run_launcher() -> None:
             run_action(
                 monitor,
                 collection_id=collection_id.strip(),
-                output=DEFAULT_OUTPUT_DIR,
+                output=default_output_dir,
                 concurrency=concurrency,
                 no_images="images" not in selections,
-                headless=DEFAULT_BROWSER_HEADLESS,
+                headless=default_headless,
             )
             continue
 
@@ -438,7 +475,7 @@ def _run_launcher() -> None:
             if not keyword:
                 continue
             limit = _input_positive_int("结果数量：", "10")
-            run_action(query_db, keyword=keyword, limit=limit, data_dir=str(DEFAULT_OUTPUT_DIR))
+            run_action(query_db, keyword=keyword, limit=limit, data_dir=str(default_output_dir))
             continue
 
         if choice == "interactive":
@@ -468,6 +505,7 @@ def manual() -> None:
     Show the built-in terminal manual with paging support.
     显示内置终端说明书，支持分页查看。
     """
+    default_output_dir = _get_default_output_dir()
     manual_text = f"""
 NAME
   zhihu - Local-first Zhihu extractor with Markdown + SQLite outputs
@@ -558,7 +596,7 @@ COMMAND REFERENCE
   Defaults:
   - answers = 10
   - articles = 5
-  - output base = `{DEFAULT_OUTPUT_DIR}`
+  - output base = `{default_output_dir}`
 
   Examples:
   - `./zhihu creator "https://www.zhihu.com/people/iterator"`
@@ -648,7 +686,7 @@ COMMAND REFERENCE
   - open this built-in manual in pager
 
 OUTPUT STRUCTURE
-  Base: `{DEFAULT_OUTPUT_DIR}`
+  Base: `{default_output_dir}`
 
   - `entries/`
     normal outputs from fetch / batch / monitor
@@ -714,10 +752,10 @@ def onboard() -> None:
 @app.command("fetch")
 def fetch(
     url: str = typer.Argument(..., help="Zhihu link(s) (article/answer/question) / 知乎链接（支持多条，含混杂文本）"),
-    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output directory / 输出目录"),
     limit: Optional[int] = typer.Option(None, "-n", "--limit", help="Limit answer count (question pages only) / 限制回答数量 (仅限问题页)"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
-    headless: bool = typer.Option(DEFAULT_BROWSER_HEADLESS, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
+    headless: Optional[bool] = typer.Option(None, "-b", "--headless/--no-headless", help="Run browser in headless mode / 无头模式运行浏览器"),
 ) -> None:
     """
     Scrape one or more Zhihu links. Automatically extracts URLs from text.
@@ -733,6 +771,11 @@ def fetch(
     zhihu fetch "Text containing https://www.zhihu.com/p/123 https://www.zhihu.com/p/456"
     zhihu fetch "https://www.zhihu.com/question/123456" -n 10
     """
+    cfg = _get_cfg()
+    log = _get_log()
+    output_dir = _resolve_output_dir(output)
+    headless_mode = _resolve_headless(headless)
+
     urls = extract_urls(url)
     if not urls:
         rprint("[red]❌ No valid Zhihu links found in input / 未在输入中找到有效链接[/red]")
@@ -764,10 +807,10 @@ def fetch(
             # Execute scraping / 执行抓取
             asyncio.run(_fetch_and_save(
                 url=target_url,
-                output_dir=output,
+                output_dir=output_dir,
                 scrape_config=scrape_config,
                 download_images=not no_images,
-                headless=headless
+                headless=headless_mode
             ))
 
     except Exception as e:
@@ -778,10 +821,10 @@ def fetch(
 @app.command("batch")
 def batch(
     input_file: Path = typer.Argument(..., help="URL list file (one link per line) / URL列表文件 (每行一个链接)"),
-    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output directory / 输出目录"),
     concurrency: int = typer.Option(4, "-c", "--concurrency", help="Concurrency count (recommend 4-8) / 并发数 (建议 4-8)"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
-    headless: bool = typer.Option(DEFAULT_BROWSER_HEADLESS, "-b", "--headless", help="Run browser in headless mode / 无头模式运行浏览器"),
+    headless: Optional[bool] = typer.Option(None, "-b", "--headless/--no-headless", help="Run browser in headless mode / 无头模式运行浏览器"),
 ) -> None:
     """
     Batch scrape multiple Zhihu links.
@@ -794,6 +837,10 @@ def batch(
         zhihu batch ./urls.txt
         zhihu batch ./urls.txt -c 8 -o ./output
     """
+    log = _get_log()
+    output_dir = _resolve_output_dir(output)
+    headless_mode = _resolve_headless(headless)
+
     if not input_file.exists():
         rprint(f"[red]❌ File not found / 文件不存在: {input_file}[/red]")
         raise SystemExit(1)
@@ -811,10 +858,10 @@ def batch(
     # Execute concurrently / 并发执行
     results = asyncio.run(_batch_concurrent(
         urls=urls,
-        output_dir=output,
+        output_dir=output_dir,
         concurrency=max_concurrency,
         download_images=not no_images,
-        headless=headless
+        headless=headless_mode
     ))
 
     # Statistics / 统计结果
@@ -828,7 +875,7 @@ def batch(
 @app.command("creator")
 def creator(
     creator: str = typer.Argument(..., help="Zhihu creator profile URL or token / 知乎用户主页 URL 或 token"),
-    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output directory / 输出目录"),
     answers: int = typer.Option(10, "--answers", help="Maximum number of answers / 最大回答数量"),
     articles: int = typer.Option(5, "--articles", help="Maximum number of articles / 最大专栏数量"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
@@ -841,6 +888,10 @@ def creator(
         zhihu creator https://www.zhihu.com/people/hu-xi-jin
         zhihu creator hu-xi-jin --answers 20 --articles 10
     """
+    cfg = _get_cfg()
+    log = _get_log()
+    output_dir = _resolve_output_dir(output)
+
     if answers < 0 or articles < 0:
         raise typer.BadParameter("Creator limits must be 0 or greater / 作者抓取数量必须大于等于 0")
     if answers == 0 and articles == 0:
@@ -860,7 +911,7 @@ def creator(
 
         asyncio.run(_fetch_creator_and_save(
             creator=creator,
-            output_dir=output,
+            output_dir=output_dir,
             answer_limit=answers,
             article_limit=articles,
             download_images=not no_images,
@@ -873,10 +924,10 @@ def creator(
 @app.command("monitor")
 def monitor(
     collection_id: str = typer.Argument(..., help="Zhihu collection ID (e.g., 78170682) / 知乎收藏夹ID (如 78170682)"),
-    output: Path = typer.Option(DEFAULT_OUTPUT_DIR, "-o", "--output", help="Output directory / 输出目录"),
+    output: Optional[Path] = typer.Option(None, "-o", "--output", help="Output directory / 输出目录"),
     concurrency: int = typer.Option(4, "-c", "--concurrency", help="Concurrency count / 并发数"),
     no_images: bool = typer.Option(False, "-i", "--no-images", help="Don't download images / 不下载图片"),
-    headless: bool = typer.Option(DEFAULT_BROWSER_HEADLESS, "-b", "--headless", help="Headless mode / 无头模式"),
+    headless: Optional[bool] = typer.Option(None, "-b", "--headless/--no-headless", help="Headless mode / 无头模式"),
 ) -> None:
     """
     Incrementally monitor and scrape new content from Zhihu collections.
@@ -899,11 +950,15 @@ def monitor(
         zhihu monitor 78170682 -o ./data         # Specify output directory / 指定输出目录
         zhihu monitor 78170682 -c 8             # Increase concurrency / 提高并发数
     """
+    log = _get_log()
+    output_dir = _resolve_output_dir(output)
+    headless_mode = _resolve_headless(headless)
+
     log.info("monitor_started", collection_id=collection_id)
     rprint(f"[bold]📡 Starting incremental monitoring / 启动增量监控: Collection / 收藏夹 {collection_id}[/bold]")
 
     from core.monitor import CollectionMonitor
-    m = CollectionMonitor(data_dir=str(output))
+    m = CollectionMonitor(data_dir=str(output_dir))
 
     try:
         new_items, new_last_id = m.get_new_items(collection_id)
@@ -922,10 +977,10 @@ def monitor(
 
     results = asyncio.run(_batch_concurrent(
         urls=urls,
-        output_dir=output,
+        output_dir=output_dir,
         concurrency=max_concurrency,
         download_images=not no_images,
-        headless=headless,
+        headless=headless_mode,
         collection_id=collection_id
     ))
 
@@ -945,7 +1000,7 @@ def monitor(
 def query_db(
     keyword: str = typer.Argument(..., help="Keyword to search / 要搜索的关键词"),
     limit: int = typer.Option(10, "-l", "--limit", help="Maximum number of results / 最大显示结果数量"),
-    data_dir: str = typer.Option(str(DEFAULT_OUTPUT_DIR), "-d", "--data-dir", help="Data directory / 数据目录"),
+    data_dir: Optional[str] = typer.Option(None, "-d", "--data-dir", help="Data directory / 数据目录"),
 ) -> None:
     """
     Search scraped Zhihu content in local SQLite database.
@@ -960,10 +1015,11 @@ def query_db(
         zhihu query "Transformer" -l 20     # Limit results / 限制结果数量
         zhihu query "LLM" -d ./custom_data  # Specify data directory / 指定数据目录
     """
+    resolved_data_dir = data_dir or str(_get_default_output_dir())
     from core.db import ZhihuDatabase
     from rich.table import Table
 
-    db_path = Path(data_dir) / "zhihu.db"
+    db_path = Path(resolved_data_dir) / "zhihu.db"
     if not db_path.exists():
         rprint("[red]❌ Zhihu database not found. Please run fetch or monitor first / 未找到知乎数据库，请先执行抓取任务 (fetch 或 monitor)。[/red]")
         raise SystemExit(1)
@@ -1016,6 +1072,7 @@ def interactive() -> None:
     Example:
         zhihu interactive
     """
+    log = _get_log()
     from cli.interactive import run_interactive
     try:
         asyncio.run(run_interactive())
@@ -1043,6 +1100,7 @@ def config_cmd(
         raise SystemExit(0)
 
     if show:
+        cfg = _get_cfg()
         rprint(Panel(
             Text(f"""
 [b]配置路径 (Config Path):[/] {Path(__file__).parent.parent / "config.yaml"}
@@ -1070,6 +1128,7 @@ def check() -> None:
     2. configured cookie file valid
     3. Playwright browser available
     """
+    cfg = _get_cfg()
     rprint("🔍 System check... / 系统检查...\n")
 
     # Check config file / 检查配置文件
@@ -1101,6 +1160,7 @@ async def _check_playwright() -> None:
     from playwright.async_api import async_playwright
     from core.browser_fallback import _launch_browser_with_fallback
 
+    cfg = _get_cfg()
     async with async_playwright() as pw:
         browser = await _launch_browser_with_fallback(
             pw,
@@ -1148,6 +1208,7 @@ async def _batch_concurrent(
     """
     semaphore = asyncio.Semaphore(concurrency)
     humanizer = get_humanizer()
+    log = _get_log()
 
     async def fetch_one(url: str, index: int) -> Dict[str, Any]:
         async with semaphore:
@@ -1303,6 +1364,7 @@ async def _save_items(
     """
     from datetime import datetime
 
+    cfg = _get_cfg()
     content_root.mkdir(parents=True, exist_ok=True)
 
     image_cfg = cfg.crawler.images

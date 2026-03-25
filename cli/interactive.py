@@ -26,17 +26,11 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskPr
 from rich import box
 from rich.live import Live
 
-from core.config import get_config, get_logger, resolve_project_path
+from core.config import get_config, resolve_project_path
 from core.cookie_manager import has_real_cookie_values
 from core.utils import extract_urls
 from core.scraper import ZhihuDownloader
 from cli.app import _fetch_and_save
-
-# ==========================================
-# Initialize Configuration and Logging (初始化配置和日志)
-# ==========================================
-cfg = get_config()
-log = get_logger()
 
 # ==========================================
 # Core Color Theme System (Theme Tokens) / 核心配色系统
@@ -63,7 +57,14 @@ q_style = Style([
     ('instruction', f'fg:{THEME["dim"]}'),
 ])
 
-DATA_DIR = resolve_project_path(cfg.output.directory)
+def _get_cfg():
+    """Load runtime config lazily / 延迟加载运行时配置"""
+    return get_config()
+
+
+def _get_data_dir():
+    """Resolve data dir lazily / 延迟解析数据目录"""
+    return resolve_project_path(_get_cfg().output.directory)
 
 
 async def _async_input(prompt_text: str) -> str:
@@ -87,6 +88,7 @@ def _print_banner():
     Print Dashboard Header in Americana Fusion style
     打印符合 Americana Fusion 风格的 Dashboard Header
     """
+    cfg = _get_cfg()
     top_deco = Text("⚡ MODULE: DATA_EXTRACTION_UNIT ⚡", style=f"bold {THEME['accent']}")
     zhihu_header = Text("█ 知 乎 █", style=f"bold {THEME['secondary']}")
     scraper_art = r"""
@@ -171,6 +173,8 @@ async def run_interactive():
     Main interactive loop
     交互式主入口
     """
+    cfg = _get_cfg()
+    data_dir = _get_data_dir()
     _print_banner()
 
     while True:
@@ -211,7 +215,7 @@ async def run_interactive():
                     # Call core pipeline with database storage / 调用带有数据库存储的底层核心管道
                     await _fetch_and_save(
                         url=url,
-                        output_dir=DATA_DIR,
+                        output_dir=data_dir,
                         scrape_config=scrape_config,
                         download_images=True,
                         headless=cfg.zhihu.browser.headless

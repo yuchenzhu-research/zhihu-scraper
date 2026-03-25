@@ -181,6 +181,30 @@ class CookieManager:
         return len(self.sessions) > 0
 
 
-# Global singleton instance (used in scenarios not involving threaded concurrency isolation)
-# 全局单例实例化 (通常用在不涉及多线程并发隔离的场景)
-cookie_manager = CookieManager()
+_cookie_manager: Optional[CookieManager] = None
+
+
+def get_cookie_manager() -> CookieManager:
+    """
+    Lazily initialize the cookie manager.
+    延迟初始化 Cookie 管理器。
+    """
+    global _cookie_manager
+    if _cookie_manager is None:
+        _cookie_manager = CookieManager()
+    return _cookie_manager
+
+
+class _LazyCookieManagerProxy:
+    """
+    Proxy access to the lazily initialized CookieManager.
+    代理转发到延迟初始化的 CookieManager。
+    """
+
+    def __getattr__(self, item):
+        return getattr(get_cookie_manager(), item)
+
+
+# Global lazy proxy (used in scenarios not involving threaded concurrency isolation)
+# 全局延迟代理实例 (通常用在不涉及多线程并发隔离的场景)
+cookie_manager = _LazyCookieManagerProxy()
