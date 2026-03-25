@@ -3,12 +3,12 @@
 这份文档定义两个问题：
 
 1. 哪些目录属于正式项目结构，应该长期维护
-2. 哪些目录只属于本地运行、调试、参考资料，不应作为仓库能力的一部分
+2. 哪些目录只属于本地运行、调试，不应作为仓库能力的一部分
 
 This document defines two things:
 
 1. which directories are part of the maintained project layout
-2. which directories are local-only runtime, debug, or reference areas and should stay outside the product boundary
+2. which directories are local-only runtime or debug areas and should stay outside the product boundary
 
 ## Official Layout / 正式目录
 
@@ -50,7 +50,6 @@ This document defines two things:
 - `data/zhihu.db`
 - `data/.monitor_state.json`
 - `MediaCrawler/`
-- `references/`
 
 历史兼容路径仍可存在，但不再推荐作为默认布局：
 
@@ -95,10 +94,13 @@ This document defines two things:
 
 ## Cleanup Decisions / 本轮清理决策
 
-- `references/skillsmp/` 不再作为正式仓库内容保留
-- `references/` 整体视为本地研究/参考区
 - `data/README.md` 与 `examples/README.md` 保留目录职责说明，不再重复仓库边界长说明
 - Cookie、日志等敏感/本地状态默认迁移到 `.local/`
 - 历史上的 `cookies.json` / `cookie_pool/` 暂时保留兼容，但不再作为文档主路径
+
+## References / 参考资料
+
+- `references/` 保持原有参考资料用途，不纳入本轮运行时目录整理
+- 是否重构、精简或重新分类 `references/`，后续需要单独决策，不在这份边界文档里强行归类
 
 后续如果要重构 Cookie 存储、运行时目录或配置层，应以这份边界文档为准，而不是继续把本地实验目录混进正式仓库。
