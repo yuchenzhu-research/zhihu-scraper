@@ -19,7 +19,7 @@
 <p>
   <strong>Status:</strong> active ·
   <strong>Install:</strong> <code>./install.sh</code> ·
-  <strong>Manual:</strong> <code>./zhihu manual</code>
+  <strong>Manual:</strong> <code>zhihu manual</code>
 </p>
 
 <p>
@@ -113,7 +113,7 @@ cd zhihu-scraper
 安装完成后，推荐直接从首页菜单进入：
 
 ```bash
-./zhihu
+zhihu
 ```
 
 一次性最短路径：
@@ -123,7 +123,7 @@ git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 ./install.sh
 # 然后编辑 .local/cookies.json 填入你自己的 z_c0 / d_c0
-./zhihu
+zhihu
 ```
 
 ### 3. 配置 Cookie
@@ -144,7 +144,7 @@ cp cookies.example.json .local/cookies.json
 最简单的一次抓取：
 
 ```bash
-./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
 如果你更喜欢显式调用 Python：
@@ -158,7 +158,7 @@ cp cookies.example.json .local/cookies.json
 README 只保留首页级说明。完整命令说明统一在内置手册中：
 
 ```bash
-./zhihu manual
+zhihu manual
 ```
 
 ## 核心特性 Features
@@ -185,7 +185,7 @@ README 只保留首页级说明。完整命令说明统一在内置手册中：
   支持监控新内容并保留进度指针。
 
 - 🎛️ **双入口**
-  既可以用 `./zhihu`，也可以用 `python3 cli/app.py`。
+  首选 `zhihu`，仓库内也可以继续用 `./zhihu` 或 `python3 cli/app.py`。
 
 ## 支持范围 Coverage
 
@@ -204,18 +204,19 @@ README 只保留首页级说明。完整命令说明统一在内置手册中：
 
 | 你想做什么 | 推荐命令 |
 |---|---|
-| 第一次进入项目 | `./zhihu` |
-| 抓一条链接 | `./zhihu fetch "<url>"` |
-| 抓作者主页 | `./zhihu creator "<people url>"` |
-| 批量抓取 | `./zhihu batch urls.txt` |
-| 环境检查 | `./zhihu check` |
-| 查看完整说明书 | `./zhihu manual` |
+| 第一次进入项目 | `zhihu` |
+| 抓一条链接 | `zhihu fetch "<url>"` |
+| 抓作者主页 | `zhihu creator "<people url>"` |
+| 批量抓取 | `zhihu batch urls.txt` |
+| 环境检查 | `zhihu check` |
+| 查看完整说明书 | `zhihu manual` |
 
 ## 使用方式 Usage
 
-项目提供两条等价入口：
+项目默认入口是全局命令 `zhihu`。仓库内也保留兜底入口：
 
 ```bash
+zhihu <command> ...
 ./zhihu <command> ...
 python3 cli/app.py <command> ...
 ```
@@ -235,7 +236,7 @@ python3 cli/app.py <command> ...
 完整参数和示例请看：
 
 ```bash
-./zhihu manual
+zhihu manual
 ```
 
 ## 示例输出 Examples
@@ -314,7 +315,7 @@ cookies.example.json
 ```bash
 export HTTP_PROXY=http://127.0.0.1:7890
 export HTTPS_PROXY=http://127.0.0.1:7890
-./zhihu check
+zhihu check
 ```
 
 ### 安全提示
@@ -328,7 +329,7 @@ export HTTPS_PROXY=http://127.0.0.1:7890
 
 ```mermaid
 flowchart LR
-    A["CLI / Menu<br/>./zhihu · manual · commands"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
+    A["CLI / Menu<br/>zhihu · ./zhihu · manual"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
     B --> C["Protocol Access<br/>ZhihuAPIClient + CookieManager"]
     B -. article blocked .-> D["Browser Fallback<br/>Playwright"]
     B --> E["Persist Layer<br/>Markdown + images + SQLite"]
@@ -400,7 +401,7 @@ flowchart LR
 详细命令说明统一收口到：
 
 ```bash
-./zhihu manual
+zhihu manual
 ```
 
 ### 首页菜单怎么操作？

@@ -513,6 +513,7 @@ NAME
   zhihu - 面向本地归档的知乎提取工具（Markdown + SQLite）
 
 SYNOPSIS
+  zhihu <command> [options]
   ./zhihu <command> [options]
   python3 cli/app.py <command> [options]
 
@@ -520,7 +521,8 @@ INSTALL MODEL
   - `pyproject.toml` is the dependency source of truth
   - `./install.sh` is the official one-shot installer
   - `./install.sh --recreate` rebuilds `.venv` from scratch
-  - `./zhihu` prefers the local `.venv` automatically when available
+  - `zhihu` is the preferred global entrypoint after installation
+  - `./zhihu` remains the repository-local fallback and prefers the local `.venv`
 
 PAGER
   Exit manual / 退出说明书:
@@ -529,6 +531,7 @@ PAGER
 
 HOME MENU
   Open / 打开:
+  - `zhihu`
   - `./zhihu`
   - `python3 cli/app.py`
 
@@ -575,9 +578,9 @@ COMMAND REFERENCE
   - `-n > 50`: higher anti-bot risk warning
 
   Examples:
-  - `./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"`
-  - `./zhihu fetch "text ... https://www.zhihu.com/question/28696373 ..."`
-  - `./zhihu fetch "https://www.zhihu.com/question/28696373" -n 10`
+  - `zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"`
+  - `zhihu fetch "text ... https://www.zhihu.com/question/28696373 ..."`
+  - `zhihu fetch "https://www.zhihu.com/question/28696373" -n 10`
 
 2) creator
   Purpose:
@@ -600,8 +603,8 @@ COMMAND REFERENCE
   - output base = `{default_output_dir}`
 
   Examples:
-  - `./zhihu creator "https://www.zhihu.com/people/iterator"`
-  - `./zhihu creator iterator --answers 20 --articles 10`
+  - `zhihu creator "https://www.zhihu.com/people/iterator"`
+  - `zhihu creator iterator --answers 20 --articles 10`
 
 3) batch
   Purpose:
@@ -615,7 +618,7 @@ COMMAND REFERENCE
   - `-b, --headless`
 
   Example:
-  - `./zhihu batch urls.txt -c 4`
+  - `zhihu batch urls.txt -c 4`
 
 4) monitor
   Purpose:
@@ -634,7 +637,7 @@ COMMAND REFERENCE
   - avoids skipping failed items in next run
 
   Example:
-  - `./zhihu monitor 78170682 -c 4`
+  - `zhihu monitor 78170682 -c 4`
 
 5) query
   Purpose:
@@ -646,7 +649,7 @@ COMMAND REFERENCE
   - `-d, --data-dir PATH` where `zhihu.db` is located
 
   Example:
-  - `./zhihu query "Transformer" -l 20`
+  - `zhihu query "Transformer" -l 20`
 
 6) interactive
   Purpose:
@@ -667,8 +670,8 @@ COMMAND REFERENCE
   - `--path` show config file path
 
   Examples:
-  - `./zhihu config --show`
-  - `./zhihu config --path`
+  - `zhihu config --show`
+  - `zhihu config --path`
 
 8) check
   Purpose:
@@ -680,7 +683,7 @@ COMMAND REFERENCE
   - Playwright availability under current browser config
 
   Example:
-  - `./zhihu check`
+  - `zhihu check`
 
 9) manual
   Purpose:
@@ -732,9 +735,9 @@ CURRENT LIMITS
 QUICK START
   - `./install.sh`
   - `./install.sh --recreate`  # when the local environment is broken
-  - `./zhihu`                  # open the home menu / 打开首页菜单
-  - `./zhihu check`
-  - `./zhihu manual`
+  - `zhihu`                    # open the home menu / 打开首页菜单
+  - `zhihu check`
+  - `zhihu manual`
 """.strip()
 
     with console.pager(styles=True):

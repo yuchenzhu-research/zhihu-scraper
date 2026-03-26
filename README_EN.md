@@ -19,7 +19,7 @@
 <p>
   <strong>Status:</strong> active ·
   <strong>Install:</strong> <code>./install.sh</code> ·
-  <strong>Manual:</strong> <code>./zhihu manual</code>
+  <strong>Manual:</strong> <code>zhihu manual</code>
 </p>
 
 <p>
@@ -113,7 +113,7 @@ If your local environment is broken or messy, rebuild it:
 After installation, start from the home menu:
 
 ```bash
-./zhihu
+zhihu
 ```
 
 Shortest end-to-end path:
@@ -123,7 +123,7 @@ git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 ./install.sh
 # then edit .local/cookies.json with your own z_c0 / d_c0
-./zhihu
+zhihu
 ```
 
 ### 3. Configure Cookies
@@ -144,7 +144,7 @@ Then fill in your own `z_c0` and `d_c0`.
 The simplest fetch:
 
 ```bash
-./zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
 If you prefer explicit Python entrypoints:
@@ -158,7 +158,7 @@ If you prefer explicit Python entrypoints:
 This README is intentionally homepage-level. Detailed command help lives in:
 
 ```bash
-./zhihu manual
+zhihu manual
 ```
 
 ## Features
@@ -185,7 +185,7 @@ This README is intentionally homepage-level. Detailed command help lives in:
   Monitors new items while keeping a stable progress pointer.
 
 - 🎛️ **Two entry styles**
-  Both `./zhihu` and `python3 cli/app.py` are supported.
+  Prefer `zhihu`; `./zhihu` and `python3 cli/app.py` remain available as fallback entry styles.
 
 ## Coverage
 
@@ -204,18 +204,19 @@ This README is intentionally homepage-level. Detailed command help lives in:
 
 | What you want to do | Recommended command |
 |---|---|
-| Start from the home menu | `./zhihu` |
-| Fetch one link | `./zhihu fetch "<url>"` |
-| Fetch a creator profile | `./zhihu creator "<people url>"` |
-| Run batch capture | `./zhihu batch urls.txt` |
-| Check your environment | `./zhihu check` |
-| Open the full manual | `./zhihu manual` |
+| Start from the home menu | `zhihu` |
+| Fetch one link | `zhihu fetch "<url>"` |
+| Fetch a creator profile | `zhihu creator "<people url>"` |
+| Run batch capture | `zhihu batch urls.txt` |
+| Check your environment | `zhihu check` |
+| Open the full manual | `zhihu manual` |
 
 ## Usage
 
-The project provides two equivalent entry styles:
+The default entrypoint is the global `zhihu` command. Repository-local fallbacks are still available:
 
 ```bash
+zhihu <command> ...
 ./zhihu <command> ...
 python3 cli/app.py <command> ...
 ```
@@ -235,7 +236,7 @@ Common commands:
 Full arguments and examples are centralized in:
 
 ```bash
-./zhihu manual
+zhihu manual
 ```
 
 ## Examples
@@ -314,7 +315,7 @@ If your environment requires a proxy, the reliable current path is to configure 
 ```bash
 export HTTP_PROXY=http://127.0.0.1:7890
 export HTTPS_PROXY=http://127.0.0.1:7890
-./zhihu check
+zhihu check
 ```
 
 ### Security Notes
@@ -328,7 +329,7 @@ export HTTPS_PROXY=http://127.0.0.1:7890
 
 ```mermaid
 flowchart LR
-    A["CLI / Menu<br/>./zhihu · manual · commands"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
+    A["CLI / Menu<br/>zhihu · ./zhihu · manual"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
     B --> C["Protocol Access<br/>ZhihuAPIClient + CookieManager"]
     B -. article blocked .-> D["Browser Fallback<br/>Playwright"]
     B --> E["Persist Layer<br/>Markdown + images + SQLite"]
@@ -400,7 +401,7 @@ Because the homepage should do three things well:
 Detailed command help is intentionally centralized in:
 
 ```bash
-./zhihu manual
+zhihu manual
 ```
 
 ### How do I operate the home menu?

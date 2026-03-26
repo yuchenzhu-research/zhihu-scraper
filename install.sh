@@ -26,6 +26,50 @@ usage() {
     echo "  ./install.sh --recreate # 删除并重建 .venv 后重新安装"
 }
 
+detect_shell_rc() {
+    local shell_name
+    shell_name="$(basename "${SHELL:-}")"
+    case "$shell_name" in
+        zsh)
+            echo "$HOME/.zshrc"
+            ;;
+        bash)
+            echo "$HOME/.bashrc"
+            ;;
+        *)
+            echo "$HOME/.profile"
+            ;;
+    esac
+}
+
+install_global_launcher() {
+    local bin_dir="$HOME/.local/bin"
+    local launcher_path="$bin_dir/zhihu"
+    local rc_file
+    rc_file="$(detect_shell_rc)"
+
+    mkdir -p "$bin_dir"
+    ln -sf "$PROJECT_DIR/zhihu" "$launcher_path"
+    echo "   ✅ 已创建全局入口: $launcher_path"
+
+    if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+        touch "$rc_file"
+        if ! grep -Fqs 'export PATH="$HOME/.local/bin:$PATH"' "$rc_file"; then
+            {
+                echo ""
+                echo "# zhihu-scraper"
+                echo 'export PATH="$HOME/.local/bin:$PATH"'
+            } >> "$rc_file"
+            echo "   ✅ 已写入 PATH 到: $rc_file"
+            echo "   ℹ️  重新打开终端或执行: source $rc_file"
+        else
+            echo "   ℹ️  PATH 配置已存在于: $rc_file"
+        fi
+    else
+        echo "   ✅ 当前 PATH 已包含 $bin_dir"
+    fi
+}
+
 RECREATE_VENV=false
 for arg in "$@"; do
     case "$arg" in
@@ -136,15 +180,20 @@ echo "📌 运行环境检查..."
 "$VENV_PYTHON" cli/app.py check || true
 
 echo ""
+echo "📌 安装全局命令入口..."
+install_global_launcher
+
+echo ""
 echo "========================================"
 echo -e "  ${GREEN}✅ 安装完成${NC}"
 echo "========================================"
 echo ""
 echo "推荐直接运行:"
 echo ""
-echo "  ./zhihu manual"
-echo "  ./zhihu check"
-echo "  ./zhihu interactive"
+echo "  zhihu"
+echo "  zhihu manual"
+echo "  zhihu check"
+echo "  zhihu interactive"
 echo ""
 echo "如果你习惯显式使用 Python:"
 echo ""
@@ -155,7 +204,8 @@ echo "说明:"
 echo "  - 依赖由 pyproject.toml 统一声明"
 echo "  - install.sh 是官方一键安装入口"
 echo "  - 如需一键重建环境: ./install.sh --recreate"
-echo "  - 根目录 ./zhihu 会优先使用本地 .venv"
+echo "  - 推荐直接使用全局命令 zhihu"
+echo "  - 根目录 ./zhihu 仍可作为仓库内兜底入口"
 echo "  - 本地凭据、日志等运行文件建议统一放在 .local/"
 echo ""
 echo "========================================"

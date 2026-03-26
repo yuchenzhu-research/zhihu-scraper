@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  SOURCE_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE_TARGET="$(readlink "$SOURCE")"
+  if [[ "$SOURCE_TARGET" != /* ]]; then
+    SOURCE="$SOURCE_DIR/$SOURCE_TARGET"
+  else
+    SOURCE="$SOURCE_TARGET"
+  fi
+done
+
+PROJECT_ROOT="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
 APP_ENTRY="$PROJECT_ROOT/cli/app.py"
 
