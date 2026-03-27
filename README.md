@@ -404,6 +404,32 @@ flowchart LR
 zhihu manual
 ```
 
+### 为什么我输入 `zhihu` 没反应，或者执行成了别的东西？
+
+先执行：
+
+```bash
+type zhihu
+which zhihu
+zhihu --help
+```
+
+如果 `type zhihu` 显示它是 shell function、alias，或者指向了 Conda 激活函数，那就是你的 shell 配置把真正的 `zhihu` 命令覆盖了。
+
+这时要做的不是改项目，而是改你自己的 shell 配置，比如把：
+
+```bash
+zhihu () {
+    conda activate zhihu
+}
+```
+
+重命名成别的名字，例如 `zhihu_env`，然后重新执行：
+
+```bash
+source ~/.zshrc
+```
+
 ### 首页菜单怎么操作？
 
 - 方向键移动

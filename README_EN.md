@@ -404,6 +404,32 @@ Detailed command help is intentionally centralized in:
 zhihu manual
 ```
 
+### Why does typing `zhihu` do nothing or run the wrong thing?
+
+Run:
+
+```bash
+type zhihu
+which zhihu
+zhihu --help
+```
+
+If `type zhihu` says it is a shell function or alias, or points to a Conda activation helper, your shell config is shadowing the real `zhihu` command.
+
+In that case, fix your shell config instead of the project. For example, rename:
+
+```bash
+zhihu () {
+    conda activate zhihu
+}
+```
+
+to something like `zhihu_env`, then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
 ### How do I operate the home menu?
 
 - arrow keys to move
