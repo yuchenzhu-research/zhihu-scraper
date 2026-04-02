@@ -12,6 +12,7 @@ interactive.py — 交互式归档工作台
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from io import StringIO
 
 import questionary
 from questionary import Style
@@ -19,6 +20,7 @@ from rich.columns import Columns
 from rich.console import Console, Group
 from rich.panel import Panel
 from rich.align import Align
+from rich.padding import Padding
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskProgressColumn
 from rich import box
@@ -167,11 +169,35 @@ def _print_banner():
         width=frame_width,
     )
 
+    workspace = Group(
+        Align.center(header_panel),
+        Align.center(status_renderable),
+        Align.center(hint_panel),
+    )
+    workspace_height = _measure_renderable_height(workspace)
+    top_padding = max(0, (console.size.height - workspace_height) // 2 - 2)
+
     console.clear()
-    console.print(Align.center(header_panel))
-    console.print(Align.center(status_renderable))
-    console.print(Align.center(hint_panel))
+    console.print(Padding(workspace, (top_padding, 0, 0, 0)))
     console.print()
+
+
+def _measure_renderable_height(renderable) -> int:
+    """
+    Measure rendered line height for vertical centering.
+    计算渲染后的行数，用于垂直居中。
+    """
+    buffer = StringIO()
+    probe = Console(
+        width=console.size.width,
+        file=buffer,
+        force_terminal=False,
+        color_system=None,
+        legacy_windows=False,
+    )
+    probe.print(renderable)
+    lines = buffer.getvalue().rstrip("\n").splitlines()
+    return len(lines)
 
 
 async def parse_question_options(url: str) -> dict:
