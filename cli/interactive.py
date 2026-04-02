@@ -1,18 +1,16 @@
 """
-interactive.py - Interactive Panel Module (Americana Fusion Style)
+interactive.py - Interactive Archive Workspace
 
-Inherits the brilliant terminal Dashboard from legacy main.py and integrates with v3.0 database engine.
+Provides a guided terminal workspace for capturing Zhihu links into local archives.
 
 ================================================================================
-interactive.py — 交互式面板模块 (Americana Fusion 风格)
+interactive.py — 交互式归档工作台
 
-继承旧版 main.py 的绚丽终端 Dashboard，并对接 v3.0 的 db 引擎。
+提供一个引导式终端界面，用于把知乎链接保存到本地归档。
 ================================================================================
 """
 
 import asyncio
-import time
-from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
 import questionary
@@ -33,15 +31,17 @@ from core.scraper import ZhihuDownloader
 from cli.app import _fetch_and_save
 
 # ==========================================
-# Core Color Theme System (Theme Tokens) / 核心配色系统
+# Minimal Theme Tokens / 极简主题变量
 # ==========================================
 THEME = {
-    "accent": "#00C8FF",    # Neon Blue / 霓虹蓝
-    "secondary": "#FF1493", # Bright Pink / 亮桃红
-    "warn": "#EBFF3B",      # Bright Yellow / 亮黄
-    "text": "#FFFFFF",      # Pure White / 纯白
-    "dim": "#666666",       # Dark Gray / 暗灰
-    "success": "#00FF55"    # Fluorescent Green / 荧光绿
+    "accent": "#0A84FF",
+    "text": "#F5F5F7",
+    "muted": "#8E8E93",
+    "line": "#3A3A3C",
+    "panel": "#1C1C1E",
+    "success": "#30D158",
+    "warn": "#FFD60A",
+    "danger": "#FF453A",
 }
 
 console = Console()
@@ -49,12 +49,12 @@ executor = ThreadPoolExecutor(max_workers=1)
 
 q_style = Style([
     ('question', f'fg:{THEME["accent"]} bold'),
-    ('answer', f'fg:{THEME["success"]}'),
-    ('pointer', f'fg:{THEME["secondary"]} bold'),
-    ('highlighted', f'fg:{THEME["accent"]} bold'),
+    ('answer', f'fg:{THEME["text"]}'),
+    ('pointer', f'fg:{THEME["accent"]} bold'),
+    ('highlighted', f'fg:{THEME["text"]} bg:{THEME["accent"]} bold'),
     ('selected', f'fg:{THEME["success"]}'),
-    ('separator', f'fg:{THEME["dim"]}'),
-    ('instruction', f'fg:{THEME["dim"]}'),
+    ('separator', f'fg:{THEME["line"]}'),
+    ('instruction', f'fg:{THEME["muted"]}'),
 ])
 
 def _get_cfg():
@@ -73,8 +73,8 @@ async def _async_input(prompt_text: str) -> str:
     封装 rich 的 console.input 为异步模式
     """
     full_prompt = Text.assemble(
-        (f" ❯ ", f"bold {THEME['secondary']}"),
-        (prompt_text, f"bold {THEME['accent']}")
+        ("• ", f"bold {THEME['accent']}"),
+        (prompt_text, f"bold {THEME['text']}")
     )
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, console.input, full_prompt)
@@ -83,54 +83,74 @@ async def _async_input(prompt_text: str) -> str:
 # Note: extract_urls is now imported from core.utils to avoid code duplication
 
 
+def _build_status_card(label: str, value: str, tone: str) -> Panel:
+    """
+    Build a compact status card.
+    构建紧凑状态卡片。
+    """
+    title = Text(label, style=f"bold {THEME['muted']}")
+    body = Text(value, style=f"bold {THEME[tone]}")
+    return Panel(
+        Align.center(Group(title, body)),
+        box=box.ROUNDED,
+        border_style=THEME["line"],
+        padding=(0, 2),
+    )
+
+
 def _print_banner():
     """
-    Print Dashboard Header in Americana Fusion style
-    打印符合 Americana Fusion 风格的 Dashboard Header
+    Render the interactive workspace header.
+    渲染交互式工作台头部。
     """
     cfg = _get_cfg()
-    top_deco = Text("⚡ MODULE: DATA_EXTRACTION_UNIT ⚡", style=f"bold {THEME['accent']}")
-    zhihu_header = Text("█ 知 乎 █", style=f"bold {THEME['secondary']}")
-    scraper_art = r"""
-   _____ __________  ___    ____  __________
-  / ___// ____/ __ \/   |  / __ \/ ____/ __ \
-  \__ \/ /   / /_/ / /| | / /_/ / __/ / /_/ /
- ___/ / /___/ _, _/ ___ |/ ____/ /___/ _, _/
-/____/\____/_/ |_/_/  |_/_/   /_____/_/ |_|
-""".strip("\n")
+    cookie_status = (
+        ("已就绪", "success")
+        if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
+        else ("未检测到", "warn")
+    )
+    browser_status = ("无头", "muted") if cfg.zhihu.browser.headless else ("显示窗口", "accent")
 
-    bot_deco = Text("INTELLIGENT CRAWLER ENGINE (v3.0 DB-LINKED)", style=f"{THEME['dim']} italic")
-
-    header_content = Group(
-        Align.center(top_deco),
-        Align.center(zhihu_header),
-        Align.center(Text(scraper_art, style=f"bold {THEME['accent']}")),
-        Align.center(bot_deco)
+    eyebrow = Text("ZHIHU ARCHIVE", style=f"bold {THEME['accent']}")
+    title = Text("知乎归档台", style=f"bold {THEME['text']}")
+    subtitle = Text(
+        "把回答、问题与专栏保存为 Markdown 和本地索引",
+        style=THEME["muted"],
     )
 
     header_panel = Panel(
-        header_content, border_style=THEME["accent"], box=box.ROUNDED, padding=(1, 2), width=70
+        Align.center(Group(eyebrow, title, subtitle)),
+        border_style=THEME["line"],
+        box=box.ROUNDED,
+        padding=(1, 3),
+        width=76,
     )
 
-    cookie_status = (
-        f"[{THEME['success']}]VALID[/]"
-        if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
-        else f"[{THEME['warn']}]MISSING[/]"
+    status_grid = Table.grid(expand=False, padding=(0, 1))
+    status_grid.add_row(
+        _build_status_card("Cookie", cookie_status[0], cookie_status[1]),
+        _build_status_card("存储", "Markdown + SQLite", "success"),
+        _build_status_card("浏览器", browser_status[0], browser_status[1]),
     )
 
-    status_line = Text.assemble(
-        " 🔑 ", ("SEAL: ", THEME["accent"]), (cookie_status, ""), "  |  ",
-        " 📂 ", ("ARCHIVE: ", THEME["accent"]), (f"[{THEME['success']}]SQLite + FS[/]", ""), "  |  ",
-        " 🕸️ ", ("CORE: ", THEME["accent"]), (f"[{THEME['secondary']}]API PROTOCOL[/]", "")
+    hint_panel = Panel(
+        Align.center(
+            Text(
+                "粘贴知乎链接并回车开始归档。输入 q 退出。",
+                style=THEME["muted"],
+            )
+        ),
+        border_style=THEME["line"],
+        box=box.ROUNDED,
+        padding=(0, 2),
+        width=76,
     )
 
-    status_panel = Panel(
-        Align.center(status_line), border_style=THEME["dim"], box=box.HORIZONTALS, padding=(0, 1), width=70
-    )
-
+    console.clear()
     console.print(Align.center(header_panel))
-    console.print(Align.center(status_panel))
-    console.print("\n")
+    console.print(Align.center(status_grid))
+    console.print(Align.center(hint_panel))
+    console.print()
 
 
 async def parse_question_options(url: str) -> dict:
@@ -140,22 +160,27 @@ async def parse_question_options(url: str) -> dict:
     """
     downloader = ZhihuDownloader(url)
     if not downloader.has_valid_cookies():
-        console.print("[yellow]⚠️  No valid login info (z_c0) detected, forced guest mode (Top 3) / 未检测到有效登录信息 (z_c0)，强制使用游客模式 (Top 3)[/yellow]")
+        console.print(
+            f"[{THEME['warn']}]未检测到可用 Cookie，将使用游客模式，仅抓取前 3 条。[/]"
+        )
         return {"start": 0, "limit": 3}
 
     choice = await questionary.select(
-        "Please select scraping mode / 请选择抓取模式:",
-        choices=["1. Scrape by quantity (Top N) / 按数量抓取 (Top N)", "2. Return default (Top 3) / 返回默认 (Top 3)"],
+        "选择抓取方式:",
+        choices=[
+            "抓取指定数量（Top N）",
+            "使用默认数量（Top 3）",
+        ],
         style=q_style
     ).ask_async()
 
     if not choice:
         return {"start": 0, "limit": 3}
 
-    if choice.startswith("1"):
+    if choice.startswith("抓取指定数量"):
         limit = await questionary.text(
-            "Please enter scraping quantity / 请输入抓取数量:", default="20",
-            validate=lambda text: text.isdigit() and int(text) > 0 or "Please enter positive integer / 请输入正整数",
+            "请输入抓取数量:", default="20",
+            validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数",
             style=q_style
         ).ask_async()
         return {"start": 0, "limit": int(limit) if limit else 3}
@@ -177,11 +202,11 @@ async def run_interactive():
     _print_banner()
 
     while True:
-        answer = await _async_input("Please enter Zhihu link (or 'q' to exit) / 请输入知乎链接 (或 'q' 退出): ")
+        answer = await _async_input("输入知乎链接")
 
         if not answer or answer.strip().lower() == 'q':
-            console.print(f"[{THEME['dim']}]Shutting down... / 正在关闭...[/]")
-            time.sleep(0.3)
+            console.print(f"[{THEME['muted']}]已退出归档工作台。[/]")
+            await asyncio.sleep(0.2)
             break
 
         answer = answer.strip()
@@ -189,29 +214,28 @@ async def run_interactive():
 
         if not urls:
             if answer and answer.lower() != 'q':
-                console.print("[red]❌ No valid link recognized, please retry / 未识别到有效链接，请重试[/red]")
+                console.print(f"[{THEME['danger']}]未识别到有效知乎链接，请重新输入。[/]")
             continue
 
-        console.rule(f"[bold {THEME['accent']}]Processing {len(urls)} Task(s) / 正在处理 {len(urls)} 个任务[/]")
+        console.rule(f"[bold {THEME['accent']}]开始处理 {len(urls)} 个链接[/]")
 
         for url in urls:
             scrape_config = {}
             if "/question/" in url and "/answer/" not in url:
-                console.print(f"\n[{THEME['accent']}]⚙️  Question detected / 检测到问题:[/][dim] {url}[/]")
+                console.print(f"\n[{THEME['accent']}]检测到问题页[/] [{THEME['muted']}]{url}[/]")
                 scrape_config = await parse_question_options(url)
 
             try:
                 progress = Progress(
-                    SpinnerColumn(style=THEME["secondary"]),
-                    TextColumn("[bold white]{task.description}"),
+                    SpinnerColumn(style=THEME["accent"]),
+                    TextColumn(f"[bold {THEME['text']}]{{task.description}}"),
                     BarColumn(complete_style=THEME["accent"], finished_style=THEME["success"]),
-                    TaskProgressColumn(),
+                    TaskProgressColumn(text_format=f"[{THEME['muted']}]{{task.percentage:>3.0f}}%"),
                     expand=True
                 )
                 with Live(progress, console=console, refresh_per_second=10):
-                    task_id = progress.add_task("🚀 Extracting and Saving to Database... / 正在提取并保存到数据库...", total=None)
+                    task_id = progress.add_task("正在抓取内容并写入归档", total=None)
 
-                    # Call core pipeline with database storage / 调用带有数据库存储的底层核心管道
                     await _fetch_and_save(
                         url=url,
                         output_dir=data_dir,
@@ -220,9 +244,9 @@ async def run_interactive():
                         headless=cfg.zhihu.browser.headless
                     )
 
-                    progress.update(task_id, completed=1, total=1, description="✨ Task completed and DB synced / 任务完成并已同步数据库!")
+                    progress.update(task_id, completed=1, total=1, description="归档完成")
+                console.print(f"[{THEME['success']}]已保存到本地归档[/] [{THEME['muted']}]{url}[/]")
             except Exception as e:
-                console.print(f"[bold {THEME['secondary']}]✘ Critical Error / 严重错误:[/][red] {e}[/]")
+                console.print(f"[bold {THEME['danger']}]处理失败[/] [{THEME['text']}]{e}[/]")
 
-        # Give user a moment to read results / 给用户一小段停顿阅读结果
         print("\n")

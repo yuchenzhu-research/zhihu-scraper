@@ -1058,20 +1058,20 @@ def query_db(
 @app.command("interactive")
 def interactive() -> None:
     """
-    Launch interactive scraping mode with neon console panel.
-    启动带霓虹控制台面板的交互式抓取模式。
+    Launch the interactive archive workspace.
+    启动交互式归档工作台。
 
     Features:
-    - Color terminal interface
     - Guided URL input
+    - Clean terminal workspace
     - Real-time capture progress
-    - View capture history
+    - Save directly into local archive
 
     功能：
-    - 彩色终端界面
     - 引导式输入 URL
+    - 简洁终端工作台
     - 实时显示抓取进度
-    - 查看抓取历史记录
+    - 直接写入本地归档
 
     Example:
         zhihu interactive
