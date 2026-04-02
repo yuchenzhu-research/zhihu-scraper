@@ -1,5 +1,5 @@
 """
-state.py - View models and stage-3 draft parsing for the interactive TUI.
+state.py - View models for the interactive TUI.
 """
 
 from dataclasses import dataclass
@@ -54,6 +54,43 @@ class DraftSummary:
         """Whether a single question-page draft still needs a Top-N choice."""
         return self.pending_question_url is not None
 
+    @property
+    def ready_to_run(self) -> bool:
+        """Whether the current draft can be executed immediately."""
+        return bool(self.targets) and not self.requires_question_limit
+
+
+@dataclass(frozen=True)
+class ExecutionRecord:
+    """Result for one target inside a stage-4 execution round."""
+
+    target: DraftTarget
+    saved_count: int
+    markdown_paths: tuple[str, ...]
+    error: str | None = None
+    log_tail: tuple[str, ...] = ()
+
+    @property
+    def succeeded(self) -> bool:
+        """Whether this target finished without an execution error."""
+        return self.error is None
+
+
+@dataclass(frozen=True)
+class ExecutionReport:
+    """Aggregated result of one stage-4 execution round."""
+
+    output_dir: str
+    records: tuple[ExecutionRecord, ...]
+
+    @property
+    def success_count(self) -> int:
+        return sum(1 for record in self.records if record.succeeded)
+
+    @property
+    def failure_count(self) -> int:
+        return len(self.records) - self.success_count
+
 
 def build_home_snapshot() -> HomeSnapshot:
     """Build the current home snapshot from runtime configuration."""
@@ -74,8 +111,8 @@ def build_home_snapshot() -> HomeSnapshot:
             StatusItem("旧版回退", "--legacy", "muted"),
         ),
         notes=(
-            "现在可以直接在工作台内粘贴知乎链接，应用会先生成归档草案。",
-            "单个问题页链接会先询问抓取数量；多链接场景先保持轻量预览。",
+            "回车会先生成归档草案，按 Ctrl+R 执行当前草案。",
+            "问题页链接会先询问抓取数量；阶段 4 已接入单轮真实抓取。",
             "旧版 Rich / questionary 流程仍然可用：zhihu interactive --legacy",
         ),
         cookie_ready=cookie_ready,
@@ -88,7 +125,7 @@ def build_idle_summary() -> DraftSummary:
         title="等待输入链接",
         lines=(
             "支持回答、问题页、专栏链接，也支持从一段混合文本中自动提取。",
-            "这一阶段先完成输入流和问题页选项，不执行真实抓取。",
+            "回车先生成草案；确认后按 Ctrl+R 执行当前归档。",
         ),
         tone="muted",
     )
@@ -120,7 +157,7 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
             return DraftSummary(
                 title="检测到问题页链接",
                 lines=(
-                    f"{_describe_target(question_target)}",
+                    f"{describe_target(question_target)}",
                     "这不是单条回答。请先选择本轮要预览的回答数量。",
                     "可选 Top 3、Top 20 或自定义正整数。",
                 ),
@@ -145,13 +182,15 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
             DraftTarget(url=target.url, url_type=target.url_type, limit=3 if target.url_type == "question" else None)
             for target in targets
         )
-        preview_lines = tuple(_describe_target(target) for target in targets[:3])
+        preview_lines = tuple(describe_target(target) for target in targets[:3])
         more_count = len(targets) - len(preview_lines)
         extra_lines = (f"其余 {more_count} 个链接将在下一阶段接入真实任务队列。",) if more_count > 0 else ()
         summary_lines = (
             _summarize_type_counts(targets),
-            f"检测到 {len(question_targets)} 个问题页，阶段 3 先统一按 Top 3 预览。",
-        ) + preview_lines + extra_lines
+            "检测到问题页时，当前阶段先按每个问题 Top 3 执行。",
+        ) + preview_lines + extra_lines + (
+            "确认后按 Ctrl+R 执行当前草案。",
+        )
         return DraftSummary(
             title="已暂存多链接草案",
             lines=summary_lines,
@@ -159,15 +198,15 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
             targets=targets,
         )
 
-    preview_lines = tuple(_describe_target(target) for target in targets[:3])
+    preview_lines = tuple(describe_target(target) for target in targets[:3])
     more_count = len(targets) - len(preview_lines)
-    extra_lines = (f"其余 {more_count} 个链接已识别，真实执行会在阶段 4 接入。",) if more_count > 0 else ()
+    extra_lines = (f"其余 {more_count} 个链接已识别，本轮会按当前顺序顺次执行。",) if more_count > 0 else ()
     return DraftSummary(
         title="已识别归档草案",
         lines=(
             _summarize_type_counts(targets),
         ) + preview_lines + extra_lines + (
-            "当前阶段只验证输入流，不会真正写入归档目录。",
+            "确认后按 Ctrl+R 开始归档。",
         ),
         tone="success",
         targets=targets,
@@ -182,10 +221,10 @@ def apply_question_limit(draft: DraftSummary, limit: int, source: str) -> DraftS
     )
     question_target = next((target for target in updated_targets if target.url_type == "question"), None)
     lines = (
-        _describe_target(question_target) if question_target else f"问题页 · Top {limit}",
+        describe_target(question_target) if question_target else f"问题页 · Top {limit}",
         f"抓取数量已设置为 Top {limit}。",
         f"来源：{source}。",
-        "当前阶段只保留草案，真实抓取会在下一阶段接入。",
+        "确认后按 Ctrl+R 开始归档。",
     )
     return DraftSummary(
         title="问题页草案已更新",
@@ -214,8 +253,10 @@ def _summarize_type_counts(targets: tuple[DraftTarget, ...]) -> str:
     return f"识别到 {len(targets)} 个链接：{summary}。"
 
 
-def _describe_target(target: DraftTarget) -> str:
+def describe_target(target: DraftTarget | None) -> str:
     """Create a compact one-line description for a parsed target."""
+    if target is None:
+        return "未知目标"
     target_id = extract_id_from_url(target.url)
     type_name = {
         "answer": "回答",
@@ -226,3 +267,63 @@ def _describe_target(target: DraftTarget) -> str:
     if target.url_type == "question" and target.limit:
         return f"{base} · Top {target.limit}"
     return base
+
+
+def build_running_summary(
+    draft: DraftSummary,
+    *,
+    current_index: int,
+    total: int,
+    output_dir: str,
+    phase: str,
+) -> DraftSummary:
+    """Build the transient running-state summary shown during execution."""
+    current_target = draft.targets[current_index - 1] if 0 < current_index <= total else None
+    return DraftSummary(
+        title=f"正在归档 {current_index}/{total}",
+        lines=(
+            f"当前目标：{describe_target(current_target)}",
+            f"阶段：{phase}",
+            f"输出目录：{output_dir}",
+            "执行期间输入栏会暂时锁定，完成后自动恢复。",
+        ),
+        tone="accent",
+        targets=draft.targets,
+    )
+
+
+def build_execution_summary(report: ExecutionReport) -> DraftSummary:
+    """Build the final summary card from one execution report."""
+    success = report.success_count
+    failure = report.failure_count
+    if success and not failure:
+        title = "归档完成"
+        tone = "success"
+    elif success:
+        title = "归档部分完成"
+        tone = "warn"
+    else:
+        title = "归档失败"
+        tone = "danger"
+
+    lines = [
+        f"本轮执行完成：成功 {success} 个，失败 {failure} 个。",
+        f"输出目录：{report.output_dir}",
+    ]
+
+    for record in report.records[:3]:
+        if record.succeeded:
+            lines.append(f"{describe_target(record.target)} · 已保存 {record.saved_count} 条内容")
+        else:
+            lines.append(f"{describe_target(record.target)} · 失败：{record.error}")
+
+    remaining = len(report.records) - min(len(report.records), 3)
+    if remaining > 0:
+        lines.append(f"其余 {remaining} 个目标已完成，后续阶段会补更完整的结果面板。")
+
+    return DraftSummary(
+        title=title,
+        lines=tuple(lines),
+        tone=tone,
+        targets=tuple(record.target for record in report.records),
+    )

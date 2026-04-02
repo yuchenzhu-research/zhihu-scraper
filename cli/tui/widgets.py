@@ -62,7 +62,7 @@ class InputCard(Widget):
             placeholder="粘贴回答、问题页或专栏链接；支持从混合文本中自动提取",
             id="url-input",
         )
-        yield Static("回车生成归档草案；按 q 或 Esc 退出。", classes="section-caption")
+        yield Static("回车生成草案；Ctrl+R 执行归档；按 q 或 Esc 退出。", classes="section-caption")
 
 
 class SummaryCard(Widget):

@@ -1069,12 +1069,12 @@ def interactive(
 
     Features:
     - Full-screen terminal shell with in-app URL input
-    - Responsive centered layout and question-page limit modal
+    - Responsive centered layout, question-page limit modal, and single-run execution
     - Legacy fallback during the rebuild
 
     功能：
     - 内置链接输入栏的全屏终端界面
-    - 响应式居中布局与问题页数量弹层
+    - 响应式居中布局、问题页数量弹层与单轮真实执行
     - 重构期间保留旧版回退入口
 
     Example:
@@ -1284,7 +1284,7 @@ async def _fetch_and_save(
     download_images: bool = True,
     headless: bool = True,
     collection_id: Optional[str] = None,
-) -> None:
+) -> List[Dict[str, Any]]:
     """
     Execute scraping and save to local files and database.
     执行抓取并保存到本地文件和数据库。
@@ -1320,10 +1320,10 @@ async def _fetch_and_save(
 
     if not data:
         rprint("[yellow]⚠️  No content obtained / 未获取到内容[/yellow]")
-        return
+        return []
 
     items = data if isinstance(data, list) else [data]
-    await _save_items(
+    return await _save_items(
         items=items,
         content_root=resolve_entries_output_dir(output_dir),
         db_root=output_dir,
