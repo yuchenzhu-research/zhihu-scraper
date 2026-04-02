@@ -3,6 +3,7 @@ state.py - View models for the interactive TUI.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from core.config import get_config
 from core.cookie_manager import has_available_cookie_sources
@@ -28,6 +29,15 @@ class HomeSnapshot:
     statuses: tuple[StatusItem, ...]
     notes: tuple[str, ...]
     cookie_ready: bool
+
+
+@dataclass(frozen=True)
+class PanelSnapshot:
+    """Generic card snapshot used by queue/history panels."""
+
+    title: str
+    lines: tuple[str, ...]
+    tone: str
 
 
 @dataclass(frozen=True)
@@ -62,7 +72,7 @@ class DraftSummary:
 
 @dataclass(frozen=True)
 class ExecutionRecord:
-    """Result for one target inside a stage-4 execution round."""
+    """Result for one target inside one execution round."""
 
     target: DraftTarget
     saved_count: int
@@ -78,7 +88,7 @@ class ExecutionRecord:
 
 @dataclass(frozen=True)
 class ExecutionReport:
-    """Aggregated result of one stage-4 execution round."""
+    """Aggregated result of one execution round."""
 
     output_dir: str
     records: tuple[ExecutionRecord, ...]
@@ -112,7 +122,7 @@ def build_home_snapshot() -> HomeSnapshot:
         ),
         notes=(
             "回车会先生成归档草案，按 Ctrl+R 执行当前草案。",
-            "问题页链接会先询问抓取数量；阶段 4 已接入单轮真实抓取。",
+            "按 Ctrl+Y 可载入最近一轮失败项，生成重试草案。",
             "旧版 Rich / questionary 流程仍然可用：zhihu interactive --legacy",
         ),
         cookie_ready=cookie_ready,
@@ -184,7 +194,7 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
         )
         preview_lines = tuple(describe_target(target) for target in targets[:3])
         more_count = len(targets) - len(preview_lines)
-        extra_lines = (f"其余 {more_count} 个链接将在下一阶段接入真实任务队列。",) if more_count > 0 else ()
+        extra_lines = (f"其余 {more_count} 个链接也已加入当前草案队列。",) if more_count > 0 else ()
         summary_lines = (
             _summarize_type_counts(targets),
             "检测到问题页时，当前阶段先按每个问题 Top 3 执行。",
@@ -327,3 +337,107 @@ def build_execution_summary(report: ExecutionReport) -> DraftSummary:
         tone=tone,
         targets=tuple(record.target for record in report.records),
     )
+
+
+def build_queue_snapshot(draft: DraftSummary, *, is_running: bool) -> PanelSnapshot:
+    """Build the queue panel from the current draft."""
+    if not draft.targets:
+        return PanelSnapshot(
+            title="当前队列为空",
+            lines=(
+                "输入链接并回车后，这里会显示本轮待执行目标。",
+                "多链接会按当前顺序顺次执行。",
+            ),
+            tone="muted",
+        )
+
+    status = "执行中" if is_running else "待补问题页配置" if draft.requires_question_limit else "等待执行"
+    tone = "accent" if is_running else "warn" if draft.requires_question_limit else "success"
+    preview = tuple(describe_target(target) for target in draft.targets[:4])
+    remaining = len(draft.targets) - len(preview)
+    extra = (f"其余 {remaining} 个目标仍在当前草案中。",) if remaining > 0 else ()
+    return PanelSnapshot(
+        title="当前草案队列",
+        lines=(
+            f"状态：{status} · 共 {len(draft.targets)} 个目标。",
+            *_with_queue_prefix(preview),
+            *extra,
+        ),
+        tone=tone,
+    )
+
+
+def build_history_snapshot(reports: tuple[ExecutionReport, ...]) -> PanelSnapshot:
+    """Build the recent-results panel from execution history."""
+    if not reports:
+        return PanelSnapshot(
+            title="最近结果为空",
+            lines=(
+                "执行一次归档后，这里会显示输出路径和失败摘要。",
+                "如果最近一轮存在失败项，可按 Ctrl+Y 载入重试草案。",
+            ),
+            tone="muted",
+        )
+
+    latest = reports[0]
+    tone = "warn" if latest.failure_count else "success"
+    lines = [
+        f"最近一轮：成功 {latest.success_count} 个，失败 {latest.failure_count} 个。",
+        f"输出目录：{latest.output_dir}",
+    ]
+    for record in latest.records[:3]:
+        if record.succeeded:
+            target_path = _short_output_path(record.markdown_paths[0]) if record.markdown_paths else latest.output_dir
+            lines.append(f"{describe_target(record.target)} -> {target_path}")
+        else:
+            detail = record.error or "未知错误"
+            if record.log_tail:
+                detail = f"{detail} | {record.log_tail[-1]}"
+            lines.append(f"{describe_target(record.target)} -> 失败：{detail}")
+
+    if len(reports) > 1:
+        lines.append(f"已保留最近 {len(reports)} 轮执行摘要。")
+
+    if latest.failure_count:
+        lines.append("按 Ctrl+Y 可从最近一轮失败项生成重试草案。")
+
+    return PanelSnapshot(
+        title="最近执行结果",
+        lines=tuple(lines),
+        tone=tone,
+    )
+
+
+def build_retry_draft(report: ExecutionReport) -> DraftSummary | None:
+    """Create a retry draft from the failed targets in the latest report."""
+    failed_targets = tuple(record.target for record in report.records if not record.succeeded)
+    if not failed_targets:
+        return None
+
+    preview = tuple(describe_target(target) for target in failed_targets[:3])
+    remaining = len(failed_targets) - len(preview)
+    extra = (f"其余 {remaining} 个失败目标也已加入当前重试草案。",) if remaining > 0 else ()
+    return DraftSummary(
+        title="失败项重试草案",
+        lines=(
+            f"已从最近一轮失败项生成 {len(failed_targets)} 个目标。",
+            *preview,
+            *extra,
+            "确认后按 Ctrl+R 重新执行。",
+        ),
+        tone="warn",
+        targets=failed_targets,
+    )
+
+
+def _short_output_path(path: str) -> str:
+    """Compress a saved markdown path for the recent-results panel."""
+    parts = Path(path).parts
+    if len(parts) <= 3:
+        return path
+    return str(Path(*parts[-3:]))
+
+
+def _with_queue_prefix(lines: tuple[str, ...]) -> tuple[str, ...]:
+    """Prefix queue lines to distinguish them from status copy."""
+    return tuple(f"队列：{line}" for line in lines)

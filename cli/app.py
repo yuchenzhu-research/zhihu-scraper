@@ -1069,12 +1069,12 @@ def interactive(
 
     Features:
     - Full-screen terminal shell with in-app URL input
-    - Responsive centered layout, question-page limit modal, and single-run execution
+    - Responsive centered layout, question-page limit modal, and recent-result workflow
     - Legacy fallback during the rebuild
 
     功能：
     - 内置链接输入栏的全屏终端界面
-    - 响应式居中布局、问题页数量弹层与单轮真实执行
+    - 响应式居中布局、问题页数量弹层、最近结果与失败重试工作流
     - 重构期间保留旧版回退入口
 
     Example:

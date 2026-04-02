@@ -62,23 +62,23 @@ class InputCard(Widget):
             placeholder="粘贴回答、问题页或专栏链接；支持从混合文本中自动提取",
             id="url-input",
         )
-        yield Static("回车生成草案；Ctrl+R 执行归档；按 q 或 Esc 退出。", classes="section-caption")
+        yield Static("回车生成草案；Ctrl+R 执行；Ctrl+Y 载入失败重试；按 q 或 Esc 退出。", classes="section-caption")
 
 
-class SummaryCard(Widget):
-    """Mutable card that reflects the current parsed draft."""
+class MutableCard(Widget):
+    """Shared mutable card for summary, queue, and recent-result panels."""
 
     _TONES = ("muted", "accent", "success", "warn", "danger")
 
-    def __init__(self, title: str, lines: tuple[str, ...], tone: str) -> None:
-        super().__init__(id="draft-card")
+    def __init__(self, card_id: str, title: str, lines: tuple[str, ...], tone: str) -> None:
+        super().__init__(id=card_id)
         self._title = title
         self._lines = lines
         self._tone = tone
 
     def compose(self) -> ComposeResult:
-        yield Static(self._title, id="draft-title")
-        yield Static(self._format_lines(self._lines), id="draft-body")
+        yield Static(self._title, classes="card-title")
+        yield Static(self._format_lines(self._lines), classes="card-body")
 
     def on_mount(self) -> None:
         """Apply the initial tone class."""
@@ -89,8 +89,8 @@ class SummaryCard(Widget):
         self._title = title
         self._lines = lines
         self._tone = tone
-        self.query_one("#draft-title", Static).update(title)
-        self.query_one("#draft-body", Static).update(self._format_lines(lines))
+        self.query_one(".card-title", Static).update(title)
+        self.query_one(".card-body", Static).update(self._format_lines(lines))
         self._sync_tone()
 
     def _sync_tone(self) -> None:
@@ -100,6 +100,27 @@ class SummaryCard(Widget):
     @staticmethod
     def _format_lines(lines: tuple[str, ...]) -> str:
         return "\n".join(f"• {line}" for line in lines)
+
+
+class SummaryCard(MutableCard):
+    """Mutable card that reflects the current parsed draft."""
+
+    def __init__(self, title: str, lines: tuple[str, ...], tone: str) -> None:
+        super().__init__("draft-card", title, lines, tone)
+
+
+class QueueCard(MutableCard):
+    """Mutable card that shows the current draft queue."""
+
+    def __init__(self, title: str, lines: tuple[str, ...], tone: str) -> None:
+        super().__init__("queue-card", title, lines, tone)
+
+
+class HistoryCard(MutableCard):
+    """Mutable card that shows recent execution results."""
+
+    def __init__(self, title: str, lines: tuple[str, ...], tone: str) -> None:
+        super().__init__("history-card", title, lines, tone)
 
 
 class HomeStage(Vertical):

@@ -1,5 +1,5 @@
 """
-runner.py - Stage 4 execution bridge for the interactive TUI.
+runner.py - Execution bridge for the interactive TUI.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def execute_draft_run(
     draft: DraftSummary,
     progress_callback: ProgressCallback | None = None,
 ) -> ExecutionReport:
-    """Execute one draft as a single stage-4 run and return a compact report."""
+    """Execute one draft as a single run and return a compact report."""
     cfg = get_config()
     output_dir = resolve_project_path(cfg.output.directory)
     records: list[ExecutionRecord] = []

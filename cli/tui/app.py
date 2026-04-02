@@ -1,5 +1,5 @@
 """
-app.py - Stage 4 Textual shell for zhihu interactive mode.
+app.py - Stage 5 Textual shell for zhihu interactive mode.
 """
 
 from typing import Callable
@@ -16,19 +16,22 @@ from cli.tui.state import (
     ExecutionReport,
     apply_question_limit,
     build_execution_summary,
+    build_history_snapshot,
     build_home_snapshot,
     build_idle_summary,
+    build_queue_snapshot,
+    build_retry_draft,
     build_running_summary,
     parse_input_to_draft,
 )
-from cli.tui.widgets import HeroCard, HintCard, HomeStage, InputCard, StatusPill, SummaryCard
+from cli.tui.widgets import HistoryCard, HeroCard, HintCard, HomeStage, InputCard, QueueCard, StatusPill, SummaryCard
 
 
 DraftExecutor = Callable[[DraftSummary, ProgressCallback | None], ExecutionReport]
 
 
 class ZhihuInteractiveShell(App[None]):
-    """Stage 4 shell for the rebuilt interactive experience."""
+    """Stage 5 shell for the rebuilt interactive experience."""
 
     CSS_PATH = "theme.tcss"
     TITLE = "zhihu interactive"
@@ -37,6 +40,7 @@ class ZhihuInteractiveShell(App[None]):
     BINDINGS = [
         ("ctrl+l", "focus_input", "输入"),
         ("ctrl+r", "run_current_draft", "执行"),
+        ("ctrl+y", "load_retry_draft", "重试"),
         ("q", "quit", "退出"),
         ("escape", "quit", "退出"),
     ]
@@ -48,8 +52,11 @@ class ZhihuInteractiveShell(App[None]):
         self._pending_question_draft: DraftSummary | None = None
         self._draft_executor = draft_executor or execute_draft_run
         self._is_running = False
+        self._history: list[ExecutionReport] = []
 
     def compose(self) -> ComposeResult:
+        queue = build_queue_snapshot(self._draft, is_running=False)
+        history = build_history_snapshot(())
         yield Container(
             HomeStage(
                 HeroCard(self._snapshot.eyebrow, self._snapshot.title, self._snapshot.subtitle),
@@ -59,6 +66,11 @@ class ZhihuInteractiveShell(App[None]):
                 ),
                 InputCard(),
                 SummaryCard(self._draft.title, self._draft.lines, self._draft.tone),
+                Grid(
+                    QueueCard(queue.title, queue.lines, queue.tone),
+                    HistoryCard(history.title, history.lines, history.tone),
+                    id="workflow-grid",
+                ),
                 HintCard(self._snapshot.notes),
                 id="center-stage",
             ),
@@ -104,7 +116,7 @@ class ZhihuInteractiveShell(App[None]):
                     title="任务仍在执行中",
                     lines=(
                         "当前归档尚未完成，请等待本轮执行结束。",
-                        "阶段 4 先支持单轮执行，不允许并发启动多个任务。",
+                        "阶段 5 仍保持单轮执行，不允许并发启动多个任务。",
                     ),
                     tone="warn",
                     targets=self._draft.targets,
@@ -133,7 +145,7 @@ class ZhihuInteractiveShell(App[None]):
                     title="还没有可执行的草案",
                     lines=(
                         "请先粘贴知乎链接并回车生成当前草案。",
-                        "阶段 4 已接入真实执行，但仍以当前草案为单次运行边界。",
+                        "阶段 5 已接入真实执行、最近结果和失败重试，但仍以当前草案为单次运行边界。",
                     ),
                     tone="warn",
                 )
@@ -161,8 +173,56 @@ class ZhihuInteractiveShell(App[None]):
             thread=True,
         )
 
+    def action_load_retry_draft(self) -> None:
+        """Load a retry draft from the latest failed execution records."""
+        if self._is_running:
+            self._set_draft(
+                DraftSummary(
+                    title="任务仍在执行中",
+                    lines=(
+                        "当前归档尚未完成，暂时不能切换到失败重试草案。",
+                        "等待本轮执行结束后再加载失败项。",
+                    ),
+                    tone="warn",
+                    targets=self._draft.targets,
+                )
+            )
+            return
+
+        latest_report = self._history[0] if self._history else None
+        if latest_report is None:
+            self._set_draft(
+                DraftSummary(
+                    title="还没有可重试的结果",
+                    lines=(
+                        "先执行至少一轮归档，最近结果面板才会出现失败项。",
+                        "阶段 5 的失败重试入口依赖最近一轮执行报告。",
+                    ),
+                    tone="warn",
+                )
+            )
+            return
+
+        retry_draft = build_retry_draft(latest_report)
+        if retry_draft is None:
+            self._set_draft(
+                DraftSummary(
+                    title="最近一轮没有失败项",
+                    lines=(
+                        "最近一次执行全部成功，不需要生成重试草案。",
+                        "你可以继续输入新链接，或直接执行新的当前草案。",
+                    ),
+                    tone="success",
+                    targets=self._draft.targets,
+                )
+            )
+            return
+
+        self._set_draft(retry_draft)
+        self.action_focus_input()
+
     def action_quit(self) -> None:
-        """Prevent quitting while a stage-4 run is still active."""
+        """Prevent quitting while an execution run is still active."""
         if self._is_running:
             self._set_draft(
                 DraftSummary(
@@ -187,6 +247,8 @@ class ZhihuInteractiveShell(App[None]):
         """Update the mutable summary card below the input bar."""
         self._draft = draft
         self.query_one(SummaryCard).update_content(draft.title, draft.lines, draft.tone)
+        queue = build_queue_snapshot(draft, is_running=self._is_running)
+        self.query_one(QueueCard).update_content(queue.title, queue.lines, queue.tone)
 
     def _handle_question_limit(self, selected_limit: int | None) -> None:
         """Resolve the pending question-page draft when the modal closes."""
@@ -232,9 +294,13 @@ class ZhihuInteractiveShell(App[None]):
     def _finish_run(self, report: ExecutionReport) -> None:
         """Restore the UI after a successful worker completion."""
         self._is_running = False
+        self._history.insert(0, report)
+        self._history = self._history[:5]
         input_widget = self.query_one("#url-input", Input)
         input_widget.disabled = False
         self._set_draft(build_execution_summary(report))
+        history = build_history_snapshot(tuple(self._history))
+        self.query_one(HistoryCard).update_content(history.title, history.lines, history.tone)
         input_widget.focus()
 
     def _finish_run_with_error(self, error: str) -> None:
@@ -257,5 +323,5 @@ class ZhihuInteractiveShell(App[None]):
 
 
 def launch_tui() -> None:
-    """Run the stage-4 Textual shell."""
+    """Run the stage-5 Textual shell."""
     ZhihuInteractiveShell().run()

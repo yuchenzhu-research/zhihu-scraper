@@ -131,13 +131,29 @@ Screen {
 }
 
 #input-card,
-#draft-card {
+#draft-card,
+#queue-card,
+#history-card {
     width: 100%;
     height: auto;
     padding: 1 2;
     background: #141415;
     border: round #3a3a3c;
     margin-bottom: 1;
+}
+
+#workflow-grid {
+    width: 100%;
+    layout: grid;
+    grid-size: 2 1;
+    grid-columns: 1fr 1fr;
+    grid-gutter: 1 1;
+}
+
+.compact #workflow-grid,
+.narrow #workflow-grid {
+    grid-size: 1 2;
+    grid-columns: 1fr;
 }
 
 .section-label {
@@ -163,32 +179,42 @@ Screen {
     border: tall #0a84ff;
 }
 
-#draft-title {
+.card-title {
     text-style: bold;
     margin-bottom: 1;
 }
 
-#draft-body {
+.card-body {
     color: #c7c7cc;
 }
 
-#draft-card.tone-muted #draft-title {
+#draft-card.tone-muted .card-title,
+#queue-card.tone-muted .card-title,
+#history-card.tone-muted .card-title {
     color: #8e8e93;
 }
 
-#draft-card.tone-accent #draft-title {
+#draft-card.tone-accent .card-title,
+#queue-card.tone-accent .card-title,
+#history-card.tone-accent .card-title {
     color: #0a84ff;
 }
 
-#draft-card.tone-success #draft-title {
+#draft-card.tone-success .card-title,
+#queue-card.tone-success .card-title,
+#history-card.tone-success .card-title {
     color: #30d158;
 }
 
-#draft-card.tone-warn #draft-title {
+#draft-card.tone-warn .card-title,
+#queue-card.tone-warn .card-title,
+#history-card.tone-warn .card-title {
     color: #ffd60a;
 }
 
-#draft-card.tone-danger #draft-title {
+#draft-card.tone-danger .card-title,
+#queue-card.tone-danger .card-title,
+#history-card.tone-danger .card-title {
     color: #ff453a;
 }
 
