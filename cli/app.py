@@ -1056,30 +1056,41 @@ def query_db(
 
 
 @app.command("interactive")
-def interactive() -> None:
+def interactive(
+    legacy: bool = typer.Option(
+        False,
+        "--legacy",
+        help="Use the legacy Rich/questionary workflow / 使用旧版 Rich/questionary 流程",
+    ),
+) -> None:
     """
     Launch the interactive archive workspace.
     启动交互式归档工作台。
 
     Features:
-    - Guided URL input
-    - Clean terminal workspace
-    - Real-time capture progress
-    - Save directly into local archive
+    - Full-screen terminal shell
+    - Responsive centered layout
+    - Legacy fallback during the rebuild
 
     功能：
-    - 引导式输入 URL
-    - 简洁终端工作台
-    - 实时显示抓取进度
-    - 直接写入本地归档
+    - 全屏终端界面
+    - 响应式居中布局
+    - 重构期间保留旧版回退入口
 
     Example:
         zhihu interactive
+        zhihu interactive --legacy
     """
     log = _get_log()
-    from cli.interactive import run_interactive
     try:
-        asyncio.run(run_interactive())
+        if legacy:
+            from cli.interactive_legacy import run_interactive as run_legacy_interactive
+
+            asyncio.run(run_legacy_interactive())
+        else:
+            from cli.interactive import run_interactive
+
+            run_interactive()
     except Exception as e:
         handle_error(e, log)
 
