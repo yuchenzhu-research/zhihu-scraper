@@ -15,9 +15,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import questionary
 from questionary import Style
+from rich.columns import Columns
 from rich.console import Console, Group
 from rich.panel import Panel
-from rich.table import Table
 from rich.align import Align
 from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskProgressColumn
@@ -83,7 +83,19 @@ async def _async_input(prompt_text: str) -> str:
 # Note: extract_urls is now imported from core.utils to avoid code duplication
 
 
-def _build_status_card(label: str, value: str, tone: str) -> Panel:
+def _layout_metrics() -> tuple[int, int]:
+    """
+    Compute responsive layout sizes from current terminal width.
+    根据当前终端宽度计算响应式布局尺寸。
+    """
+    terminal_width = max(console.size.width, 48)
+    frame_width = min(108, max(68, int(terminal_width * 0.70)))
+    frame_width = min(frame_width, terminal_width - 4)
+    card_width = max(18, (frame_width - 4) // 3)
+    return frame_width, card_width
+
+
+def _build_status_card(label: str, value: str, tone: str, width: int) -> Panel:
     """
     Build a compact status card.
     构建紧凑状态卡片。
@@ -94,7 +106,8 @@ def _build_status_card(label: str, value: str, tone: str) -> Panel:
         Align.center(Group(title, body)),
         box=box.ROUNDED,
         border_style=THEME["line"],
-        padding=(0, 2),
+        padding=(0, 1),
+        width=width,
     )
 
 
@@ -104,6 +117,7 @@ def _print_banner():
     渲染交互式工作台头部。
     """
     cfg = _get_cfg()
+    frame_width, card_width = _layout_metrics()
     cookie_status = (
         ("已就绪", "success")
         if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
@@ -123,14 +137,21 @@ def _print_banner():
         border_style=THEME["line"],
         box=box.ROUNDED,
         padding=(1, 3),
-        width=76,
+        width=frame_width,
     )
 
-    status_grid = Table.grid(expand=False, padding=(0, 1))
-    status_grid.add_row(
-        _build_status_card("Cookie", cookie_status[0], cookie_status[1]),
-        _build_status_card("存储", "Markdown + SQLite", "success"),
-        _build_status_card("浏览器", browser_status[0], browser_status[1]),
+    cards = [
+        _build_status_card("Cookie", cookie_status[0], cookie_status[1], card_width),
+        _build_status_card("存储", "Markdown / SQLite", "success", card_width),
+        _build_status_card("浏览器", browser_status[0], browser_status[1], card_width),
+    ]
+
+    status_renderable = Columns(
+        cards,
+        equal=True,
+        expand=False,
+        align="center",
+        padding=(0, 1),
     )
 
     hint_panel = Panel(
@@ -143,12 +164,12 @@ def _print_banner():
         border_style=THEME["line"],
         box=box.ROUNDED,
         padding=(0, 2),
-        width=76,
+        width=frame_width,
     )
 
     console.clear()
     console.print(Align.center(header_panel))
-    console.print(Align.center(status_grid))
+    console.print(Align.center(status_renderable))
     console.print(Align.center(hint_panel))
     console.print()
 
