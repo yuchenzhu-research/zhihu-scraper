@@ -39,6 +39,7 @@ from typing import Union, List, Optional, Dict, Any, Callable
 import httpx
 from pathlib import Path
 import re
+import hashlib
 from datetime import datetime
 from random import uniform
 
@@ -385,11 +386,40 @@ class ZhihuDownloader:
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
         })
 
+        def infer_extension(url: str, content_type: str) -> str:
+            """
+            Infer a file extension from URL or HTTP content type.
+            根据 URL 或 HTTP content-type 推断文件扩展名。
+            """
+            lowered_url = url.lower()
+            if lowered_url.endswith(".jpg") or lowered_url.endswith(".jpeg"):
+                return ".jpg"
+            if lowered_url.endswith(".png"):
+                return ".png"
+            if lowered_url.endswith(".webp"):
+                return ".webp"
+            if lowered_url.endswith(".gif"):
+                return ".gif"
+            if lowered_url.endswith(".svg"):
+                return ".svg"
+
+            content_type = (content_type or "").split(";")[0].strip().lower()
+            mapping = {
+                "image/jpeg": ".jpg",
+                "image/jpg": ".jpg",
+                "image/png": ".png",
+                "image/webp": ".webp",
+                "image/gif": ".gif",
+                "image/svg+xml": ".svg",
+            }
+            return mapping.get(content_type, ".jpg")
+
         async def worker(url: str):
             async with sem:
                 try:
-                    # 获取文件名，去除 URL 参数和尺寸后缀
-                    fname = url.split("/")[-1].split("?")[0]
+                    # 获取基础文件名，去除 URL 参数和尺寸后缀
+                    raw_name = url.split("/")[-1].split("?")[0]
+                    fname = raw_name
                     for suffix in ["_720w", "_r", "_l"]:
                         if fname.endswith(suffix + ".jpg"):
                             fname = fname.replace(suffix + ".jpg", ".jpg")
@@ -398,26 +428,52 @@ class ZhihuDownloader:
                             fname = fname.replace(suffix + ".png", ".png")
                             break
 
-                    # 确保有扩展名
-                    if "." not in fname:
-                        fname += ".jpg"
+                    stem = Path(fname).stem if "." in fname else (fname or hashlib.sha1(url.encode("utf-8")).hexdigest()[:16])
+                    suffix = Path(fname).suffix if "." in fname else ""
 
-                    # 保存路径带上 images/ 前缀（用于 Markdown 引用）
-                    local_path = dest / fname
+                    if suffix:
+                        existing_path = dest / f"{stem}{suffix}"
+                        if existing_path.exists():
+                            url_to_local[url] = f"{relative_prefix}/{existing_path.name}"
+                            return
+                    else:
+                        for existing_path in sorted(dest.glob(f"{stem}.*")):
+                            if existing_path.is_file():
+                                url_to_local[url] = f"{relative_prefix}/{existing_path.name}"
+                                return
+
+                    last_error: Optional[Exception] = None
+                    resp: Optional[httpx.Response] = None
+                    for attempt in range(1, 4):
+                        try:
+                            resp = await client.get(url, timeout=timeout)
+                            resp.raise_for_status()
+                            break
+                        except Exception as e:
+                            last_error = e
+                            if attempt < 3:
+                                await asyncio.sleep(0.8 * attempt)
+                            else:
+                                raise
+
+                    assert resp is not None
+
+                    if not suffix:
+                        suffix = infer_extension(url, resp.headers.get("Content-Type", ""))
+
+                    final_name = f"{stem}{suffix}"
+                    local_path = dest / final_name
 
                     if local_path.exists():
-                        url_to_local[url] = f"{relative_prefix}/{fname}"
+                        url_to_local[url] = f"{relative_prefix}/{final_name}"
                         return
-
-                    resp = await client.get(url, timeout=timeout)
-                    resp.raise_for_status()
 
                     # 写入二进制文件
                     with open(local_path, "wb") as f:
                         f.write(resp.content)
 
                     # 返回带 images/ 前缀的路径（用于 Markdown）
-                    url_to_local[url] = f"{relative_prefix}/{fname}"
+                    url_to_local[url] = f"{relative_prefix}/{final_name}"
 
                 except Exception as e:
                     print(f"⚠️ 图片下载失败 [{url}]: {e}")

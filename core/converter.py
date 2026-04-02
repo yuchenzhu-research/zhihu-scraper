@@ -19,7 +19,7 @@ converter.py — HTML → Markdown 转换模块
 import re
 import uuid
 
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qs
 from typing import Optional, Dict
 from bs4 import BeautifulSoup, Tag
 from markdownify import MarkdownConverter
@@ -88,7 +88,7 @@ class ZhihuConverter:
         seen_base: set[str] = set()  # For deduplicating similar theme images / 用于去重同主题图片
 
         for img in soup.find_all("img"):
-            if "ztext-math" in (img.get("class") or []):
+            if ZhihuConverter._extract_formula_from_img(img):
                 continue
             src = (
                 img.get("data-actualsrc")
@@ -181,10 +181,14 @@ class ZhihuConverter:
             marker.string = placeholder
             span.replace_with(marker)
 
-        #    Legacy format: <img class="ztext-math" data-formula="...">
-        #    兼容旧版: <img class="ztext-math" data-formula="...">
-        for img in soup.select("img.ztext-math"):
-            formula = img.get("data-formula", "")
+        #    Legacy format and equation-image fallback:
+        #    - <img class="ztext-math" data-formula="...">
+        #    - <img src="https://www.zhihu.com/equation?tex=...">
+        #    兼容旧版与 equation 图片格式:
+        #    - <img class="ztext-math" data-formula="...">
+        #    - <img src="https://www.zhihu.com/equation?tex=...">
+        for img in list(soup.find_all("img")):
+            formula = self._extract_formula_from_img(img)
             if not formula:
                 continue
             is_block = self._is_block_formula(img, formula) or (
@@ -222,6 +226,41 @@ class ZhihuConverter:
                     code["class"] = [f"language-{lang}"]
 
         return str(soup)
+
+    @staticmethod
+    def _extract_formula_from_img(img: Tag) -> str:
+        """
+        Extract formula text from Zhihu formula images.
+        从知乎公式图片中提取公式文本。
+        """
+        if not img or img.name != "img":
+            return ""
+
+        css_classes = img.get("class") or []
+        if "ztext-math" in css_classes:
+            return (
+                img.get("data-formula")
+                or img.get("data-tex")
+                or img.get("alt")
+                or ""
+            ).strip()
+
+        for candidate in (
+            img.get("data-actualsrc"),
+            img.get("data-original"),
+            img.get("src"),
+        ):
+            if not candidate or "zhihu.com/equation" not in candidate:
+                continue
+            parsed = urlparse(candidate)
+            tex_values = parse_qs(parsed.query).get("tex") or []
+            if tex_values:
+                return tex_values[0].strip()
+            alt = (img.get("alt") or "").strip()
+            if alt:
+                return alt
+
+        return ""
 
     def _extract_link_card(self, soup: BeautifulSoup, card: Tag) -> Optional[Tag]:
         """
@@ -355,6 +394,8 @@ class ZhihuConverter:
         if tex.endswith(r"\\"):
             return True
         parent = node.parent if node else None
+        if node and node.name == "img" and str(node.get("eeimg", "")).strip() == "2":
+            return True
         if parent and parent.name in ("p", "div", "figure"):
             text = parent.get_text(" ", strip=True)
             if text == node.get_text(" ", strip=True):
@@ -385,15 +426,24 @@ class _MarkdownBridge(MarkdownConverter):
 
     def __init__(self, img_map: Optional[Dict[str, str]] = None, **kwargs):
         self.img_map = img_map or {}
+        self._img_map_by_base = {
+            self._normalize_image_basename(url): local
+            for url, local in self.img_map.items()
+            if self._normalize_image_basename(url)
+        }
         super().__init__(**kwargs)
 
     def convert_img(self, el: Tag, text: str, parent_tags: set) -> str:
-        src = (
-            el.get("data-actualsrc")
-            or el.get("data-original")
-            or el.get("src")
-            or ""
-        )
+        candidates = []
+        for candidate in (
+            el.get("data-actualsrc"),
+            el.get("data-original"),
+            el.get("src"),
+        ):
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        src = candidates[0] if candidates else ""
         if not src:
             return ""
         if "zhihu.com/equation" not in src and any(
@@ -401,5 +451,28 @@ class _MarkdownBridge(MarkdownConverter):
         ):
             return ""
         alt = el.get("alt", "")
-        local = self.img_map.get(src, src)
+        local = ""
+        for candidate in candidates:
+            local = self.img_map.get(candidate, "")
+            if local:
+                break
+            base_name = self._normalize_image_basename(candidate)
+            if base_name:
+                local = self._img_map_by_base.get(base_name, "")
+                if local:
+                    break
+        if not local:
+            local = src
         return f"![{alt}]({local})\n\n"
+
+    @staticmethod
+    def _normalize_image_basename(url: str) -> str:
+        if not url:
+            return ""
+        base_name = url.split("/")[-1].split("?")[0]
+        for suffix in ["_720w", "_r", "_l"]:
+            if base_name.endswith(suffix + ".jpg"):
+                return base_name.replace(suffix + ".jpg", ".jpg")
+            if base_name.endswith(suffix + ".png"):
+                return base_name.replace(suffix + ".png", ".png")
+        return base_name
