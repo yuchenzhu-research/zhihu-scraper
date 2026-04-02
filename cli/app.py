@@ -1068,13 +1068,13 @@ def interactive(
     启动交互式归档工作台。
 
     Features:
-    - Full-screen terminal shell
-    - Responsive centered layout
+    - Full-screen terminal shell with in-app URL input
+    - Responsive centered layout and question-page limit modal
     - Legacy fallback during the rebuild
 
     功能：
-    - 全屏终端界面
-    - 响应式居中布局
+    - 内置链接输入栏的全屏终端界面
+    - 响应式居中布局与问题页数量弹层
     - 重构期间保留旧版回退入口
 
     Example:

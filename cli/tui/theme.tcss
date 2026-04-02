@@ -117,6 +117,7 @@ Screen {
     padding: 1 2;
     background: #141415;
     border: round #3a3a3c;
+    margin-top: 1;
 }
 
 .callout {
@@ -127,4 +128,130 @@ Screen {
 
 .callout.dim {
     color: #8e8e93;
+}
+
+#input-card,
+#draft-card {
+    width: 100%;
+    height: auto;
+    padding: 1 2;
+    background: #141415;
+    border: round #3a3a3c;
+    margin-bottom: 1;
+}
+
+.section-label {
+    color: #8e8e93;
+    margin-bottom: 1;
+    text-style: bold;
+}
+
+.section-caption {
+    color: #8e8e93;
+    margin-top: 1;
+    text-align: center;
+}
+
+#url-input {
+    width: 100%;
+    border: none;
+    background: #18181a;
+    color: #f5f5f7;
+}
+
+#url-input:focus {
+    border: tall #0a84ff;
+}
+
+#draft-title {
+    text-style: bold;
+    margin-bottom: 1;
+}
+
+#draft-body {
+    color: #c7c7cc;
+}
+
+#draft-card.tone-muted #draft-title {
+    color: #8e8e93;
+}
+
+#draft-card.tone-accent #draft-title {
+    color: #0a84ff;
+}
+
+#draft-card.tone-success #draft-title {
+    color: #30d158;
+}
+
+#draft-card.tone-warn #draft-title {
+    color: #ffd60a;
+}
+
+#draft-card.tone-danger #draft-title {
+    color: #ff453a;
+}
+
+Footer {
+    background: #101010;
+    color: #8e8e93;
+}
+
+QuestionLimitScreen {
+    align: center middle;
+    background: #000000 60%;
+}
+
+#question-limit-dialog {
+    width: 72;
+    max-width: 88;
+    height: auto;
+    padding: 1 2;
+    background: #171718;
+    border: round #3a3a3c;
+}
+
+#dialog-title {
+    color: #f5f5f7;
+    text-style: bold;
+    margin-bottom: 1;
+    content-align: center middle;
+}
+
+#dialog-body {
+    color: #8e8e93;
+    text-align: center;
+    margin-bottom: 1;
+}
+
+#dialog-presets,
+#dialog-actions {
+    width: 100%;
+    height: auto;
+    align-horizontal: center;
+    margin-top: 1;
+}
+
+.limit-button,
+#dialog-actions Button {
+    min-width: 16;
+    margin-right: 1;
+}
+
+#custom-limit {
+    width: 100%;
+    margin-top: 1;
+    border: none;
+    background: #1c1c1e;
+    color: #f5f5f7;
+}
+
+#custom-limit:focus {
+    border: tall #0a84ff;
+}
+
+#dialog-error {
+    margin-top: 1;
+    color: #ff453a;
+    text-align: center;
 }
