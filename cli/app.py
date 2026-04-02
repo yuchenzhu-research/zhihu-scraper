@@ -360,7 +360,7 @@ def _run_launcher() -> None:
                 questionary.Choice("批量抓取", value="batch"),
                 questionary.Choice("收藏夹监控", value="monitor"),
                 questionary.Choice("搜索本地数据库", value="query"),
-                questionary.Choice("炫酷交互界面", value="interactive"),
+                questionary.Choice("归档工作台", value="interactive"),
                 questionary.Choice("首次使用向导", value="onboard"),
                 questionary.Choice("环境检查", value="check"),
                 questionary.Choice("查看说明书", value="manual"),
@@ -653,13 +653,17 @@ COMMAND REFERENCE
 
 6) interactive
   Purpose:
-  - interactive terminal workflow for quick manual capture
-  - 交互式终端抓取流程
+  - full-screen archive workbench with draft, queue, recent-result, and retry flow
+  - 全屏归档工作台，包含草案、队列、最近结果与失败重试
 
   Current support:
   - answer / article / question links
+  - `Enter`: build current draft
+  - `Ctrl+R`: execute current draft
+  - `Ctrl+Y`: load retry draft from the latest failed records
   - does NOT parse `people/...` creator links in interactive mode
   - use `creator` command for profile URLs
+  - `--legacy`: deprecated fallback to the old Rich/questionary flow
 
 7) config
   Purpose:
@@ -706,7 +710,8 @@ OUTPUT STRUCTURE
 ARCHITECTURE (LAYER MAP)
   CLI Layer
   - `cli/app.py` command routing + orchestration
-  - `cli/interactive.py` guided terminal mode
+  - `cli/interactive.py` Textual-based interactive workbench
+  - `cli/interactive_legacy.py` deprecated Rich/questionary fallback
 
   Fetch Layer
   - `core/scraper.py`
@@ -1060,7 +1065,7 @@ def interactive(
     legacy: bool = typer.Option(
         False,
         "--legacy",
-        help="Use the legacy Rich/questionary workflow / 使用旧版 Rich/questionary 流程",
+        help="Deprecated fallback to the legacy Rich/questionary workflow / 已弃用的旧版 Rich/questionary 回退流程",
     ),
 ) -> None:
     """
@@ -1068,14 +1073,14 @@ def interactive(
     启动交互式归档工作台。
 
     Features:
-    - Full-screen terminal shell with in-app URL input
-    - Responsive centered layout, question-page limit modal, and recent-result workflow
-    - Legacy fallback during the rebuild
+    - Full-screen archive workbench with in-app URL input
+    - Responsive centered layout, question-page limit modal, queue, recent results, and retry flow
+    - Deprecated legacy fallback for regression checks only
 
     功能：
-    - 内置链接输入栏的全屏终端界面
-    - 响应式居中布局、问题页数量弹层、最近结果与失败重试工作流
-    - 重构期间保留旧版回退入口
+    - 内置链接输入栏的全屏归档工作台
+    - 响应式居中布局、问题页数量弹层、队列、最近结果与失败重试
+    - 仅用于回归检查的旧版回退入口
 
     Example:
         zhihu interactive

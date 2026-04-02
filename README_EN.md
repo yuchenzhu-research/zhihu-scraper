@@ -239,6 +239,13 @@ Full arguments and examples are centralized in:
 zhihu manual
 ```
 
+`interactive` is now the default terminal workbench:
+
+- `Enter` builds the current draft
+- `Ctrl+R` executes the current draft
+- `Ctrl+Y` loads a retry draft from the latest failed records
+- `zhihu interactive --legacy` remains only as a fallback for regression checks
+
 ## Examples
 
 The repository keeps two ready-to-open showcase exports:
