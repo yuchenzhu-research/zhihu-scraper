@@ -7,12 +7,13 @@ from cli.tui.state import (
     ExecutionRecord,
     ExecutionReport,
     apply_question_limit,
+    build_detail_snapshot,
     build_history_snapshot,
     build_retry_draft,
     build_running_summary,
     parse_input_to_draft,
 )
-from cli.tui.widgets import HistoryCard, QueueCard, SummaryCard
+from cli.tui.widgets import DetailCard, HistoryCard, QueueCard, SummaryCard
 
 
 def _mixed_executor(draft, progress_callback=None):
@@ -95,6 +96,24 @@ class TuiStateTests(unittest.TestCase):
         self.assertEqual(history.tone, "warn")
         self.assertTrue(any("Ctrl+Y" in line for line in history.lines))
 
+    def test_detail_snapshot_contains_log_tail(self):
+        draft = parse_input_to_draft("https://zhuanlan.zhihu.com/p/789", True)
+        report = ExecutionReport(
+            output_dir="data",
+            records=(
+                ExecutionRecord(
+                    target=draft.targets[0],
+                    saved_count=0,
+                    markdown_paths=(),
+                    error="403",
+                    log_tail=("warmup", "blocked"),
+                ),
+            ),
+        )
+        detail = build_detail_snapshot(draft, (report,))
+        self.assertEqual(detail.title, "执行详情")
+        self.assertTrue(any("blocked" in line for line in detail.lines))
+
 
 class TuiWorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_recent_results_and_retry_flow(self):
@@ -121,9 +140,11 @@ class TuiWorkflowTests(unittest.IsolatedAsyncioTestCase):
 
             summary_body = app.query_one(SummaryCard).query_one(".card-body", Static).content
             history_body = app.query_one(HistoryCard).query_one(".card-body", Static).content
+            detail_body = app.query_one(DetailCard).query_one(".card-body", Static).content
             self.assertIn("失败 1 个", summary_body)
             self.assertIn("entries/answer/index.md", history_body)
             self.assertIn("retry failed", history_body)
+            self.assertIn("日志尾部：retry failed", detail_body)
 
             await pilot.press("ctrl+y")
             await pilot.pause()

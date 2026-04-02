@@ -123,5 +123,12 @@ class HistoryCard(MutableCard):
         super().__init__("history-card", title, lines, tone)
 
 
+class DetailCard(MutableCard):
+    """Mutable card that shows detailed draft or execution information."""
+
+    def __init__(self, title: str, lines: tuple[str, ...], tone: str) -> None:
+        super().__init__("detail-card", title, lines, tone)
+
+
 class HomeStage(Vertical):
     """Main stage wrapper for the centered landing view."""

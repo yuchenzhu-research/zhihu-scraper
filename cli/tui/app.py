@@ -15,6 +15,7 @@ from cli.tui.state import (
     DraftSummary,
     ExecutionReport,
     apply_question_limit,
+    build_detail_snapshot,
     build_execution_summary,
     build_history_snapshot,
     build_home_snapshot,
@@ -24,7 +25,7 @@ from cli.tui.state import (
     build_running_summary,
     parse_input_to_draft,
 )
-from cli.tui.widgets import HistoryCard, HeroCard, HintCard, HomeStage, InputCard, QueueCard, StatusPill, SummaryCard
+from cli.tui.widgets import DetailCard, HistoryCard, HeroCard, HintCard, HomeStage, InputCard, QueueCard, StatusPill, SummaryCard
 
 
 DraftExecutor = Callable[[DraftSummary, ProgressCallback | None], ExecutionReport]
@@ -57,6 +58,7 @@ class ZhihuInteractiveShell(App[None]):
     def compose(self) -> ComposeResult:
         queue = build_queue_snapshot(self._draft, is_running=False)
         history = build_history_snapshot(())
+        detail = build_detail_snapshot(self._draft, ())
         yield Container(
             HomeStage(
                 HeroCard(self._snapshot.eyebrow, self._snapshot.title, self._snapshot.subtitle),
@@ -71,6 +73,7 @@ class ZhihuInteractiveShell(App[None]):
                     HistoryCard(history.title, history.lines, history.tone),
                     id="workflow-grid",
                 ),
+                DetailCard(detail.title, detail.lines, detail.tone),
                 HintCard(self._snapshot.notes),
                 id="center-stage",
             ),
@@ -247,8 +250,7 @@ class ZhihuInteractiveShell(App[None]):
         """Update the mutable summary card below the input bar."""
         self._draft = draft
         self.query_one(SummaryCard).update_content(draft.title, draft.lines, draft.tone)
-        queue = build_queue_snapshot(draft, is_running=self._is_running)
-        self.query_one(QueueCard).update_content(queue.title, queue.lines, queue.tone)
+        self._refresh_panels()
 
     def _handle_question_limit(self, selected_limit: int | None) -> None:
         """Resolve the pending question-page draft when the modal closes."""
@@ -299,8 +301,6 @@ class ZhihuInteractiveShell(App[None]):
         input_widget = self.query_one("#url-input", Input)
         input_widget.disabled = False
         self._set_draft(build_execution_summary(report))
-        history = build_history_snapshot(tuple(self._history))
-        self.query_one(HistoryCard).update_content(history.title, history.lines, history.tone)
         input_widget.focus()
 
     def _finish_run_with_error(self, error: str) -> None:
@@ -320,6 +320,15 @@ class ZhihuInteractiveShell(App[None]):
             )
         )
         input_widget.focus()
+
+    def _refresh_panels(self) -> None:
+        """Refresh secondary workflow panels from current draft and history."""
+        queue = build_queue_snapshot(self._draft, is_running=self._is_running)
+        history = build_history_snapshot(tuple(self._history))
+        detail = build_detail_snapshot(self._draft, tuple(self._history))
+        self.query_one(QueueCard).update_content(queue.title, queue.lines, queue.tone)
+        self.query_one(HistoryCard).update_content(history.title, history.lines, history.tone)
+        self.query_one(DetailCard).update_content(detail.title, detail.lines, detail.tone)
 
 
 def launch_tui() -> None:

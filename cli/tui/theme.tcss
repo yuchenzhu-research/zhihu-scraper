@@ -133,7 +133,8 @@ Screen {
 #input-card,
 #draft-card,
 #queue-card,
-#history-card {
+#history-card,
+#detail-card {
     width: 100%;
     height: auto;
     padding: 1 2;
@@ -190,31 +191,36 @@ Screen {
 
 #draft-card.tone-muted .card-title,
 #queue-card.tone-muted .card-title,
-#history-card.tone-muted .card-title {
+#history-card.tone-muted .card-title,
+#detail-card.tone-muted .card-title {
     color: #8e8e93;
 }
 
 #draft-card.tone-accent .card-title,
 #queue-card.tone-accent .card-title,
-#history-card.tone-accent .card-title {
+#history-card.tone-accent .card-title,
+#detail-card.tone-accent .card-title {
     color: #0a84ff;
 }
 
 #draft-card.tone-success .card-title,
 #queue-card.tone-success .card-title,
-#history-card.tone-success .card-title {
+#history-card.tone-success .card-title,
+#detail-card.tone-success .card-title {
     color: #30d158;
 }
 
 #draft-card.tone-warn .card-title,
 #queue-card.tone-warn .card-title,
-#history-card.tone-warn .card-title {
+#history-card.tone-warn .card-title,
+#detail-card.tone-warn .card-title {
     color: #ffd60a;
 }
 
 #draft-card.tone-danger .card-title,
 #queue-card.tone-danger .card-title,
-#history-card.tone-danger .card-title {
+#history-card.tone-danger .card-title,
+#detail-card.tone-danger .card-title {
     color: #ff453a;
 }
 

@@ -430,6 +430,53 @@ def build_retry_draft(report: ExecutionReport) -> DraftSummary | None:
     )
 
 
+def build_detail_snapshot(draft: DraftSummary, reports: tuple[ExecutionReport, ...]) -> PanelSnapshot:
+    """Build a detail panel for the current draft and latest execution report."""
+    if reports:
+        latest = reports[0]
+        lines = []
+        for record in latest.records[:4]:
+            if record.succeeded:
+                saved_path = _short_output_path(record.markdown_paths[0]) if record.markdown_paths else latest.output_dir
+                lines.append(f"{describe_target(record.target)} 已写入 {saved_path}")
+            else:
+                lines.append(f"{describe_target(record.target)} 失败：{record.error}")
+                if record.log_tail:
+                    lines.append(f"日志尾部：{record.log_tail[-1]}")
+
+        if not lines:
+            lines.append("最近一轮执行还没有明细。")
+
+        if latest.failure_count:
+            lines.append("失败项可通过 Ctrl+Y 重新装载为当前草案。")
+
+        return PanelSnapshot(
+            title="执行详情",
+            lines=tuple(lines),
+            tone="warn" if latest.failure_count else "success",
+        )
+
+    if draft.targets:
+        preview = tuple(describe_target(target) for target in draft.targets[:4])
+        remaining = len(draft.targets) - len(preview)
+        extra = (f"其余 {remaining} 个目标已在队列中等待。",) if remaining > 0 else ()
+        status = "等待问题页数量确认。" if draft.requires_question_limit else "草案已准备就绪，按 Ctrl+R 可直接执行。"
+        return PanelSnapshot(
+            title="当前草案详情",
+            lines=preview + extra + (status,),
+            tone="warn" if draft.requires_question_limit else "accent",
+        )
+
+    return PanelSnapshot(
+        title="工作台详情",
+        lines=(
+            "这里会显示当前草案的目标细节，或最近一轮执行的详细结果。",
+            "当失败项存在时，这里也会展示最近的错误摘要和日志尾部。",
+        ),
+        tone="muted",
+    )
+
+
 def _short_output_path(path: str) -> str:
     """Compress a saved markdown path for the recent-results panel."""
     parts = Path(path).parts
