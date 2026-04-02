@@ -1,21 +1,20 @@
 """
-app.py - Stage 1 Textual shell for zhihu interactive mode
+app.py - Stage 2 Textual home screen for zhihu interactive mode
 
-This stage only provides a centered, resize-safe full-screen shell and a
-clear fallback path to the legacy interactive workflow.
+This stage upgrades the phase-1 shell into a structured, resize-aware home
+screen that can support later input and task states.
 """
 
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Static
+from textual.containers import Container, Grid
+from textual.events import Mount, Resize
 
-
-class StatusPill(Static):
-    """Compact status tile."""
+from cli.tui.state import build_home_snapshot
+from cli.tui.widgets import HeroCard, HintCard, HomeStage, StatusPill
 
 
 class ZhihuInteractiveShell(App[None]):
-    """Stage 1 shell for the rebuilt interactive experience."""
+    """Stage 2 shell for the rebuilt interactive experience."""
 
     CSS_PATH = "theme.tcss"
     TITLE = "zhihu interactive"
@@ -27,26 +26,34 @@ class ZhihuInteractiveShell(App[None]):
     ]
 
     def compose(self) -> ComposeResult:
-        yield Vertical(
-            Static("ZHIHU ARCHIVE", id="eyebrow"),
-            Static("知乎归档台", id="title"),
-            Static("把回答、问题与专栏保存为 Markdown 和本地索引", id="subtitle"),
-            id="hero",
+        snapshot = build_home_snapshot()
+        yield Container(
+            HomeStage(
+                HeroCard(snapshot.eyebrow, snapshot.title, snapshot.subtitle),
+                Grid(
+                    *(StatusPill(item.label, item.value, item.tone) for item in snapshot.statuses),
+                    id="status-grid",
+                ),
+                HintCard(snapshot.notes),
+                id="center-stage",
+            ),
+            id="viewport",
         )
-        yield Horizontal(
-            StatusPill("Cookie\n已就绪", classes="status-pill"),
-            StatusPill("存储\nMarkdown / SQLite", classes="status-pill"),
-            StatusPill("模式\n全屏 TUI", classes="status-pill"),
-            id="status-row",
-        )
-        yield Vertical(
-            Static("新交互工作台搭建中。当前阶段只验证全屏架构、居中布局和缩放重绘。", classes="callout"),
-            Static("如需继续使用旧版流程，请执行：zhihu interactive --legacy", classes="callout dim"),
-            Static("按 q 或 Esc 退出。", classes="callout dim"),
-            id="hint",
-        )
+
+    def on_mount(self, _: Mount) -> None:
+        """Apply the initial responsive layout class."""
+        self._sync_layout_mode(self.size.width)
+
+    def on_resize(self, event: Resize) -> None:
+        """Re-apply responsive layout classes whenever the terminal changes."""
+        self._sync_layout_mode(event.size.width)
+
+    def _sync_layout_mode(self, width: int) -> None:
+        """Update screen classes based on current terminal width."""
+        self.screen.set_class(width < 110, "compact")
+        self.screen.set_class(width < 84, "narrow")
 
 
 def launch_tui() -> None:
-    """Run the stage-1 Textual shell."""
+    """Run the stage-2 Textual shell."""
     ZhihuInteractiveShell().run()
