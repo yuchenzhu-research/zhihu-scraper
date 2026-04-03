@@ -49,7 +49,6 @@ from typing import Optional, List, Dict, Any
 from random import uniform
 import asyncio
 import json
-import importlib
 import sys
 import typer
 from rich import print as rprint
@@ -57,6 +56,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
+from cli.healthcheck import render_environment_check
+from cli.optional_deps import get_questionary as _get_questionary
 from core.config import get_config, get_logger, get_humanizer, resolve_project_path
 from core.utils import sanitize_filename, extract_urls
 from core.scraper import ZhihuDownloader, ZhihuCreatorDownloader
@@ -117,17 +118,6 @@ def _resolve_output_dir(output: Optional[Path]) -> Path:
 def _resolve_headless(headless: Optional[bool]) -> bool:
     """Resolve CLI headless option with runtime fallback / 解析 CLI 无头参数并回落到运行时配置"""
     return _get_default_browser_headless() if headless is None else headless
-
-
-def _get_questionary():
-    """Import questionary lazily with actionable guidance / 延迟导入 questionary 并提供明确提示"""
-    try:
-        return importlib.import_module("questionary")
-    except ModuleNotFoundError as exc:
-        rprint("[bold yellow]⚠️ Missing optional TTY dependency / 缺少交互式终端依赖：questionary[/bold yellow]")
-        rprint("请重新同步当前分支依赖，例如：")
-        rprint("[cyan]pip install -e .[/cyan]  或  [cyan]./install.sh --recreate[/cyan]")
-        raise typer.Exit(code=1) from exc
 
 
 def print_result(
@@ -1171,49 +1161,7 @@ def check() -> None:
     2. configured cookie file valid
     3. Playwright browser available
     """
-    cfg = _get_cfg()
-    rprint("🔍 System check... / 系统检查...\n")
-
-    # Check config file / 检查配置文件
-    config_path = Path(__file__).parent.parent / "config.yaml"
-    if config_path.exists():
-        rprint("✅ config.yaml exists / 存在")
-    else:
-        rprint("❌ config.yaml missing / 不存在")
-
-    # Check cookies / 检查 cookies
-    from core.cookie_manager import count_available_cookie_sources, has_real_cookie_values, resolve_cookie_file_path, resolve_cookie_pool_dir
-
-    cookies_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-    cookie_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
-    primary_cookie_ready = has_real_cookie_values(cookies_path)
-    available_sources = count_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
-    rprint(f"{'✅' if primary_cookie_ready else '⚠️'} 主 Cookie 文件 / Primary cookie file: {cookies_path}")
-    rprint(f"{'✅' if available_sources else '⚠️'} 可用号源数 / Available sessions: {available_sources} (pool: {cookie_pool_dir})")
-
-    # Check playwright / 检查 playwright
-    try:
-        asyncio.run(_check_playwright())
-        rprint("✅ Playwright OK / 正常")
-    except ModuleNotFoundError:
-        rprint(Text("⚠️ Playwright not installed / 未安装。专栏降级模式暂不可用，建议先执行 ./install.sh", justify="left"))
-    except Exception as e:
-        rprint(f"❌ Playwright error / 错误: {e}")
-
-
-async def _check_playwright() -> None:
-    """Check if playwright is available / 检查 playwright 是否可用"""
-    from playwright.async_api import async_playwright
-    from core.browser_fallback import _launch_browser_with_fallback
-
-    cfg = _get_cfg()
-    async with async_playwright() as pw:
-        browser = await _launch_browser_with_fallback(
-            pw,
-            cfg.zhihu.browser,
-            headless=cfg.zhihu.browser.headless,
-        )
-        await browser.close()
+    render_environment_check()
 
 
 # ============================================================

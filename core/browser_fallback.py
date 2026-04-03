@@ -19,7 +19,13 @@ from typing import Optional, Dict, Any
 from .config import get_config, get_logger, summarize_text_for_logs
 
 
-async def _launch_browser_with_fallback(playwright: Any, browser_cfg: Any, *, headless: bool):
+async def _launch_browser_with_fallback(
+    playwright: Any,
+    browser_cfg: Any,
+    *,
+    headless: bool,
+    report_launch_failures: bool = True,
+):
     """
     Try configured browser channel first, then fall back to bundled Chromium.
     先按配置的浏览器通道启动，失败后再回退到 Playwright 自带 Chromium。
@@ -39,7 +45,8 @@ async def _launch_browser_with_fallback(playwright: Any, browser_cfg: Any, *, he
         try:
             return await playwright.chromium.launch(**{**launch_kwargs, "channel": channel})
         except Exception as e:
-            log.warning("browser_channel_launch_failed", channel=channel, error=str(e))
+            if report_launch_failures:
+                log.warning("browser_channel_launch_failed", channel=channel, error=str(e))
 
     return await playwright.chromium.launch(**launch_kwargs)
 

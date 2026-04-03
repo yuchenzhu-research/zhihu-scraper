@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 import typer
 
+import cli.optional_deps as optional_deps
 from cli.app import _get_questionary, build_output_folder_name
+from cli.healthcheck import summarize_playwright_failure
 from core.config import Config
 from core.utils import sanitize_filename
 
@@ -45,9 +47,41 @@ class ConfigCompatibilityTests(unittest.TestCase):
 
 class LauncherDependencyTests(unittest.TestCase):
     def test_questionary_missing_raises_clean_exit(self):
-        with patch("cli.app.importlib.import_module", side_effect=ModuleNotFoundError):
-            with self.assertRaises(typer.Exit):
-                _get_questionary()
+        with patch.object(optional_deps.importlib, "import_module", side_effect=ModuleNotFoundError):
+            with patch.object(optional_deps.sys.stderr, "isatty", return_value=False):
+                with patch.object(optional_deps, "rprint") as mocked_print:
+                    with self.assertRaises(typer.Exit):
+                        _get_questionary()
+                    mocked_print.assert_not_called()
+
+    def test_questionary_missing_interactive_tty_prints_guidance(self):
+        with patch.object(optional_deps.importlib, "import_module", side_effect=ModuleNotFoundError):
+            with patch.object(optional_deps.sys.stderr, "isatty", return_value=True):
+                with patch.object(optional_deps, "rprint") as mocked_print:
+                    with self.assertRaises(typer.Exit):
+                        _get_questionary()
+                    self.assertGreaterEqual(mocked_print.call_count, 1)
+
+
+class HealthcheckSummaryTests(unittest.TestCase):
+    def test_playwright_permission_failure_is_summarized(self):
+        detail, hint = summarize_playwright_failure(
+            RuntimeError(
+                "BrowserType.launch: Target page, context or browser has been closed\n"
+                "[FATAL] bootstrap_check_in org.chromium.Chromium: Permission denied (1100)"
+            )
+        )
+        self.assertIn("Chromium", detail)
+        self.assertIsNotNone(hint)
+        assert hint is not None
+        self.assertIn("受限沙箱", hint)
+
+    def test_playwright_missing_binary_failure_is_summarized(self):
+        detail, hint = summarize_playwright_failure(RuntimeError("Executable doesn't exist at /tmp/chromium"))
+        self.assertIn("Playwright 浏览器未安装完整", detail)
+        self.assertIsNotNone(hint)
+        assert hint is not None
+        self.assertIn("playwright install chromium", hint)
 
 
 if __name__ == "__main__":

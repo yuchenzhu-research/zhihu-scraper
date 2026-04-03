@@ -212,6 +212,10 @@ zhihu manual
 | Linux | Ongoing compatibility hardening | Core CLI paths work; config compatibility and path behavior are being tightened |
 | Windows | Needs fuller validation | Path handling, shell behavior, and browser dependencies still need dedicated verification |
 
+For the explicit support boundary, see:
+
+- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+
 ## Recommended Paths
 
 | What you want to do | Recommended command |

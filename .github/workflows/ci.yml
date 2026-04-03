@@ -8,7 +8,13 @@ on:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -25,8 +31,12 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall cli core
 
+      - name: Run unit tests
+        run: python -m unittest -q tests.test_cli_compat tests.test_tui_rebuild
+
       - name: CLI smoke check
         run: |
           python cli/app.py --help
           python cli/app.py manual --help
+          python cli/app.py interactive --help
           python cli/app.py check --help

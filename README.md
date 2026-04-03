@@ -212,6 +212,10 @@ zhihu manual
 | Linux | 持续兼容中 | CLI 主路径可用，正在补配置兼容和路径命名等回归 |
 | Windows | 待完整验证 | 路径、shell、浏览器依赖仍需专项调试与说明书补齐 |
 
+更具体的平台支持边界见：
+
+- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+
 ## 推荐入口 Recommended Paths
 
 | 你想做什么 | 推荐命令 |
