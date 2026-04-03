@@ -1,359 +1,33 @@
 """
-config.py - Configuration Management Module
-
-Provides unified configuration loading, validation, and environment variable override.
-Uses YAML format configuration files, supports defaults and type safety.
-
-================================================================================
-config.py — 配置管理模块
-
-提供统一的配置加载、验证和环境变量覆盖功能。
-使用 YAML 格式的配置文件，支持默认值和类型安全。
-================================================================================
+config.py - Facade for runtime config, logging, and humanization helpers.
 """
 
-import hashlib
-import re
-from pathlib import Path
-from typing import Any, Dict, Optional, Union
-
-import yaml
-
-from .config_schema import (
-    Config,
-    HumanizeConfig,
-    LoggingConfig,
-    build_config_from_dict,
-    build_default_config,
-)
-from .structlog_compat import BoundLoggerBase, STRUCTLOG_AVAILABLE, setup_fallback_logging, structlog
-
-# ============================================================
-# Configuration Loader (配置加载器)
-# ============================================================
-
-class ConfigLoader:
-    """
-    Configuration loader supporting multiple paths and defaults
-    配置加载器，支持多路径和默认值
-    """
-
-    _instance: Optional["ConfigLoader"] = None
-    _config: Optional[Config] = None
-
-    def __new__(cls) -> "ConfigLoader":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __init__(self):
-        if hasattr(self, "_initialized"):
-            return
-        self._initialized = True
-
-    def load(
-        self,
-        config_path: Optional[Union[str, Path]] = None,
-        *,
-        override_level: Optional[str] = None,
-    ) -> Config:
-        """
-        Load configuration file
-        加载配置文件
-
-        Args:
-            config_path: Configuration file path (default: config.yaml in project root)
-            override_level: Optional environment variable override level (DEBUG/INFO/WARNING/ERROR)
-        """
-        if self._config is not None:
-            return self._config
-
-        if config_path is None:
-            # Default search in project root directory
-            # 默认查找项目根目录
-            root = get_project_root()
-            config_path = root / "config.yaml"
-        else:
-            config_path = Path(config_path)
-
-        if not config_path.exists():
-            self._log_missing_config(config_path)
-            self._config = self._get_default_config()
-            return self._config
-
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                raw = yaml.safe_load(f) or {}
-
-            self._config = build_config_from_dict(raw)
-
-            # Environment variable override / 环境变量覆盖
-            if override_level:
-                self._config.logging.level = override_level
-
-            # Set logging level (must be done before returning)
-            # 设置日志级别（必须在返回前）
-            setup_logging(self._config)
-
-            return self._config
-
-        except Exception as e:
-            print(f"⚠️ Configuration file load failed: {e}")
-            print("  Using default configuration / 使用默认配置")
-            self._config = self._get_default_config()
-            setup_logging(self._config)
-            return self._config
-
-    def _get_default_config(self) -> Config:
-        """
-        Get default configuration (when config file doesn't exist or parsing fails)
-        获取默认配置（当配置文件不存在或解析失败时）
-        """
-        return build_default_config()
-
-    def _log_missing_config(self, path: Path) -> None:
-        log = structlog.get_logger()
-        log.warning("config_file_not_found", path=str(path), using_defaults=True)
-
-    def get(self) -> Config:
-        """
-        Get loaded configuration / 获取已加载的配置
-        """
-        if self._config is None:
-            return self.load()
-        return self._config
-
-    def reload(self, config_path: Optional[Union[str, Path]] = None) -> Config:
-        """
-        Reload configuration / 重新加载配置
-        """
-        self._config = None
-        return self.load(config_path)
-
-
-def get_config(config_path: Optional[Union[str, Path]] = None) -> Config:
-    """
-    Convenience function to get configuration
-    便捷函数：获取配置
-    """
-    loader = ConfigLoader()
-    return loader.load(config_path)
-
-
-def get_project_root() -> Path:
-    """
-    Get project root path
-    获取项目根目录
-    """
-    return Path(__file__).parent.parent
-
-
-def resolve_project_path(path: Union[str, Path]) -> Path:
-    """
-    Resolve relative paths against project root
-    将相对路径解析为项目根目录下的绝对路径
-    """
-    path = Path(path)
-    if path.is_absolute():
-        return path
-    return get_project_root() / path
-
-
-# ============================================================
-# Logging System (日志系统)
-# ============================================================
-
-_SENSITIVE_KEY_MARKERS = (
-    "cookie",
-    "token",
-    "secret",
-    "authorization",
-    "set-cookie",
-    "credential",
-    "session",
-)
-
-_CONTENT_KEY_MARKERS = (
-    "html",
-    "content",
-    "body",
-    "response_preview",
-    "response_text",
-    "page_preview",
-    "page_text",
-)
-
-_COOKIE_PAIR_RE = re.compile(r"(?i)\b(z_c0|d_c0)\s*=\s*([^;,\s]+)")
-_COOKIE_JSON_RE = re.compile(r'(?i)"(z_c0|d_c0)"\s*:\s*"([^"]+)"')
-_AUTHORIZATION_RE = re.compile(
-    r"(?i)\bauthorization\b(?:\s*[:=]\s*|\s+)(?:bearer\s+)?([A-Za-z0-9._~+/=-]+)"
-)
-_BEARER_RE = re.compile(r"(?i)\bbearer\s+([A-Za-z0-9._~+/=-]+)")
-
-
-def summarize_text_for_logs(value: str, *, kind: str = "text") -> str:
-    """
-    Replace raw payloads with a stable summary for logs.
-    将原始文本替换为适合日志记录的稳定摘要。
-    """
-    normalized = value or ""
-    digest = hashlib.sha256(normalized.encode("utf-8", errors="ignore")).hexdigest()[:12]
-    return f"<{kind}_redacted len={len(normalized)} sha256={digest}>"
-
-
-def _mask_inline_secrets(value: str) -> str:
-    """
-    Mask secret-like substrings embedded in generic messages.
-    屏蔽通用字符串里内嵌的敏感片段。
-    """
-    masked = _COOKIE_PAIR_RE.sub(lambda m: f"{m.group(1)}=<redacted>", value)
-    masked = _COOKIE_JSON_RE.sub(lambda m: f'"{m.group(1)}":"<redacted>"', masked)
-    masked = _AUTHORIZATION_RE.sub("authorization=<redacted>", masked)
-    masked = _BEARER_RE.sub("Bearer <redacted>", masked)
-    return masked
-
-
-def _looks_like_html(value: str) -> bool:
-    """
-    Heuristic check for HTML-like payloads.
-    启发式判断是否是 HTML 类内容。
-    """
-    lowered = value.lower()
-    return any(marker in lowered for marker in ("<!doctype", "<html", "<body", "</div>", "</script>", "<meta "))
-
-
-def _sanitize_log_value(key: str, value: Any) -> Any:
-    """
-    Recursively sanitize log values before rendering.
-    在日志渲染前递归脱敏。
-    """
-    normalized_key = key.lower()
-
-    if isinstance(value, dict):
-        return {sub_key: _sanitize_log_value(str(sub_key), sub_value) for sub_key, sub_value in value.items()}
-
-    if isinstance(value, (list, tuple)):
-        return [_sanitize_log_value(normalized_key, item) for item in value]
-
-    if not isinstance(value, str):
-        return value
-
-    if value.startswith("<") and "_redacted len=" in value and " sha256=" in value and value.endswith(">"):
-        return value
-
-    masked = _mask_inline_secrets(value)
-
-    if any(marker in normalized_key for marker in _SENSITIVE_KEY_MARKERS):
-        return summarize_text_for_logs(masked, kind=normalized_key.replace("-", "_") or "secret")
-
-    if any(marker in normalized_key for marker in _CONTENT_KEY_MARKERS) or _looks_like_html(masked):
-        kind = "html" if _looks_like_html(masked) else "content"
-        return summarize_text_for_logs(masked, kind=kind)
-
-    if len(masked) > 300:
-        return masked[:300] + f"... <truncated len={len(masked)}>"
-
-    return masked
-
-
-def sanitize_event_dict(_: Any, __: str, event_dict: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Structlog processor that redacts sensitive fields and large payloads.
-    Structlog 处理器：统一脱敏敏感字段和大文本载荷。
-    """
-    return {key: _sanitize_log_value(str(key), value) for key, value in event_dict.items()}
-
-
-def setup_logging(config: Union[Config, LoggingConfig]) -> None:
-    """
-    Initialize structured logging system
-    初始化结构化日志系统
-    """
-    if isinstance(config, Config):
-        log_config = config.logging
-    else:
-        log_config = config
-
-    import logging
-
-    log_level = getattr(logging, log_config.level.upper(), logging.INFO)
-    log_path = resolve_project_path(log_config.file) if log_config.file else None
-
-    if not STRUCTLOG_AVAILABLE:
-        if log_path is not None:
-            log_path.parent.mkdir(parents=True, exist_ok=True)
-        setup_fallback_logging(log_config.level, log_file=str(log_path) if log_path else None)
-        return
-
-    shared_processors = [
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        sanitize_event_dict,
-    ]
-
-    if log_config.format == "json":
-        renderer = structlog.processors.JSONRenderer()
-    else:
-        renderer = structlog.dev.ConsoleRenderer()
-
-    formatter = structlog.stdlib.ProcessorFormatter(
-        processor=renderer,
-        foreign_pre_chain=shared_processors,
-    )
-
-    handlers = [logging.StreamHandler()]
-    if log_path:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
-
-    root_logger = logging.getLogger()
-    root_logger.handlers.clear()
-    root_logger.setLevel(log_level)
-
-    for handler in handlers:
-        handler.setFormatter(formatter)
-        root_logger.addHandler(handler)
-
-    structlog.configure(
-        processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
-        wrapper_class=structlog.stdlib.BoundLogger,
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        cache_logger_on_first_use=True,
-    )
-
-
-# ============================================================
-# Human Behavior Simulation (Humanize) / 人类行为模拟
-# ============================================================
+from __future__ import annotations
 
 import asyncio
-from random import uniform
 from contextlib import asynccontextmanager
+from random import uniform
+from typing import Optional
+
+from .config_runtime import ConfigLoader, get_config
+from .config_schema import Config, HumanizeConfig, LoggingConfig
+from .logging_setup import sanitize_event_dict, setup_logging, summarize_text_for_logs
+from .project_paths import get_project_root, resolve_project_path
+from .structlog_compat import BoundLoggerBase, structlog
 
 
 def get_logger(name: str = "zhihu-scraper") -> BoundLoggerBase:
     """
-    Get structured logger
-    获取结构化日志记录器
+    Get structured logger.
+    获取结构化日志记录器。
     """
     return structlog.get_logger(name)
 
 
 class Humanizer:
     """
-    Human behavior simulator - random delays to simulate human operations
-    人类行为模拟器 - 随机延迟以模拟真人操作
-
-    Usage:
-        await humanize.random_delay()      # Random request interval
-        await humanize.page_load()         # Wait after page load
-        await humanize.scroll()            # Wait after scroll
-
-    用法:
-        await humanize.random_delay()      # 随机请求间隔
-        await humanize.page_load()         # 页面加载等待
-        await humanize.scroll()            # 滚动后等待
+    Human behavior simulator - random delays to simulate human operations.
+    人类行为模拟器 - 随机延迟以模拟真人操作。
     """
 
     def __init__(self, config: Optional[HumanizeConfig] = None):
@@ -362,26 +36,24 @@ class Humanizer:
     @property
     def config(self) -> HumanizeConfig:
         """
-        Get configuration, singleton pattern to avoid repeated loading
-        获取配置，单例模式避免重复加载
+        Get configuration, singleton pattern to avoid repeated loading.
+        获取配置，单例模式避免重复加载。
         """
         if self._config is None:
             try:
                 cfg = get_config()
                 self._config = cfg.crawler.humanize
             except Exception:
-                # Use safe defaults if config loading fails
-                # 如果配置加载失败，使用安全默认值
                 self._config = HumanizeConfig()
         return self._config
 
     def random_delay(self, min_delay: Optional[float] = None, max_delay: Optional[float] = None) -> asyncio.sleep:
         """
-        Random delay simulating human request interval
-        随机延迟，模拟人类请求间隔
+        Random delay simulating human request interval.
+        随机延迟，模拟人类请求间隔。
         """
         if not self.config.enabled:
-            return  # No delay when disabled / 禁用时不做延迟
+            return
 
         min_d = min_delay if min_delay is not None else self.config.min_delay
         max_d = max_delay if max_delay is not None else self.config.max_delay
@@ -391,30 +63,28 @@ class Humanizer:
 
     async def page_load(self) -> None:
         """
-        Wait after page load, simulating reading/rendering time
-        页面加载后等待，模拟阅读/渲染时间
+        Wait after page load, simulating reading/rendering time.
+        页面加载后等待，模拟阅读/渲染时间。
         """
         if not self.config.enabled:
             return
 
-        delay = self.config.page_load_delay
-        await asyncio.sleep(delay)
+        await asyncio.sleep(self.config.page_load_delay)
 
     async def scroll(self) -> None:
         """
-        Wait after scroll, simulating content loading
-        滚动后等待，模拟内容加载
+        Wait after scroll, simulating content loading.
+        滚动后等待，模拟内容加载。
         """
         if not self.config.enabled:
             return
 
-        delay = self.config.scroll_delay
-        await asyncio.sleep(delay)
+        await asyncio.sleep(self.config.scroll_delay)
 
     async def before_action(self, action: str = "request") -> None:
         """
-        Wait before action
-        操作前等待
+        Wait before action.
+        操作前等待。
         """
         if not self.config.enabled:
             return
@@ -430,14 +100,13 @@ class Humanizer:
         await asyncio.sleep(uniform(min_d, max_d))
 
 
-# Global Humanizer instance / 全局 Humanizer 实例
 _humanizer: Optional[Humanizer] = None
 
 
 def get_humanizer() -> Humanizer:
     """
-    Get global Humanizer instance
-    获取全局 Humanizer 实例
+    Get global Humanizer instance.
+    获取全局 Humanizer 实例。
     """
     global _humanizer
     if _humanizer is None:
@@ -452,13 +121,27 @@ def get_humanizer() -> Humanizer:
 @asynccontextmanager
 async def humanize(action: str = "request"):
     """
-    Context manager form of delay
-    上下文管理器形式的延迟
-
-    Usage:
-        async with humanize("request"):
-            await page.goto(url)
+    Context manager form of delay.
+    上下文管理器形式的延迟。
     """
     h = get_humanizer()
     await h.before_action(action)
     yield
+
+
+__all__ = [
+    "Config",
+    "ConfigLoader",
+    "HumanizeConfig",
+    "Humanizer",
+    "LoggingConfig",
+    "get_config",
+    "get_humanizer",
+    "get_logger",
+    "get_project_root",
+    "humanize",
+    "resolve_project_path",
+    "sanitize_event_dict",
+    "setup_logging",
+    "summarize_text_for_logs",
+]

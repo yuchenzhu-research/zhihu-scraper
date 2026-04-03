@@ -14,10 +14,12 @@
 - command surface: `tests.test_command_surface`
 - TUI regression: `tests.test_tui_rebuild`
 - save pipeline: `tests.test_save_pipeline`
+- save result contracts: `tests.test_save_contracts`
 - config display: `tests.test_config_view`
 - scraper payload normalization: `tests.test_scraper_payloads`
 - scraper result contracts: `tests.test_scraper_contracts`
 - config schema parsing: `tests.test_config_schema`
+- config runtime facade: `tests.test_config_runtime`
 
 3. CLI smoke
 - `python cli/app.py --help`

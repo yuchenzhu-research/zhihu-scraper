@@ -11,13 +11,15 @@ from dataclasses import dataclass
 from datetime import datetime
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 from rich import print as rprint
 
+from cli.save_contracts import CreatorSaveResult, SaveRunResult, SavedContentRecord
 from core.converter import ZhihuConverter
 from core.db import ZhihuDatabase
 from core.scraper import ZhihuCreatorDownloader, ZhihuDownloader
+from core.scraper_contracts import CreatorProfileSummary, ScrapedItem, to_scraped_items
 from core.utils import sanitize_filename
 
 
@@ -80,10 +82,38 @@ async def fetch_and_save(
     headless: bool = True,
     collection_id: Optional[str] = None,
     printer: Printer = rprint,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Execute scraping and save the result to local files and SQLite.
     执行抓取，并保存到本地文件和 SQLite。
+    """
+    result = await fetch_and_save_result(
+        url=url,
+        output_dir=output_dir,
+        scrape_config=scrape_config,
+        settings=settings,
+        download_images=download_images,
+        headless=headless,
+        collection_id=collection_id,
+        printer=printer,
+    )
+    return result.to_legacy_records()
+
+
+async def fetch_and_save_result(
+    *,
+    url: str,
+    output_dir: Path,
+    scrape_config: Dict[str, Any],
+    settings: SavePipelineSettings,
+    download_images: bool = True,
+    headless: bool = True,
+    collection_id: Optional[str] = None,
+    printer: Printer = rprint,
+) -> SaveRunResult:
+    """
+    Execute scraping and return a typed save result contract.
+    执行抓取，并返回类型化保存结果契约。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -94,11 +124,15 @@ async def fetch_and_save(
 
     if fetch_result.is_empty:
         printer("[yellow]⚠️  No content obtained / 未获取到内容[/yellow]")
-        return []
+        return SaveRunResult(
+            source_url=url,
+            content_root=resolve_entries_output_dir(output_dir),
+            records=(),
+            collection_id=collection_id,
+        )
 
-    items = [item.to_dict() for item in fetch_result.items]
-    return await save_items(
-        items=items,
+    return await save_items_result(
+        items=fetch_result.items,
         content_root=resolve_entries_output_dir(output_dir),
         db_root=output_dir,
         settings=settings,
@@ -118,52 +152,76 @@ async def fetch_creator_and_save(
     settings: SavePipelineSettings,
     download_images: bool = True,
     printer: Printer = rprint,
-) -> None:
+) -> Optional[CreatorSaveResult]:
     """
     Fetch creator content and persist it using the standard save pipeline.
     抓取作者内容，并复用标准保存链路落地。
+    """
+    return await fetch_creator_and_save_result(
+        creator=creator,
+        output_dir=output_dir,
+        answer_limit=answer_limit,
+        article_limit=article_limit,
+        settings=settings,
+        download_images=download_images,
+        printer=printer,
+    )
+
+
+async def fetch_creator_and_save_result(
+    *,
+    creator: str,
+    output_dir: Path,
+    answer_limit: int,
+    article_limit: int,
+    settings: SavePipelineSettings,
+    download_images: bool = True,
+    printer: Printer = rprint,
+) -> Optional[CreatorSaveResult]:
+    """
+    Fetch creator content and return a typed save result contract.
+    抓取作者内容，并返回类型化保存结果契约。
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     downloader = ZhihuCreatorDownloader(creator)
     result = await downloader.fetch_items_result(answer_limit=answer_limit, article_limit=article_limit)
-    creator_info = result.creator.to_dict()
-    items = [item.to_dict() for item in result.items]
-    sync_info = {
-        "answers": result.answers.to_dict(),
-        "articles": result.articles.to_dict(),
-    }
+    creator_info = result.creator
 
-    if not items:
+    if result.is_empty:
         printer("[yellow]⚠️  No creator content obtained / 未获取到作者内容[/yellow]")
-        return
+        return None
 
-    creator_name = creator_info.get("name", creator_info.get("url_token", creator))
-    printer(f"[cyan]👤 Creator / 作者[/cyan]: {creator_name} ({creator_info.get('url_token', 'unknown')})")
-    if creator_info.get("follower_count") or creator_info.get("following_count"):
+    printer(f"[cyan]👤 Creator / 作者[/cyan]: {creator_info.name} ({creator_info.url_token or 'unknown'})")
+    if creator_info.follower_count or creator_info.following_count:
         printer(
-            f"   👥 Followers / 粉丝: {creator_info.get('follower_count', 0)}"
-            f" | Following / 关注: {creator_info.get('following_count', 0)}"
+            f"   👥 Followers / 粉丝: {creator_info.follower_count}"
+            f" | Following / 关注: {creator_info.following_count}"
         )
 
-    creator_root = resolve_creator_output_dir(output_dir, creator_info.get("url_token", creator))
-
-    saved_records = await save_items(
-        items=items,
+    creator_root = resolve_creator_output_dir(output_dir, creator_info.url_token or creator)
+    save_result = await save_items_result(
+        items=result.items,
         content_root=creator_root,
         db_root=output_dir,
         settings=settings,
         download_images=download_images,
-        source_url_fallback=f"https://www.zhihu.com/people/{creator_info.get('url_token', creator)}",
+        source_url_fallback=f"https://www.zhihu.com/people/{creator_info.url_token or creator}",
         printer=printer,
     )
-
-    write_creator_metadata(creator_root, creator_info, saved_records, sync_info)
+    creator_result = CreatorSaveResult(
+        creator=creator_info,
+        save_result=save_result,
+        answers=result.answers,
+        articles=result.articles,
+    )
+    write_creator_metadata(creator_root, creator_info, save_result, creator_result)
+    return creator_result
 
 
 async def save_items(
     *,
-    items: List[Dict[str, Any]],
+    items: Sequence[ScrapedItem] | Sequence[dict[str, Any]],
     content_root: Path,
     db_root: Path,
     settings: SavePipelineSettings,
@@ -171,24 +229,53 @@ async def save_items(
     source_url_fallback: str,
     collection_id: Optional[str] = None,
     printer: Printer = rprint,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
+    """
+    Save normalized content items to Markdown, images, and SQLite.
+    将标准化内容保存到 Markdown、图片目录和 SQLite。
+    """
+    result = await save_items_result(
+        items=items,
+        content_root=content_root,
+        db_root=db_root,
+        settings=settings,
+        download_images=download_images,
+        source_url_fallback=source_url_fallback,
+        collection_id=collection_id,
+        printer=printer,
+    )
+    return result.to_legacy_records()
+
+
+async def save_items_result(
+    *,
+    items: Sequence[ScrapedItem] | Sequence[dict[str, Any]],
+    content_root: Path,
+    db_root: Path,
+    settings: SavePipelineSettings,
+    download_images: bool,
+    source_url_fallback: str,
+    collection_id: Optional[str] = None,
+    printer: Printer = rprint,
+) -> SaveRunResult:
     """
     Save normalized content items to Markdown, images, and SQLite.
     将标准化内容保存到 Markdown、图片目录和 SQLite。
     """
     content_root.mkdir(parents=True, exist_ok=True)
     today = datetime.now().strftime("%Y-%m-%d")
+    typed_items = _coerce_scraped_items(items)
 
     db = ZhihuDatabase(str(db_root / "zhihu.db"))
-    saved_records: List[Dict[str, Any]] = []
+    saved_records: list[SavedContentRecord] = []
     try:
-        for item in items:
-            title = sanitize_filename(item["title"])
-            author = sanitize_filename(item["author"])
-            item_date = item.get("date") or today
-            source_url = item.get("url") or source_url_fallback
+        for item in typed_items:
+            title = sanitize_filename(item.title)
+            author = sanitize_filename(item.author)
+            item_date = item.date or today
+            source_url = item.url or source_url_fallback
             item_key = sanitize_filename(
-                f"{item.get('type', 'item')}-{item.get('id', 'unknown')}",
+                f"{item.type or 'item'}-{item.id or 'unknown'}",
                 max_length=80,
             )
 
@@ -204,7 +291,7 @@ async def save_items(
 
             img_map: Dict[str, str] = {}
             if download_images:
-                img_urls = ZhihuConverter.extract_image_urls(item["html"])
+                img_urls = ZhihuConverter.extract_image_urls(item.html)
                 if img_urls:
                     printer(f"   📥 Downloading {len(img_urls)} images... / 下载 {len(img_urls)} 张图片...")
                     img_map = await ZhihuDownloader.download_images(
@@ -216,11 +303,11 @@ async def save_items(
                     )
 
             converter = ZhihuConverter(img_map=img_map)
-            md = converter.convert(item["html"])
+            md = converter.convert(item.html)
 
             header = (
-                f"# {item['title']}\n\n"
-                f"> **Author / 作者**: {item['author']}  \n"
+                f"# {item.title}\n\n"
+                f"> **Author / 作者**: {item.author}  \n"
                 f"> **Source / 来源**: [{source_url}]({source_url})  \n"
                 f"> **Date / 日期**: {item_date}\n\n"
                 "---\n\n"
@@ -230,13 +317,13 @@ async def save_items(
             full_md = header + md
             out_path.write_text(full_md, encoding="utf-8")
 
-            db.save_article(item, full_md, collection_id=collection_id)
+            db.save_article(item.to_dict(), full_md, collection_id=collection_id)
             saved_records.append(
-                {
-                    "item": item,
-                    "folder": folder,
-                    "markdown_path": out_path,
-                }
+                SavedContentRecord(
+                    item=item,
+                    folder=folder,
+                    markdown_path=out_path,
+                )
             )
 
             printer(f"✅ Saved / 保存: [cyan]{author}[/] - {title[:25]}...")
@@ -244,50 +331,55 @@ async def save_items(
     finally:
         db.close()
 
-    return saved_records
+    return SaveRunResult(
+        source_url=source_url_fallback,
+        content_root=content_root,
+        records=tuple(saved_records),
+        collection_id=collection_id,
+    )
 
 
 def write_creator_metadata(
     creator_root: Path,
-    creator_info: Dict[str, Any],
-    saved_records: List[Dict[str, Any]],
-    sync_info: Optional[Dict[str, Any]] = None,
+    creator_info: dict[str, Any] | CreatorProfileSummary,
+    saved_records: SaveRunResult | Sequence[SavedContentRecord] | Sequence[dict[str, Any]],
+    sync_info: Optional[dict[str, Any] | CreatorSaveResult] = None,
 ) -> None:
     """
     Write creator metadata files under the creator directory.
     在作者目录下写入元信息文件。
     """
     fetched_at = datetime.now().isoformat(timespec="seconds")
-    answer_records = [record for record in saved_records if record["item"].get("type") == "answer"]
-    article_records = [record for record in saved_records if record["item"].get("type") == "article"]
-    sync_info = sync_info or {}
-    answer_sync = sync_info.get("answers", {})
-    article_sync = sync_info.get("articles", {})
+    creator_payload = creator_info.to_dict() if isinstance(creator_info, CreatorProfileSummary) else dict(creator_info)
+    typed_records = _coerce_saved_records(saved_records)
+    answer_records = [record for record in typed_records if record.item.type == "answer"]
+    article_records = [record for record in typed_records if record.item.type == "article"]
+    answer_sync, article_sync = _coerce_creator_sync(sync_info)
     recent_records = sorted(
-        saved_records,
-        key=lambda record: record["item"].get("date", ""),
+        typed_records,
+        key=lambda record: record.item.date,
         reverse=True,
     )[:5]
 
     creator_payload = {
-        "user_id": creator_info.get("user_id", ""),
-        "name": creator_info.get("name", creator_info.get("url_token", "unknown")),
-        "url_token": creator_info.get("url_token", "unknown"),
-        "profile_url": creator_info.get(
+        "user_id": creator_payload.get("user_id", ""),
+        "name": creator_payload.get("name", creator_payload.get("url_token", "unknown")),
+        "url_token": creator_payload.get("url_token", "unknown"),
+        "profile_url": creator_payload.get(
             "profile_url",
-            f"https://www.zhihu.com/people/{creator_info.get('url_token', 'unknown')}",
+            f"https://www.zhihu.com/people/{creator_payload.get('url_token', 'unknown')}",
         ),
-        "avatar_url": creator_info.get("avatar_url", ""),
-        "headline": creator_info.get("headline", ""),
-        "description": creator_info.get("description", ""),
-        "follower_count": creator_info.get("follower_count", 0),
-        "following_count": creator_info.get("following_count", 0),
-        "voteup_count": creator_info.get("voteup_count", 0),
-        "answer_count": creator_info.get("answer_count", 0),
-        "articles_count": creator_info.get("articles_count", 0),
-        "question_count": creator_info.get("question_count", 0),
-        "video_count": creator_info.get("video_count", 0),
-        "column_count": creator_info.get("column_count", 0),
+        "avatar_url": creator_payload.get("avatar_url", ""),
+        "headline": creator_payload.get("headline", ""),
+        "description": creator_payload.get("description", ""),
+        "follower_count": creator_payload.get("follower_count", 0),
+        "following_count": creator_payload.get("following_count", 0),
+        "voteup_count": creator_payload.get("voteup_count", 0),
+        "answer_count": creator_payload.get("answer_count", 0),
+        "articles_count": creator_payload.get("articles_count", 0),
+        "question_count": creator_payload.get("question_count", 0),
+        "video_count": creator_payload.get("video_count", 0),
+        "column_count": creator_payload.get("column_count", 0),
         "fetched_at": fetched_at,
         "last_sync_at": fetched_at,
         "saved_answers": len(answer_records),
@@ -299,24 +391,24 @@ def write_creator_metadata(
         },
         "recent_items": [
             {
-                "id": record["item"].get("id", ""),
-                "type": record["item"].get("type", ""),
-                "title": record["item"].get("title", ""),
-                "date": record["item"].get("date", ""),
-                "markdown_path": str(record["markdown_path"].relative_to(creator_root)),
+                "id": record.item.id,
+                "type": record.item.type,
+                "title": record.item.title,
+                "date": record.item.date,
+                "markdown_path": str(record.markdown_path.relative_to(creator_root)),
             }
             for record in recent_records
         ],
         "items": [
             {
-                "id": record["item"].get("id", ""),
-                "type": record["item"].get("type", ""),
-                "title": record["item"].get("title", ""),
-                "date": record["item"].get("date", ""),
-                "url": record["item"].get("url", ""),
-                "markdown_path": str(record["markdown_path"].relative_to(creator_root)),
+                "id": record.item.id,
+                "type": record.item.type,
+                "title": record.item.title,
+                "date": record.item.date,
+                "url": record.item.url,
+                "markdown_path": str(record.markdown_path.relative_to(creator_root)),
             }
-            for record in saved_records
+            for record in typed_records
         ],
     }
 
@@ -425,11 +517,10 @@ def write_creator_metadata(
             ]
         )
         for record in records:
-            item = record["item"]
-            title = item.get("title", "").replace("|", "\\|")
-            item_date = item.get("date", "")
-            markdown_rel = record["markdown_path"].relative_to(creator_root)
-            source_url = item.get("url", "")
+            title = record.item.title.replace("|", "\\|")
+            item_date = record.item.date
+            markdown_rel = record.markdown_path.relative_to(creator_root)
+            source_url = record.item.url
             lines.append(
                 f"| {title} | {item_date} | "
                 f"[index.md]({markdown_rel.as_posix()}) | [source]({source_url}) |"
@@ -438,3 +529,33 @@ def write_creator_metadata(
 
     creator_readme_path = creator_root / "README.md"
     creator_readme_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _coerce_scraped_items(items: Sequence[ScrapedItem] | Sequence[dict[str, Any]]) -> Tuple[ScrapedItem, ...]:
+    if not items:
+        return ()
+    first = items[0]
+    if isinstance(first, ScrapedItem):
+        return tuple(items)  # type: ignore[arg-type]
+    return to_scraped_items(items)  # type: ignore[arg-type]
+
+
+def _coerce_saved_records(
+    saved_records: SaveRunResult | Sequence[SavedContentRecord] | Sequence[dict[str, Any]],
+) -> Tuple[SavedContentRecord, ...]:
+    if isinstance(saved_records, SaveRunResult):
+        return saved_records.records
+    if not saved_records:
+        return ()
+    first = saved_records[0]
+    if isinstance(first, SavedContentRecord):
+        return tuple(saved_records)  # type: ignore[arg-type]
+    return tuple(SavedContentRecord.from_legacy_dict(record) for record in saved_records)  # type: ignore[arg-type]
+
+
+def _coerce_creator_sync(sync_info: Optional[dict[str, Any] | CreatorSaveResult]) -> Tuple[dict[str, Any], dict[str, Any]]:
+    if isinstance(sync_info, CreatorSaveResult):
+        return sync_info.answers.to_dict(), sync_info.articles.to_dict()
+    if not sync_info:
+        return {}, {}
+    return sync_info.get("answers", {}), sync_info.get("articles", {})

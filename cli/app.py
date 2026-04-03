@@ -63,6 +63,7 @@ from cli.save_pipeline import (
     SavePipelineSettings,
     build_output_folder_name as render_output_folder_name,
     fetch_and_save as run_fetch_and_save,
+    fetch_and_save_result as run_fetch_and_save_result,
     fetch_creator_and_save as run_fetch_creator_and_save,
     resolve_creator_output_dir as resolve_creator_output_path,
     resolve_entries_output_dir as resolve_entries_output_path,
@@ -770,6 +771,30 @@ async def _fetch_and_save(
         collection_id: Collection ID (for database record association) / 收藏夹 ID (关联数据库记录)
     """
     return await run_fetch_and_save(
+        url=url,
+        output_dir=output_dir,
+        scrape_config=scrape_config,
+        settings=_get_save_pipeline_settings(),
+        download_images=download_images,
+        headless=headless,
+        collection_id=collection_id,
+        printer=rprint,
+    )
+
+
+async def _fetch_and_save_result(
+    url: str,
+    output_dir: Path,
+    scrape_config: dict,
+    download_images: bool = True,
+    headless: bool = True,
+    collection_id: Optional[str] = None,
+):
+    """
+    Execute scraping and return the typed save result contract.
+    执行抓取，并返回类型化保存结果契约。
+    """
+    return await run_fetch_and_save_result(
         url=url,
         output_dir=output_dir,
         scrape_config=scrape_config,
