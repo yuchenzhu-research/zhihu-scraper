@@ -90,13 +90,13 @@ async def fetch_and_save(
     downloader = ZhihuDownloader(url)
     fetch_kwargs = dict(scrape_config)
     fetch_kwargs["headless"] = headless
-    data = await downloader.fetch_page(**fetch_kwargs)
+    fetch_result = await downloader.fetch_result(**fetch_kwargs)
 
-    if not data:
+    if fetch_result.is_empty:
         printer("[yellow]⚠️  No content obtained / 未获取到内容[/yellow]")
         return []
 
-    items = data if isinstance(data, list) else [data]
+    items = [item.to_dict() for item in fetch_result.items]
     return await save_items(
         items=items,
         content_root=resolve_entries_output_dir(output_dir),
@@ -126,10 +126,13 @@ async def fetch_creator_and_save(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     downloader = ZhihuCreatorDownloader(creator)
-    result = await downloader.fetch_items(answer_limit=answer_limit, article_limit=article_limit)
-    creator_info = result.get("creator", {})
-    items = result.get("items", [])
-    sync_info = result.get("sync", {})
+    result = await downloader.fetch_items_result(answer_limit=answer_limit, article_limit=article_limit)
+    creator_info = result.creator.to_dict()
+    items = [item.to_dict() for item in result.items]
+    sync_info = {
+        "answers": result.answers.to_dict(),
+        "articles": result.articles.to_dict(),
+    }
 
     if not items:
         printer("[yellow]⚠️  No creator content obtained / 未获取到作者内容[/yellow]")

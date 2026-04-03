@@ -16,190 +16,17 @@ import hashlib
 import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
-from dataclasses import dataclass, field
 
 import yaml
 
-from .runtime_paths import DEFAULT_COOKIE_FILE, DEFAULT_COOKIE_POOL_DIR, DEFAULT_LOG_FILE
+from .config_schema import (
+    Config,
+    HumanizeConfig,
+    LoggingConfig,
+    build_config_from_dict,
+    build_default_config,
+)
 from .structlog_compat import BoundLoggerBase, STRUCTLOG_AVAILABLE, setup_fallback_logging, structlog
-
-# ============================================================
-# Configuration Data Classes (配置数据类)
-# ============================================================
-
-@dataclass
-class BrowserConfig:
-    """
-    Browser configuration / 浏览器配置
-    """
-    headless: bool = True
-    timeout: int = 30000
-    viewport: Dict[str, int] = field(default_factory=lambda: {"width": 1920, "height": 1080})
-    channel: str = "chrome"
-    args: list = field(default_factory=list)
-
-@dataclass
-class AntiDetectionConfig:
-    """
-    Anti-crawling configuration / 反爬配置
-    """
-    stealth: bool = True
-    webgl: bool = True
-    navigator: bool = True
-
-@dataclass
-class SignatureConfig:
-    """
-    Signature algorithm configuration / 签名算法配置
-    """
-    enabled: bool = False
-
-@dataclass
-class ZhihuConfig:
-    """
-    Zhihu-related configuration / 知乎相关配置
-    """
-    cookies_file: str = str(DEFAULT_COOKIE_FILE)
-    cookies_pool_dir: str = str(DEFAULT_COOKIE_POOL_DIR)
-    cookies_required: bool = True
-    browser: BrowserConfig = field(default_factory=BrowserConfig)
-    anti_detection: AntiDetectionConfig = field(default_factory=AntiDetectionConfig)
-    signature: SignatureConfig = field(default_factory=SignatureConfig)
-
-@dataclass
-class RetryConfig:
-    """
-    Retry configuration / 重试配置
-    """
-    max_attempts: int = 3
-    base_delay: float = 1.0
-    max_delay: float = 30.0
-    exponential_base: float = 2.0
-    jitter: bool = True
-
-@dataclass
-class ScrollConfig:
-    """
-    Scroll configuration / 滚动配置
-    """
-    timeout: int = 60000
-    pause: int = 1000
-    viewport_height: int = 800
-
-@dataclass
-class HumanizeConfig:
-    """
-    Human behavior simulation configuration / 人类行为模拟配置
-    """
-    enabled: bool = True
-    min_delay: float = 1.0       # Minimum request interval (seconds) / 最小请求间隔 (秒)
-    max_delay: float = 3.0       # Maximum request interval (seconds) / 最大请求间隔 (秒)
-    scroll_delay: float = 0.5    # Wait after scrolling (seconds) / 滚动后等待 (秒)
-    page_load_delay: float = 2.0 # Wait after page load (seconds) / 页面加载后等待 (秒)
-
-    @classmethod
-    def from_dict(cls, raw: Dict[str, Any]) -> "HumanizeConfig":
-        """
-        Build from dictionary, support backward compatibility
-        从字典构建，支持向后兼容
-        """
-        return cls(
-            enabled=raw.get("enabled", True),
-            min_delay=raw.get("min_delay", 1.0),
-            max_delay=raw.get("max_delay", 3.0),
-            scroll_delay=raw.get("scroll_delay", 0.5),
-            page_load_delay=raw.get("page_load_delay", 2.0),
-        )
-
-@dataclass
-class ImagesConfig:
-    """
-    Image download configuration / 图片下载配置
-    """
-    concurrency: int = 4
-    timeout: float = 30.0
-    referer: str = "https://www.zhihu.com/"
-
-@dataclass
-class CrawlerConfig:
-    """
-    General crawler configuration / 爬虫通用配置
-    """
-    retry: RetryConfig = field(default_factory=RetryConfig)
-    scroll: ScrollConfig = field(default_factory=ScrollConfig)
-    humanize: HumanizeConfig = field(default_factory=HumanizeConfig)
-    images: ImagesConfig = field(default_factory=ImagesConfig)
-
-@dataclass
-class OutputConfig:
-    """
-    Export configuration / 导出配置
-    """
-    directory: str = "data"
-    format: str = "markdown"
-    images_subdir: str = "images"
-    folder_format: str = "[{date}] {title}"
-    download_images: Optional[bool] = None
-
-@dataclass
-class LoggingConfig:
-    """
-    Logging configuration / 日志配置
-    """
-    level: str = "INFO"
-    format: str = "console"
-    file: Optional[str] = str(DEFAULT_LOG_FILE)
-    log_exceptions: bool = True
-
-@dataclass
-class Config:
-    """
-    Main configuration class / 主配置类
-    """
-    zhihu: ZhihuConfig
-    crawler: CrawlerConfig
-    output: OutputConfig
-    logging: LoggingConfig
-
-    @classmethod
-    def from_dict(cls, raw: Dict[str, Any]) -> "Config":
-        """
-        Build configuration from dictionary
-        从字典构建配置
-        """
-        # Parse Zhihu configuration / 解析知乎配置
-        zhihu_raw = raw.get("zhihu", {})
-        cookies_raw = zhihu_raw.get("cookies", {})
-        zhihu = ZhihuConfig(
-            cookies_file=cookies_raw.get("file", str(DEFAULT_COOKIE_FILE)),
-            cookies_pool_dir=cookies_raw.get("pool_dir", str(DEFAULT_COOKIE_POOL_DIR)),
-            cookies_required=cookies_raw.get("required", True),
-            browser=BrowserConfig(**zhihu_raw.get("browser", {})),
-            anti_detection=AntiDetectionConfig(**zhihu_raw.get("anti_detection", {})),
-            signature=SignatureConfig(**zhihu_raw.get("signature", {})),
-        )
-
-        # Parse crawler configuration / 解析爬虫配置
-        crawler_raw = raw.get("crawler", {})
-        crawler = CrawlerConfig(
-            retry=RetryConfig(**crawler_raw.get("retry", {})),
-            scroll=ScrollConfig(**crawler_raw.get("scroll", {})),
-            humanize=HumanizeConfig.from_dict(crawler_raw.get("humanize", {})),
-            images=ImagesConfig(**crawler_raw.get("images", {})),
-        )
-
-        # Parse export configuration / 解析导出配置
-        output = OutputConfig(**raw.get("output", {}))
-
-        # Parse logging configuration / 解析日志配置
-        logging_cfg = LoggingConfig(**raw.get("logging", {}))
-
-        return cls(
-            zhihu=zhihu,
-            crawler=crawler,
-            output=output,
-            logging=logging_cfg,
-        )
 
 # ============================================================
 # Configuration Loader (配置加载器)
@@ -258,7 +85,7 @@ class ConfigLoader:
             with open(config_path, "r", encoding="utf-8") as f:
                 raw = yaml.safe_load(f) or {}
 
-            self._config = Config.from_dict(raw)
+            self._config = build_config_from_dict(raw)
 
             # Environment variable override / 环境变量覆盖
             if override_level:
@@ -282,12 +109,7 @@ class ConfigLoader:
         Get default configuration (when config file doesn't exist or parsing fails)
         获取默认配置（当配置文件不存在或解析失败时）
         """
-        return Config(
-            zhihu=ZhihuConfig(),
-            crawler=CrawlerConfig(),
-            output=OutputConfig(),
-            logging=LoggingConfig(),
-        )
+        return build_default_config()
 
     def _log_missing_config(self, path: Path) -> None:
         log = structlog.get_logger()

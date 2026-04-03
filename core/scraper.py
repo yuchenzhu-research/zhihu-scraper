@@ -44,6 +44,13 @@ from random import uniform
 
 from .config import get_logger, get_humanizer
 from .api_client import ZhihuAPIClient
+from .scraper_contracts import (
+    CreatorFetchResult,
+    CreatorProfileSummary,
+    PageFetchResult,
+    PaginationStats,
+    to_scraped_items,
+)
 from .utils import extract_creator_token
 from .scraper_payloads import (
     build_answer_item,
@@ -91,20 +98,13 @@ class ZhihuDownloader:
         return bool(self.api_client._cookies_dict)
 
     async def fetch_page(self, **kwargs) -> Union[dict, List[dict]]:
+        """Backward-compatible fetch entrypoint returning legacy dict/list payloads."""
+        return (await self.fetch_result(**kwargs)).to_legacy_payload()
+
+    async def fetch_result(self, **kwargs) -> PageFetchResult:
         """
-        Fetch page data using pure protocol layer.
-        Supports kwargs (like start, limit) passed to _extract_question.
-
-        Scraping workflow:
-        1. First try curl_cffi API mode (lightweight and fast)
-        2. If encountering 403/blocking, automatically fall back to Playwright browser rendering
-
-        使用纯协议层抓取页面数据。
-        支持传入 kwargs (如 start, limit) 传递给 _extract_question。
-
-        抓取流程：
-        1. 首先尝试 curl_cffi API 模式 (轻量快速)
-        2. 如果遭遇 403/风控，自动降级到 Playwright 浏览器渲染
+        Typed fetch entrypoint returning a stable result contract.
+        返回稳定结果契约的抓取入口。
         """
         humanizer = get_humanizer()
 
@@ -118,11 +118,17 @@ class ZhihuDownloader:
         headless = kwargs.pop("headless", True)
 
         if self.page_type == "article":
-            return await self._extract_article(headless=headless)
+            raw_items = [await self._extract_article(headless=headless)]
         elif self.page_type == "question":
-            return await self._extract_question(**kwargs)
+            raw_items = await self._extract_question(**kwargs)
         else:
-            return await self._extract_answer()
+            raw_items = [await self._extract_answer()]
+
+        return PageFetchResult(
+            source_url=self.url,
+            page_type=self.page_type,
+            items=to_scraped_items(raw_items),
+        )
 
     async def _extract_article(self, *, headless: bool = True) -> dict:
         """提取专栏文章数据。
@@ -451,8 +457,15 @@ class ZhihuCreatorDownloader:
 
     async def fetch_items(self, answer_limit: int = 10, article_limit: int = 5) -> Dict[str, Any]:
         """
-        Fetch creator profile and selected content types.
-        抓取作者资料和指定类型内容。
+        Backward-compatible creator fetch returning the legacy dict structure.
+        返回旧版 dict 结构的兼容入口。
+        """
+        return (await self.fetch_items_result(answer_limit=answer_limit, article_limit=article_limit)).to_dict()
+
+    async def fetch_items_result(self, answer_limit: int = 10, article_limit: int = 5) -> CreatorFetchResult:
+        """
+        Fetch creator profile and selected content types with a stable result contract.
+        以稳定结果契约抓取作者资料和指定内容。
         """
         if not self.url_token:
             raise Exception(f"无法从作者输入中提取知乎用户标识: {self.creator}")
@@ -480,14 +493,12 @@ class ZhihuCreatorDownloader:
             )
             items.extend(article_result["items"])
 
-        return {
-            "creator": build_creator_profile_payload(self.url_token, creator_profile),
-            "items": items,
-            "sync": {
-                "answers": answer_result["stats"],
-                "articles": article_result["stats"],
-            },
-        }
+        return CreatorFetchResult(
+            creator=CreatorProfileSummary.from_dict(build_creator_profile_payload(self.url_token, creator_profile)),
+            items=to_scraped_items(items),
+            answers=PaginationStats.from_dict(answer_result["stats"]),
+            articles=PaginationStats.from_dict(article_result["stats"]),
+        )
 
     async def _paginate_creator_items(
         self,

@@ -16,6 +16,8 @@
 - save pipeline: `tests.test_save_pipeline`
 - config display: `tests.test_config_view`
 - scraper payload normalization: `tests.test_scraper_payloads`
+- scraper result contracts: `tests.test_scraper_contracts`
+- config schema parsing: `tests.test_config_schema`
 
 3. CLI smoke
 - `python cli/app.py --help`
