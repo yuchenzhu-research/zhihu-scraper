@@ -221,9 +221,14 @@ zhihu manual
 | 你想做什么 | 推荐命令 |
 |---|---|
 | 第一次进入项目 | `zhihu` |
+| 跑首次引导 | `zhihu onboard` |
 | 抓一条链接 | `zhihu fetch "<url>"` |
 | 抓作者主页 | `zhihu creator "<people url>"` |
 | 批量抓取 | `zhihu batch urls.txt` |
+| 监控收藏夹新增 | `zhihu monitor 78170682` |
+| 打开交互工作台 | `zhihu interactive` |
+| 本地检索 | `zhihu query "<keyword>"` |
+| 查看当前配置 | `zhihu config --show` |
 | 环境检查 | `zhihu check` |
 | 查看完整说明书 | `zhihu manual` |
 
@@ -239,6 +244,7 @@ python3 cli/app.py <command> ...
 
 常用命令：
 
+- `onboard`
 - `fetch`
 - `creator`
 - `batch`
@@ -402,6 +408,9 @@ flowchart LR
 
 - **代码结构重构**
   后续重点会放在 CLI 边界、配置 schema、TUI 模块边界和测试矩阵，防止继续向大单文件堆积。
+
+- **验证矩阵收口**
+  当前测试与 smoke 检查见 [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)。
 
 ## 开发路线图 Roadmap
 

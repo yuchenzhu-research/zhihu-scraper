@@ -220,8 +220,10 @@ PLATFORM SUPPORT
   ARCHITECTURE (LAYER MAP)
   CLI Layer
   - `cli/app.py` command routing + orchestration
+  - `cli/config_view.py` config summary rendering
   - `cli/launcher_flow.py` home menu + onboarding flow
   - `cli/manual_content.py` built-in manual source
+  - `cli/save_pipeline.py` archive save orchestration
   - `cli/interactive.py` Textual-based interactive workbench
   - `cli/interactive_legacy.py` deprecated Rich/questionary fallback
 
@@ -229,6 +231,8 @@ PLATFORM SUPPORT
   - `core/scraper.py`
     URL type detection, protocol-first fetch, question pagination,
     creator pagination, image download
+  - `core/scraper_payloads.py`
+    normalized payload builders for article / answer / creator content
 
   Access Layer
   - `core/api_client.py` Zhihu API access + cookie-based requests

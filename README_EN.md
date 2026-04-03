@@ -221,9 +221,14 @@ For the explicit support boundary, see:
 | What you want to do | Recommended command |
 |---|---|
 | Start from the home menu | `zhihu` |
+| Run first-time onboarding | `zhihu onboard` |
 | Fetch one link | `zhihu fetch "<url>"` |
 | Fetch a creator profile | `zhihu creator "<people url>"` |
 | Run batch capture | `zhihu batch urls.txt` |
+| Monitor a collection incrementally | `zhihu monitor 78170682` |
+| Open the interactive workbench | `zhihu interactive` |
+| Query the local archive | `zhihu query "<keyword>"` |
+| Show the current config | `zhihu config --show` |
 | Check your environment | `zhihu check` |
 | Open the full manual | `zhihu manual` |
 
@@ -239,6 +244,7 @@ python3 cli/app.py <command> ...
 
 Common commands:
 
+- `onboard`
 - `fetch`
 - `creator`
 - `batch`
@@ -402,6 +408,9 @@ Current design direction:
 
 - **Codebase restructuring**
   The next refactor focus is on CLI boundaries, config schema, TUI module boundaries, and the test matrix so the repository does not keep growing into oversized files.
+
+- **Validation matrix consolidation**
+  The current test and smoke layers are tracked in [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md).
 
 ## Roadmap
 
