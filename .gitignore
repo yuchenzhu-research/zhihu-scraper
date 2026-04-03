@@ -73,4 +73,5 @@ debug_*/
 # 本地实验/外部参考仓库
 MediaCrawler/
 mediacrawler/
-references/openclaw/
+references/external/*
+!references/external/README.md

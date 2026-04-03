@@ -6,8 +6,8 @@
 
 - `skills/`
   从 SkillsMP 和相关来源筛进来的 skill 参考资料
-- `openclaw/`
-  外部参考仓库占位，当前不纳入正式项目结构，也不参与版本管理
+- `external/`
+  外部参考仓库的本地挂载点，例如 `MediaCrawler`、`openclaw`
 
 ## `skills/` 结构
 
@@ -36,6 +36,24 @@
 用途：
 - 做阶段二的质量盘点
 - 做阶段三之后的结构治理和工程推进
+
+## `external/` 结构
+
+这一层用于放本地挂载的外部参考仓库。
+
+当前已经归到这里的包括：
+
+- `MediaCrawler/`
+- `openclaw/`
+
+用途：
+- 阅读外部项目的实现思路
+- 参考目录结构、模块分层、交互设计
+- 不作为主项目运行时依赖
+
+说明：
+- 进入版本库的正式文件只有 `references/external/README.md`
+- 挂载在 `references/external/*` 下的外部仓库内容默认不进入版本管理
 
 ## 边界
 
