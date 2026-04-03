@@ -55,6 +55,13 @@ class CommandSurfaceTests(unittest.TestCase):
         self.assertIn("from cli.archive_execution import fetch_and_save", legacy_text)
         self.assertNotIn("from cli.app import _fetch_and_save", legacy_text)
 
+    def test_launcher_marks_textual_tui_as_recommended_path(self):
+        launcher_text = (REPO_ROOT / "cli" / "launcher_flow.py").read_text(encoding="utf-8")
+
+        self.assertIn("Textual TUI 归档工作台（推荐）", launcher_text)
+        self.assertIn("`zhihu interactive` 会直达推荐的 Textual TUI", launcher_text)
+        self.assertIn("`zhihu interactive --legacy` 仅用于兼容回退", launcher_text)
+
     def test_bilingual_readmes_keep_core_command_snippets(self):
         readme_cn = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")

@@ -119,6 +119,8 @@ def _render_launcher_header(runtime: LauncherRuntime) -> None:
         (cookie_status, "white"),
         ("  |  浏览器补救: ", "bold magenta"),
         (browser_status, "white"),
+        ("\n主路径: ", "bold magenta"),
+        ("首页 launcher -> Textual TUI（推荐）", "white"),
     )
     runtime.console.print(Panel(content, border_style="cyan", expand=False))
 
@@ -137,7 +139,9 @@ def run_onboard_flow(runtime: LauncherRuntime, *, from_command: bool = False) ->
             "1. 先运行 ./install.sh 安装环境\n"
             f"2. 在 {configured_cookie_path} 中填入自己的 Cookie\n"
             "3. 执行一次环境检查\n"
-            "4. 然后从首页菜单开始使用",
+            "4. `zhihu` 会打开首页 launcher\n"
+            "5. `zhihu interactive` 会直达推荐的 Textual TUI\n"
+            "6. `zhihu interactive --legacy` 仅用于兼容回退",
             justify="left",
         ),
         border_style="magenta",
@@ -193,7 +197,7 @@ def run_launcher(runtime: LauncherRuntime) -> None:
                 questionary.Choice("批量抓取", value="batch"),
                 questionary.Choice("收藏夹监控", value="monitor"),
                 questionary.Choice("搜索本地数据库", value="query"),
-                questionary.Choice("归档工作台", value="interactive"),
+                questionary.Choice("Textual TUI 归档工作台（推荐）", value="interactive"),
                 questionary.Choice("首次使用向导", value="onboard"),
                 questionary.Choice("环境检查", value="check"),
                 questionary.Choice("查看说明书", value="manual"),
