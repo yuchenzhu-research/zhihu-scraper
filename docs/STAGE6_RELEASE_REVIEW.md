@@ -5,7 +5,7 @@
 ## Branch Baseline
 
 - current branch: `test`
-- current HEAD: `65a2c67`
+- current HEAD: `5aab82e`
 - comparison target: `main` / `origin/main`
 - `test` is ahead of `main` by the staged governance + refactor commits since `4b645ca`
 
@@ -35,6 +35,8 @@
   - `docs/STAGE2_QUALITY_AUDIT.md`
   - `docs/STAGE5_VALIDATION_MATRIX.md`
   - `docs/STAGE6_RELEASE_REVIEW.md`
+  - `docs/STAGE6_ISSUE_REPLY_TEMPLATES.md`
+  - `docs/STAGE6_MERGE_PLAYBOOK.md`
 - platform / install docs:
   - `docs/PLATFORM_SUPPORT.md`
   - `docs/WINDOWS_RUNBOOK.md`
