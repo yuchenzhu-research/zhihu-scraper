@@ -119,15 +119,20 @@ class ZhihuDownloader:
 
         if self.page_type == "article":
             raw_items = [await self._extract_article(headless=headless)]
+            pagination = None
         elif self.page_type == "question":
-            raw_items = await self._extract_question(**kwargs)
+            question_result = await self._extract_question_result(**kwargs)
+            raw_items = question_result["items"]
+            pagination = PaginationStats.from_dict(question_result["stats"])
         else:
             raw_items = [await self._extract_answer()]
+            pagination = None
 
         return PageFetchResult(
             source_url=self.url,
             page_type=self.page_type,
             items=to_scraped_items(raw_items),
+            pagination=pagination,
         )
 
     async def _extract_article(self, *, headless: bool = True) -> dict:
@@ -183,6 +188,10 @@ class ZhihuDownloader:
         return build_answer_item(url=self.url, answer_id=answer_id, data=data)
 
     async def _extract_question(self, start: int = 0, limit: int = 3, **kwargs) -> List[dict]:
+        """Backward-compatible question extractor returning only item payloads."""
+        return (await self._extract_question_result(start=start, limit=limit, **kwargs))["items"]
+
+    async def _extract_question_result(self, start: int = 0, limit: int = 3, **kwargs) -> Dict[str, Any]:
         """提取问题下的多个回答。
 
         利用 API 分页直接获取，支持一次获取多页回答。
@@ -205,6 +214,8 @@ class ZhihuDownloader:
 
         results: List[dict] = []
         page_index = 0
+        reached_end = False
+        stopped_early = False
 
         while len(results) < target_limit:
             current_page_size = min(page_size, target_limit - len(results))
@@ -220,11 +231,13 @@ class ZhihuDownloader:
                 if results:
                     print(f"⚠️ {message}")
                     print(f"🛑 为降低风险，本次提前停止，保留已抓到的 {len(results)} 个回答。")
+                    stopped_early = True
                     break
                 raise Exception(message)
 
             answers_data = page.get("data", [])
             if not answers_data:
+                reached_end = True
                 break
 
             for data in answers_data:
@@ -235,9 +248,12 @@ class ZhihuDownloader:
             print(f"📄 第 {page_index} 页完成，本页 {len(answers_data)} 条，累计 {len(results)}/{target_limit} 条。")
 
             if len(results) >= target_limit:
+                if page.get("paging", {}).get("is_end", len(answers_data) < current_page_size):
+                    reached_end = True
                 break
 
             if page.get("paging", {}).get("is_end", len(answers_data) < current_page_size):
+                reached_end = True
                 break
 
             if humanizer.config.enabled:
@@ -252,7 +268,17 @@ class ZhihuDownloader:
                 await asyncio.sleep(delay)
 
         print(f"✅ 成功命中 {len(results)} 个回答。")
-        return results
+        return {
+            "items": results,
+            "stats": {
+                "requested_limit": target_limit,
+                "saved_count": len(results),
+                "pages_fetched": page_index,
+                "last_offset": current_offset,
+                "reached_end": reached_end,
+                "stopped_early": stopped_early,
+            },
+        }
 
     # ── 图片下载 (Image Download) ──────────────────────────────────────────────
 
@@ -549,6 +575,8 @@ class ZhihuCreatorDownloader:
             print(f"📄 {label}第 {page_index} 页完成，本页 {len(page_items)} 条，累计 {len(items)}/{target_limit} 条。")
 
             if len(items) >= target_limit:
+                if page.get("paging", {}).get("is_end", len(page_items) < current_page_size):
+                    reached_end = True
                 break
 
             if page.get("paging", {}).get("is_end", len(page_items) < current_page_size):

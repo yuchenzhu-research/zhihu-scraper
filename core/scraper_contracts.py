@@ -144,6 +144,7 @@ class PageFetchResult:
     source_url: str
     page_type: str
     items: Tuple[ScrapedItem, ...]
+    pagination: Optional[PaginationStats] = None
 
     @property
     def is_empty(self) -> bool:

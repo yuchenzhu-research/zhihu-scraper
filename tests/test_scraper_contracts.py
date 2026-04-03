@@ -1,5 +1,7 @@
 import unittest
+from unittest.mock import patch
 
+from core.scraper import ZhihuDownloader
 from core.scraper_contracts import (
     CreatorFetchResult,
     CreatorProfileSummary,
@@ -38,10 +40,12 @@ class ScraperContractTests(unittest.TestCase):
                 ScrapedItem(id="2", type="answer", url="u", title="t", author="a", html="", date="2026-04-04"),
                 ScrapedItem(id="3", type="answer", url="u2", title="t2", author="a2", html="", date="2026-04-04"),
             ),
+            pagination=PaginationStats(10, 2, 1, 2, True, False),
         )
         legacy = result.to_legacy_payload()
         self.assertIsInstance(legacy, list)
         self.assertEqual(len(legacy), 2)
+        self.assertEqual(result.pagination.requested_limit, 10)
 
     def test_creator_fetch_result_roundtrips_to_legacy_dict(self):
         result = CreatorFetchResult(
@@ -73,6 +77,57 @@ class ScraperContractTests(unittest.TestCase):
         self.assertEqual(legacy["creator"]["url_token"], "demo")
         self.assertEqual(legacy["sync"]["answers"]["requested_limit"], 10)
         self.assertEqual(len(legacy["items"]), 1)
+
+
+class QuestionFetchResultTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fetch_result_attaches_question_pagination_stats(self):
+        class FakeApiClient:
+            def get_question_answers_page(self, question_id, limit, offset):
+                self.last_call = (question_id, limit, offset)
+                return {
+                    "data": [
+                        {
+                            "id": "a1",
+                            "author": {"name": "作者A"},
+                            "question": {"title": "测试问题"},
+                            "content": "<p>one</p>",
+                            "created_time": 1712102400,
+                            "voteup_count": 1,
+                        },
+                        {
+                            "id": "a2",
+                            "author": {"name": "作者B"},
+                            "question": {"title": "测试问题"},
+                            "content": "<p>two</p>",
+                            "created_time": 1712102401,
+                            "voteup_count": 2,
+                        },
+                    ],
+                    "paging": {"is_end": True},
+                }
+
+        class FakeHumanizer:
+            class Config:
+                enabled = False
+
+            config = Config()
+
+            async def page_load(self):
+                return None
+
+        with patch("core.scraper.ZhihuAPIClient", return_value=FakeApiClient()):
+            downloader = ZhihuDownloader("https://www.zhihu.com/question/123")
+
+        with patch("core.scraper.get_humanizer", return_value=FakeHumanizer()):
+            result = await downloader.fetch_result(limit=2)
+
+        self.assertEqual(result.page_type, "question")
+        self.assertEqual(len(result.items), 2)
+        self.assertIsNotNone(result.pagination)
+        self.assertEqual(result.pagination.requested_limit, 2)
+        self.assertEqual(result.pagination.saved_count, 2)
+        self.assertEqual(result.pagination.pages_fetched, 1)
+        self.assertTrue(result.pagination.reached_end)
 
 
 if __name__ == "__main__":
