@@ -10,7 +10,7 @@ authors = [
 ]
 keywords = ["zhihu", "scraper", "crawler"]
 
-# 核心 Python 依赖（运行时不安装 Playwright Python 包，降级时才装）
+# 基础运行依赖（协议抓取 + CLI/TUI）；浏览器回退不在这一层
 dependencies = [
     "curl_cffi>=0.14.0",
     "markdownify>=0.14.1",
@@ -31,11 +31,11 @@ zhihu = "cli.app:main"
 
 # 条件依赖
 [project.optional-dependencies]
-# 完整 CLI 环境（包含浏览器引擎）
+# 完整本地运行环境（包含浏览器回退依赖）
 full = [
     "playwright>=1.40.0",
 ]
-# 仅 CLI 命令（无浏览器，适合纯 API 模式）
+# 仅 CLI 命令（预留给未来进一步细分的轻量安装模型）
 cli = [
 ]
 # 开发测试

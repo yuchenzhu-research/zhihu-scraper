@@ -25,10 +25,17 @@ class InstallContractTests(unittest.TestCase):
     def test_platform_docs_reference_windows_runbook(self):
         platform_doc = (REPO_ROOT / "docs/PLATFORM_SUPPORT.md").read_text(encoding="utf-8")
         windows_runbook = (REPO_ROOT / "docs/WINDOWS_RUNBOOK.md").read_text(encoding="utf-8")
+        dependency_map = (REPO_ROOT / "docs/dependency-map.md").read_text(encoding="utf-8")
 
         self.assertIn("docs/WINDOWS_RUNBOOK.md", platform_doc)
+        self.assertIn("pip install -e .", platform_doc)
+        self.assertIn('pip install -e ".[full]"', platform_doc)
         self.assertIn("Windows", windows_runbook)
+        self.assertIn("python -m pip install -e .", windows_runbook)
         self.assertIn("python -m pip install -e \"[full]\"", windows_runbook.replace(".[full]", "[full]"))
+        self.assertIn("python -m playwright install chromium", windows_runbook)
+        self.assertIn("pip install -e .", dependency_map)
+        self.assertIn('pip install -e ".[full]"', dependency_map)
 
 
 if __name__ == "__main__":

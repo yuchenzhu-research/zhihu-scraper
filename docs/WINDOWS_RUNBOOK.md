@@ -38,10 +38,17 @@ py -3.14 -m venv .venv
 
 ```powershell
 python -m pip install --upgrade pip setuptools wheel
-python -m pip install -e ".[full]"
+python -m pip install -e .
 ```
 
-5. Prepare local runtime files
+5. Optional: enable browser fallback only after the base path works
+
+```powershell
+python -m pip install -e ".[full]"
+python -m playwright install chromium
+```
+
+6. Prepare local runtime files
 
 ```powershell
 mkdir .local
@@ -49,7 +56,7 @@ mkdir .local\cookie_pool
 copy cookies.example.json .local\cookies.json
 ```
 
-6. Run checks
+7. Run checks
 
 ```powershell
 python cli\app.py check
@@ -61,6 +68,7 @@ python cli\app.py manual
 - `fetch`, `creator`, `batch`, `query`, and `check` are the preferred validation targets
 - `interactive` may work, but it should still be treated as under verification on Windows
 - Playwright fallback may require extra local browser / permission debugging
+- if `pip install -e .` works but `.[full]` does not, the protocol/API path is still the first thing to validate
 
 ## Not Yet Guaranteed / 当前不保证
 

@@ -21,6 +21,12 @@
 6. 运行一次 `zhihu check`
 7. 安装全局命令 `zhihu`
 
+补充说明：
+
+- `./install.sh` 代表本地完整安装路径，内部使用 `pip install -e ".[full]"`
+- CI 当前使用 `pip install -e .` 做基础命令面与单测验证
+- 因此 CI 通过并不代表 Playwright / browser fallback 已被完整验证
+
 ## 2. 首页 / launcher 工作流
 
 入口命令：

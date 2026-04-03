@@ -54,12 +54,18 @@ This document records the current support boundary for `zhihu-scraper`.
 ## Current Validation Reality / 当前验证现状
 
 - GitHub Actions validates `ubuntu-latest` and `macos-latest`
+- CI installs the base package with `pip install -e .`
+- browser fallback and Playwright are **not** fully validated by that base install alone
+- the full local path remains `./install.sh` or `pip install -e ".[full]"`
 - unit tests currently cover:
   - CLI compatibility helpers
   - Textual TUI state and workflow basics
 - cross-platform browser fallback is still not fully automated
 
 - GitHub Actions 当前验证 `ubuntu-latest` 和 `macos-latest`
+- CI 当前只通过 `pip install -e .` 安装基础包
+- 这并不代表浏览器回退和 Playwright 已被完整验证
+- 本地完整功能路径仍然是 `./install.sh` 或 `pip install -e ".[full]"`
 - 单测当前覆盖：
   - CLI 兼容辅助逻辑
   - Textual TUI 状态与基础工作流
