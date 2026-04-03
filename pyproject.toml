@@ -22,6 +22,7 @@ dependencies = [
     "pyyaml>=6.0",
     "structlog==24.4.0",
     "typer>=0.9.0",
+    "textual>=8.2.1",
 ]
 
 # CLI 入口

@@ -239,6 +239,13 @@ python3 cli/app.py <command> ...
 zhihu manual
 ```
 
+`interactive` 现在已经是新的默认交互工作台：
+
+- `Enter` 生成当前草案
+- `Ctrl+R` 执行当前草案
+- `Ctrl+Y` 从最近一轮失败项生成重试草案
+- `zhihu interactive --legacy` 仅保留为旧版回退入口，方便回归排查
+
 ## 示例输出 Examples
 
 仓库里保留了两份可以直接打开的样例输出：
