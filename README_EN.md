@@ -215,6 +215,7 @@ zhihu manual
 For the explicit support boundary, see:
 
 - [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
 
 ## Recommended Paths
 

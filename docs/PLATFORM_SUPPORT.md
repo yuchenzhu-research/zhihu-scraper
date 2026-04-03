@@ -42,12 +42,14 @@ This document records the current support boundary for `zhihu-scraper`.
 - the repository acknowledges Windows as a target, but it is not yet a first-class setup path
 - `install.sh` is not a Windows installer
 - until a dedicated runbook and validation path exists, Windows should be treated as experimental
+- see `docs/WINDOWS_RUNBOOK.md` for the current manual setup path
 
 ### Tier 3：Windows
 
 - 仓库承认 Windows 是目标平台，但还不是一条正式的一等安装路径
 - `install.sh` 不是 Windows 安装方案
 - 在专门的 runbook 和验证链路补齐前，Windows 仍应视为实验性支持
+- 当前手动安装路径见 `docs/WINDOWS_RUNBOOK.md`
 
 ## Current Validation Reality / 当前验证现状
 

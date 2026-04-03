@@ -215,6 +215,7 @@ zhihu manual
 更具体的平台支持边界见：
 
 - [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
 
 ## 推荐入口 Recommended Paths
 
