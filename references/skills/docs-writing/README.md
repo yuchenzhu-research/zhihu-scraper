@@ -13,7 +13,7 @@
 ### 1. `hculap-prd-readme-standard`
 
 - 本地路径：
-  [references/skillsmp/hculap-prd-readme-standard/SKILL.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skillsmp/hculap-prd-readme-standard/SKILL.md)
+  [references/skills/docs-writing/hculap-prd-readme-standard/SKILL.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skills/docs-writing/hculap-prd-readme-standard/SKILL.md)
 - 来源：
   `hculap/better-code`
 - 适合你的原因：
@@ -27,7 +27,7 @@
 ### 2. `wahidyankf-readme-writing-readme-files`
 
 - 本地路径：
-  [references/skillsmp/wahidyankf-readme-writing-readme-files/SKILL.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skillsmp/wahidyankf-readme-writing-readme-files/SKILL.md)
+  [references/skills/docs-writing/wahidyankf-readme-writing-readme-files/SKILL.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skills/docs-writing/wahidyankf-readme-writing-readme-files/SKILL.md)
 - 来源：
   `wahidyankf/open-sharia-enterprise`
 - 适合你的原因：
@@ -41,9 +41,9 @@
 ### 3. `obra-writing-clearly-and-concisely`
 
 - 本地路径：
-  [references/skillsmp/obra-writing-clearly-and-concisely/SKILL.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skillsmp/obra-writing-clearly-and-concisely/SKILL.md)
+  [references/skills/docs-writing/obra-writing-clearly-and-concisely/SKILL.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skills/docs-writing/obra-writing-clearly-and-concisely/SKILL.md)
 - 附带参考：
-  [references/skillsmp/obra-writing-clearly-and-concisely/elements-of-style.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skillsmp/obra-writing-clearly-and-concisely/elements-of-style.md)
+  [references/skills/docs-writing/obra-writing-clearly-and-concisely/elements-of-style.md](/Users/yuchenzhu/Desktop/github/zhihu/references/skills/docs-writing/obra-writing-clearly-and-concisely/elements-of-style.md)
 - 来源：
   `obra/the-elements-of-style`
 - 适合你的原因：
@@ -80,6 +80,6 @@
 ## 说明
 
 - 这些技能现在是 **项目内参考资料**
-- 它们被放在 `references/skillsmp/`，方便你本地对照阅读
+- 它们被放在 `references/skills/docs-writing/`，方便你本地对照阅读
 - 这不是自动安装到全局 Codex skills 的目录
 - 如果你后面想把其中某个 skill 安装到 `~/.codex/skills` 里长期使用，可以再单独做一次全局安装

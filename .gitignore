@@ -70,7 +70,7 @@ debug_*/
 
 .venv_tls_test/     # TLS测试沙箱
 
-# 本地实验/参考仓库
+# 本地实验/外部参考仓库
 MediaCrawler/
 mediacrawler/
 references/openclaw/

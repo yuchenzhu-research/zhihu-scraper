@@ -40,12 +40,27 @@ import httpx
 from pathlib import Path
 import re
 import hashlib
-from datetime import datetime
 from random import uniform
 
 from .config import get_logger, get_humanizer
 from .api_client import ZhihuAPIClient
+from .scraper_contracts import (
+    CreatorFetchResult,
+    CreatorProfileSummary,
+    PageFetchResult,
+    PaginationStats,
+    to_scraped_items,
+)
 from .utils import extract_creator_token
+from .scraper_payloads import (
+    build_answer_item,
+    build_article_item,
+    build_creator_answer_item,
+    build_creator_article_item,
+    build_creator_profile_payload,
+    build_empty_sync_stats,
+    build_question_answer_item,
+)
 
 class ZhihuDownloader:
     """
@@ -83,20 +98,13 @@ class ZhihuDownloader:
         return bool(self.api_client._cookies_dict)
 
     async def fetch_page(self, **kwargs) -> Union[dict, List[dict]]:
+        """Backward-compatible fetch entrypoint returning legacy dict/list payloads."""
+        return (await self.fetch_result(**kwargs)).to_legacy_payload()
+
+    async def fetch_result(self, **kwargs) -> PageFetchResult:
         """
-        Fetch page data using pure protocol layer.
-        Supports kwargs (like start, limit) passed to _extract_question.
-
-        Scraping workflow:
-        1. First try curl_cffi API mode (lightweight and fast)
-        2. If encountering 403/blocking, automatically fall back to Playwright browser rendering
-
-        使用纯协议层抓取页面数据。
-        支持传入 kwargs (如 start, limit) 传递给 _extract_question。
-
-        抓取流程：
-        1. 首先尝试 curl_cffi API 模式 (轻量快速)
-        2. 如果遭遇 403/风控，自动降级到 Playwright 浏览器渲染
+        Typed fetch entrypoint returning a stable result contract.
+        返回稳定结果契约的抓取入口。
         """
         humanizer = get_humanizer()
 
@@ -110,11 +118,22 @@ class ZhihuDownloader:
         headless = kwargs.pop("headless", True)
 
         if self.page_type == "article":
-            return await self._extract_article(headless=headless)
+            raw_items = [await self._extract_article(headless=headless)]
+            pagination = None
         elif self.page_type == "question":
-            return await self._extract_question(**kwargs)
+            question_result = await self._extract_question_result(**kwargs)
+            raw_items = question_result["items"]
+            pagination = PaginationStats.from_dict(question_result["stats"])
         else:
-            return await self._extract_answer()
+            raw_items = [await self._extract_answer()]
+            pagination = None
+
+        return PageFetchResult(
+            source_url=self.url,
+            page_type=self.page_type,
+            items=to_scraped_items(raw_items),
+            pagination=pagination,
+        )
 
     async def _extract_article(self, *, headless: bool = True) -> dict:
         """提取专栏文章数据。
@@ -151,30 +170,7 @@ class ZhihuDownloader:
             if not data:
                 raise Exception(f"专栏文章 {article_id} API 及降级抓取均失败，请手工检查 URL 或重新分配 Cookie。")
 
-        author = data.get("author", {}).get("name", "未知作者")
-        title = data.get("title", "未知专栏标题")
-        html = data.get("content", "")
-        upvotes = data.get("voteup_count", 0)
-
-        # 将 timestamp 转为日历格式
-        created_sec = data.get("created", 0)
-        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
-
-        # 挂载头图
-        title_img = data.get("image_url")
-        if title_img:
-            html = f'<img src="{title_img}" alt="TitleImage"><br>{html}'
-
-        return {
-            "id": article_id,
-            "type": "article",
-            "url": self.url,
-            "title": title.strip(),
-            "author": author.strip(),
-            "html": html,
-            "date": date_str,
-            "upvotes": upvotes
-        }
+        return build_article_item(url=self.url, article_id=article_id, data=data)
 
     async def _extract_answer(self) -> dict:
         """提取单个回答数据。"""
@@ -189,26 +185,13 @@ class ZhihuDownloader:
         except Exception as e:
             raise Exception(f"回答 {answer_id} API 抓取失败: {e}")
 
-        author = data.get("author", {}).get("name", "未知作者")
-        title = data.get("question", {}).get("title", "未知问题")
-        html = data.get("content", "")
-        upvotes = data.get("voteup_count", 0)
-
-        created_sec = data.get("created_time", 0)
-        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
-
-        return {
-            "id": answer_id,
-            "type": "answer",
-            "url": self.url,
-            "title": title.strip(),
-            "author": author.strip(),
-            "html": html,
-            "date": date_str,
-            "upvotes": upvotes
-        }
+        return build_answer_item(url=self.url, answer_id=answer_id, data=data)
 
     async def _extract_question(self, start: int = 0, limit: int = 3, **kwargs) -> List[dict]:
+        """Backward-compatible question extractor returning only item payloads."""
+        return (await self._extract_question_result(start=start, limit=limit, **kwargs))["items"]
+
+    async def _extract_question_result(self, start: int = 0, limit: int = 3, **kwargs) -> Dict[str, Any]:
         """提取问题下的多个回答。
 
         利用 API 分页直接获取，支持一次获取多页回答。
@@ -231,6 +214,8 @@ class ZhihuDownloader:
 
         results: List[dict] = []
         page_index = 0
+        reached_end = False
+        stopped_early = False
 
         while len(results) < target_limit:
             current_page_size = min(page_size, target_limit - len(results))
@@ -246,41 +231,29 @@ class ZhihuDownloader:
                 if results:
                     print(f"⚠️ {message}")
                     print(f"🛑 为降低风险，本次提前停止，保留已抓到的 {len(results)} 个回答。")
+                    stopped_early = True
                     break
                 raise Exception(message)
 
             answers_data = page.get("data", [])
             if not answers_data:
+                reached_end = True
                 break
 
             for data in answers_data:
-                author = data.get("author", {}).get("name", "未知作者")
-                title = data.get("question", {}).get("title", "未知问题")
-                html = data.get("content", "")
-                upvotes = data.get("voteup_count", 0)
-
-                created_sec = data.get("created_time", 0)
-                date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
-
-                results.append({
-                    "id": str(data.get("id", "")),
-                    "type": "answer",
-                    "url": f"https://www.zhihu.com/question/{question_id}/answer/{data.get('id', '')}",
-                    "title": title.strip(),
-                    "author": author.strip(),
-                    "html": html,
-                    "date": date_str,
-                    "upvotes": upvotes,
-                })
+                results.append(build_question_answer_item(question_id=question_id, data=data))
 
             page_index += 1
             current_offset += len(answers_data)
             print(f"📄 第 {page_index} 页完成，本页 {len(answers_data)} 条，累计 {len(results)}/{target_limit} 条。")
 
             if len(results) >= target_limit:
+                if page.get("paging", {}).get("is_end", len(answers_data) < current_page_size):
+                    reached_end = True
                 break
 
             if page.get("paging", {}).get("is_end", len(answers_data) < current_page_size):
+                reached_end = True
                 break
 
             if humanizer.config.enabled:
@@ -295,7 +268,17 @@ class ZhihuDownloader:
                 await asyncio.sleep(delay)
 
         print(f"✅ 成功命中 {len(results)} 个回答。")
-        return results
+        return {
+            "items": results,
+            "stats": {
+                "requested_limit": target_limit,
+                "saved_count": len(results),
+                "pages_fetched": page_index,
+                "last_offset": current_offset,
+                "reached_end": reached_end,
+                "stopped_early": stopped_early,
+            },
+        }
 
     # ── 图片下载 (Image Download) ──────────────────────────────────────────────
 
@@ -500,8 +483,15 @@ class ZhihuCreatorDownloader:
 
     async def fetch_items(self, answer_limit: int = 10, article_limit: int = 5) -> Dict[str, Any]:
         """
-        Fetch creator profile and selected content types.
-        抓取作者资料和指定类型内容。
+        Backward-compatible creator fetch returning the legacy dict structure.
+        返回旧版 dict 结构的兼容入口。
+        """
+        return (await self.fetch_items_result(answer_limit=answer_limit, article_limit=article_limit)).to_dict()
+
+    async def fetch_items_result(self, answer_limit: int = 10, article_limit: int = 5) -> CreatorFetchResult:
+        """
+        Fetch creator profile and selected content types with a stable result contract.
+        以稳定结果契约抓取作者资料和指定内容。
         """
         if not self.url_token:
             raise Exception(f"无法从作者输入中提取知乎用户标识: {self.creator}")
@@ -529,30 +519,12 @@ class ZhihuCreatorDownloader:
             )
             items.extend(article_result["items"])
 
-        return {
-            "creator": {
-                "user_id": creator_profile.get("id", ""),
-                "name": creator_profile.get("name", self.url_token),
-                "url_token": creator_profile.get("url_token", self.url_token),
-                "headline": creator_profile.get("headline", ""),
-                "description": creator_profile.get("description", ""),
-                "profile_url": f"https://www.zhihu.com/people/{creator_profile.get('url_token', self.url_token)}",
-                "avatar_url": creator_profile.get("avatar_url") or creator_profile.get("avatar_url_template", ""),
-                "follower_count": creator_profile.get("follower_count", 0),
-                "following_count": creator_profile.get("following_count", 0),
-                "voteup_count": creator_profile.get("voteup_count", 0),
-                "answer_count": creator_profile.get("answer_count", 0),
-                "articles_count": creator_profile.get("articles_count", 0),
-                "question_count": creator_profile.get("question_count", 0),
-                "video_count": creator_profile.get("zvideo_count", 0),
-                "column_count": creator_profile.get("columns_count", 0),
-            },
-            "items": items,
-            "sync": {
-                "answers": answer_result["stats"],
-                "articles": article_result["stats"],
-            },
-        }
+        return CreatorFetchResult(
+            creator=CreatorProfileSummary.from_dict(build_creator_profile_payload(self.url_token, creator_profile)),
+            items=to_scraped_items(items),
+            answers=PaginationStats.from_dict(answer_result["stats"]),
+            articles=PaginationStats.from_dict(article_result["stats"]),
+        )
 
     async def _paginate_creator_items(
         self,
@@ -603,6 +575,8 @@ class ZhihuCreatorDownloader:
             print(f"📄 {label}第 {page_index} 页完成，本页 {len(page_items)} 条，累计 {len(items)}/{target_limit} 条。")
 
             if len(items) >= target_limit:
+                if page.get("paging", {}).get("is_end", len(page_items) < current_page_size):
+                    reached_end = True
                 break
 
             if page.get("paging", {}).get("is_end", len(page_items) < current_page_size):
@@ -638,61 +612,18 @@ class ZhihuCreatorDownloader:
         Build default sync stats for disabled or empty content types.
         为禁用或空内容类型构建默认同步统计。
         """
-        return {
-            "requested_limit": target_limit,
-            "saved_count": 0,
-            "pages_fetched": 0,
-            "last_offset": 0,
-            "reached_end": target_limit == 0,
-            "stopped_early": False,
-        }
+        return build_empty_sync_stats(target_limit)
 
     def _normalize_creator_answer(self, data: dict) -> dict:
         """
         Convert creator answer API response into the internal item format.
         将作者回答 API 结果转换为内部统一结构。
         """
-        answer_id = str(data.get("id", ""))
-        question = data.get("question", {}) or {}
-        question_id = question.get("id", "")
-        author = data.get("author", {}).get("name", "未知作者")
-        created_sec = data.get("created_time", 0)
-        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
-
-        return {
-            "id": answer_id,
-            "type": "answer",
-            "url": f"https://www.zhihu.com/question/{question_id}/answer/{answer_id}" if question_id else f"https://www.zhihu.com/answer/{answer_id}",
-            "title": (question.get("title") or "未知问题").strip(),
-            "author": author.strip(),
-            "html": data.get("content", ""),
-            "date": date_str,
-            "upvotes": data.get("voteup_count", 0),
-            "creator_url_token": self.url_token,
-        }
+        return build_creator_answer_item(url_token=self.url_token, data=data)
 
     def _normalize_creator_article(self, data: dict) -> dict:
         """
         Convert creator article API response into the internal item format.
         将作者专栏 API 结果转换为内部统一结构。
         """
-        article_id = str(data.get("id", ""))
-        author = data.get("author", {}).get("name", "未知作者")
-        created_sec = data.get("created", 0) or data.get("updated", 0)
-        date_str = datetime.fromtimestamp(created_sec).strftime("%Y-%m-%d") if created_sec else datetime.today().strftime("%Y-%m-%d")
-        html = data.get("content", "")
-        image_url = data.get("image_url") or data.get("thumbnail")
-        if image_url:
-            html = f'<img src="{image_url}" alt="TitleImage"><br>{html}'
-
-        return {
-            "id": article_id,
-            "type": "article",
-            "url": f"https://zhuanlan.zhihu.com/p/{article_id}",
-            "title": (data.get("title") or "未知专栏标题").strip(),
-            "author": author.strip(),
-            "html": html,
-            "date": date_str,
-            "upvotes": data.get("voteup_count", 0),
-            "creator_url_token": self.url_token,
-        }
+        return build_creator_article_item(url_token=self.url_token, data=data)

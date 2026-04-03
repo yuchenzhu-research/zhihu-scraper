@@ -48,18 +48,28 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from random import uniform
 import asyncio
-import json
 import sys
 import typer
 from rich import print as rprint
 from rich.console import Console
-from rich.panel import Panel
 from rich.text import Text
 
+from cli.config_view import build_config_snapshot, render_config_panel
+from cli.healthcheck import render_environment_check
+from cli.launcher_flow import LauncherCommands, LauncherRuntime, run_launcher, run_onboard_flow
+from cli.manual_content import build_manual_text
+from cli.optional_deps import get_questionary as _get_questionary
+from cli.save_pipeline import (
+    SavePipelineSettings,
+    build_output_folder_name as render_output_folder_name,
+    fetch_and_save as run_fetch_and_save,
+    fetch_and_save_result as run_fetch_and_save_result,
+    fetch_creator_and_save as run_fetch_creator_and_save,
+    resolve_creator_output_dir as resolve_creator_output_path,
+    resolve_entries_output_dir as resolve_entries_output_path,
+)
 from core.config import get_config, get_logger, get_humanizer, resolve_project_path
-from core.utils import sanitize_filename, extract_urls
-from core.scraper import ZhihuDownloader, ZhihuCreatorDownloader
-from core.converter import ZhihuConverter
+from core.utils import extract_urls
 from core.errors import handle_error
 
 # ============================================================
@@ -141,15 +151,13 @@ def build_output_folder_name(item_date: str, title: str, author: str, item_key: 
     Render output directory name from config template and append a stable unique suffix.
     根据配置模板生成输出目录名，并附加稳定唯一后缀。
     """
-    cfg = _get_cfg()
-    folder_template = cfg.output.folder_format or "[{date}] {title}"
-    try:
-        rendered = folder_template.format(date=item_date, title=title, author=author)
-    except KeyError:
-        rendered = f"[{item_date}] {title}"
-
-    rendered = sanitize_filename(rendered, max_length=120)
-    return f"{rendered} ({item_key})"
+    return render_output_folder_name(
+        item_date,
+        title,
+        author,
+        item_key,
+        folder_template=_get_cfg().output.folder_format,
+    )
 
 
 def resolve_entries_output_dir(base_dir: Path) -> Path:
@@ -157,9 +165,7 @@ def resolve_entries_output_dir(base_dir: Path) -> Path:
     Resolve the content root for normal fetch/batch/monitor outputs.
     解析普通抓取输出的内容根目录。
     """
-    if base_dir.name == "entries":
-        return base_dir
-    return base_dir / "entries"
+    return resolve_entries_output_path(base_dir)
 
 
 def resolve_creator_output_dir(base_dir: Path, url_token: str) -> Path:
@@ -167,8 +173,18 @@ def resolve_creator_output_dir(base_dir: Path, url_token: str) -> Path:
     Resolve the content root for creator outputs.
     解析作者模式输出的内容根目录。
     """
-    safe_token = sanitize_filename(url_token, max_length=80)
-    return base_dir / "creators" / safe_token
+    return resolve_creator_output_path(base_dir, url_token)
+
+
+def _get_save_pipeline_settings() -> SavePipelineSettings:
+    """Resolve save-pipeline settings from runtime config / 从运行时配置解析保存链路参数"""
+    cfg = _get_cfg()
+    return SavePipelineSettings(
+        folder_template=cfg.output.folder_format or "[{date}] {title}",
+        images_subdir=cfg.output.images_subdir or "images",
+        image_concurrency=cfg.crawler.images.concurrency,
+        image_timeout=cfg.crawler.images.timeout,
+    )
 
 
 def print_question_limit_warning(limit: int) -> None:
@@ -197,303 +213,33 @@ def print_creator_limit_warning(answers: int, articles: int) -> None:
         rprint("   Requests above 20 items use paginated API access with built-in random delays.")
 
 
-def _launcher_style():
-    """Lazy questionary style builder / 延迟构建 questionary 主题"""
-    from questionary import Style
-
-    return Style([
-        ("question", "fg:#00C8FF bold"),
-        ("answer", "fg:#FFFFFF"),
-        ("pointer", "fg:#FF1493 bold"),
-        ("highlighted", "fg:#00C8FF bold"),
-        ("selected", "fg:#00FF55"),
-        ("instruction", "fg:#777777"),
-        ("text", "fg:#FFFFFF"),
-    ])
-
-
-def _input_positive_int(prompt: str, default: str) -> int:
-    """Questionary helper for positive integers / 正整数输入助手"""
-    import questionary
-
-    value = questionary.text(
-        prompt,
-        default=default,
-        validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数",
-        style=_launcher_style(),
-    ).ask()
-    return int(value or default)
-
-
-def _input_non_negative_int(prompt: str, default: str) -> int:
-    """Questionary helper for non-negative integers / 非负整数输入助手"""
-    import questionary
-
-    value = questionary.text(
-        prompt,
-        default=default,
-        validate=lambda text: text.isdigit() or "请输入非负整数",
-        style=_launcher_style(),
-    ).ask()
-    return int(value or default)
-
-
-def _collect_fetch_options(url: str) -> Dict[str, Any]:
-    """Collect quick-fetch options from launcher / 从首页菜单收集抓取参数"""
-    import questionary
-
-    limit: Optional[int] = None
-    if "/question/" in url and "/answer/" not in url:
-        limit = _input_positive_int(
-            "问题页抓取多少条回答？",
-            "10",
-        )
-
-    selections = questionary.checkbox(
-        "附加设置：",
-        choices=[
-            questionary.Choice("下载图片", value="images", checked=True),
-        ],
-        style=_launcher_style(),
-    ).ask() or []
-
-    if "zhuanlan.zhihu.com" in url:
-        rprint("[dim]ℹ️ 如果专栏普通抓取失败，程序会自动启用浏览器补救。[/dim]")
-
-    return {
-        "limit": limit,
-        "no_images": "images" not in selections,
-        "headless": _get_default_browser_headless(),
-    }
-
-
-def _render_launcher_header() -> None:
-    """Print compact launcher banner / 打印精简首页横幅"""
-    cfg = _get_cfg()
-    default_output_dir = _get_default_output_dir()
-    from core.cookie_manager import has_available_cookie_sources
-    cookie_status = "已就绪" if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir) else "需要 Cookie"
-    browser_status = "后台运行" if cfg.zhihu.browser.headless else "显示窗口"
-    content = Text.assemble(
-        ("知乎爬虫", "bold cyan"),
-        ("  ·  知乎抓取首页\n", "white"),
-        ("输出目录: ", "bold magenta"),
-        (f"{default_output_dir}", "white"),
-        ("  |  登录状态: ", "bold magenta"),
-        (cookie_status, "white"),
-        ("  |  浏览器补救: ", "bold magenta"),
-        (browser_status, "white"),
+def _build_launcher_runtime() -> LauncherRuntime:
+    return LauncherRuntime(
+        console=console,
+        get_cfg=_get_cfg,
+        get_questionary=_get_questionary,
+        get_default_output_dir=_get_default_output_dir,
+        get_default_browser_headless=_get_default_browser_headless,
+        resolve_project_path=resolve_project_path,
+        commands=LauncherCommands(
+            fetch=fetch,
+            creator=creator,
+            batch=batch,
+            monitor=monitor,
+            query=query_db,
+            interactive=interactive,
+            check=check,
+            manual=manual,
+        ),
     )
-    console.print(Panel(content, border_style="cyan", expand=False))
 
 
 def _run_onboard_flow(*, from_command: bool = False) -> None:
-    """Minimal onboarding flow inspired by guided CLIs / 最小 onboarding 引导"""
-    import questionary
-    from core.cookie_manager import has_available_cookie_sources, resolve_cookie_file_path
-
-    cfg = _get_cfg()
-    configured_cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
-    active_cookie_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-    console.print(Panel(
-        Text(
-            "首次使用向导\n\n"
-            "1. 先运行 ./install.sh 安装环境\n"
-            f"2. 在 {configured_cookie_path} 中填入自己的 Cookie\n"
-            "3. 执行一次环境检查\n"
-            "4. 然后从首页菜单开始使用",
-            justify="left",
-        ),
-        border_style="magenta",
-        title="🚀 首次使用向导",
-        expand=False,
-    ))
-
-    cookie_ready = has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
-    rprint(f"📄 配置文件: [cyan]{Path(__file__).parent.parent / 'config.yaml'}[/]")
-    rprint(f"🍪 Cookie 文件: [cyan]{configured_cookie_path}[/] {'✅' if cookie_ready else '⚠️'}")
-    if active_cookie_path != configured_cookie_path:
-        rprint(f"↩️ 兼容旧路径: [cyan]{active_cookie_path}[/]")
-    rprint("🧰 安装入口: [cyan]./install.sh[/]")
-    rprint("🔁 重建环境: [cyan]./install.sh --recreate[/]")
-
-    should_check = questionary.confirm(
-        "现在执行环境检查吗？",
-        default=True,
-        style=_launcher_style(),
-    ).ask()
-    if should_check:
-        check()
-
-    should_open_home = questionary.confirm(
-        "现在进入首页菜单吗？",
-        default=not from_command,
-        style=_launcher_style(),
-    ).ask()
-    if should_open_home:
-        _run_launcher()
+    run_onboard_flow(_build_launcher_runtime(), from_command=from_command)
 
 
 def _run_launcher() -> None:
-    """Default home menu / 默认首页菜单"""
-    import questionary
-
-    default_output_dir = _get_default_output_dir()
-    default_headless = _get_default_browser_headless()
-
-    def run_action(func, **kwargs) -> None:
-        try:
-            func(**kwargs)
-        except SystemExit:
-            # Keep launcher alive after sub-command finishes or fails.
-            # 子命令执行完成或报错后，仍回到首页菜单。
-            return
-
-    _render_launcher_header()
-
-    while True:
-        choice = questionary.select(
-            "请选择操作：",
-            choices=[
-                questionary.Choice("快速抓取", value="fetch"),
-                questionary.Choice("作者抓取", value="creator"),
-                questionary.Choice("批量抓取", value="batch"),
-                questionary.Choice("收藏夹监控", value="monitor"),
-                questionary.Choice("搜索本地数据库", value="query"),
-                questionary.Choice("归档工作台", value="interactive"),
-                questionary.Choice("首次使用向导", value="onboard"),
-                questionary.Choice("环境检查", value="check"),
-                questionary.Choice("查看说明书", value="manual"),
-                questionary.Choice("退出", value="exit"),
-            ],
-            use_shortcuts=False,
-            style=_launcher_style(),
-        ).ask()
-
-        if not choice or choice == "exit":
-            return
-
-        if choice == "fetch":
-            url = questionary.text(
-                "输入知乎链接或一段包含链接的文字：",
-                style=_launcher_style(),
-            ).ask()
-            if not url:
-                continue
-            options = _collect_fetch_options(url)
-            run_action(
-                fetch,
-                url=url,
-                output=default_output_dir,
-                limit=options["limit"],
-                no_images=options["no_images"],
-                headless=options["headless"],
-            )
-            continue
-
-        if choice == "creator":
-            creator_input = questionary.text(
-                "输入作者主页 URL 或 url_token：",
-                style=_launcher_style(),
-            ).ask()
-            if not creator_input:
-                continue
-            answers = _input_non_negative_int("抓多少条回答？", "10")
-            articles = _input_non_negative_int("抓多少篇专栏？", "5")
-            selections = questionary.checkbox(
-                "附加设置：",
-                choices=[
-                    questionary.Choice("下载图片", value="images", checked=True),
-                ],
-                style=_launcher_style(),
-            ).ask() or []
-            run_action(
-                creator,
-                creator=creator_input,
-                output=default_output_dir,
-                answers=answers,
-                articles=articles,
-                no_images="images" not in selections,
-            )
-            continue
-
-        if choice == "batch":
-            input_file = questionary.path(
-                "输入 URL 列表文件路径：",
-                only_files=True,
-                style=_launcher_style(),
-            ).ask()
-            if not input_file:
-                continue
-            concurrency = _input_positive_int("并发数：", "4")
-            selections = questionary.checkbox(
-                "附加设置：",
-                choices=[
-                    questionary.Choice("下载图片", value="images", checked=True),
-                ],
-                style=_launcher_style(),
-            ).ask() or []
-            run_action(
-                batch,
-                input_file=Path(input_file),
-                output=default_output_dir,
-                concurrency=concurrency,
-                no_images="images" not in selections,
-                headless=default_headless,
-            )
-            continue
-
-        if choice == "monitor":
-            collection_id = questionary.text(
-                "输入收藏夹 ID：",
-                style=_launcher_style(),
-            ).ask()
-            if not collection_id:
-                continue
-            concurrency = _input_positive_int("并发数：", "4")
-            selections = questionary.checkbox(
-                "附加设置：",
-                choices=[
-                    questionary.Choice("下载图片", value="images", checked=True),
-                ],
-                style=_launcher_style(),
-            ).ask() or []
-            run_action(
-                monitor,
-                collection_id=collection_id.strip(),
-                output=default_output_dir,
-                concurrency=concurrency,
-                no_images="images" not in selections,
-                headless=default_headless,
-            )
-            continue
-
-        if choice == "query":
-            keyword = questionary.text(
-                "输入搜索关键词：",
-                style=_launcher_style(),
-            ).ask()
-            if not keyword:
-                continue
-            limit = _input_positive_int("结果数量：", "10")
-            run_action(query_db, keyword=keyword, limit=limit, data_dir=str(default_output_dir))
-            continue
-
-        if choice == "interactive":
-            run_action(interactive)
-            continue
-
-        if choice == "onboard":
-            _run_onboard_flow()
-            continue
-
-        if choice == "check":
-            run_action(check)
-            continue
-
-        if choice == "manual":
-            run_action(manual)
-            continue
+    run_launcher(_build_launcher_runtime())
 
 
 # ============================================================
@@ -507,243 +253,7 @@ def manual() -> None:
     显示内置终端说明书，支持分页查看。
     """
     default_output_dir = _get_default_output_dir()
-    manual_text = f"""
-NAME
-  zhihu - Local-first Zhihu extractor with Markdown + SQLite outputs
-  zhihu - 面向本地归档的知乎提取工具（Markdown + SQLite）
-
-SYNOPSIS
-  zhihu <command> [options]
-  ./zhihu <command> [options]
-  python3 cli/app.py <command> [options]
-
-INSTALL MODEL
-  - `pyproject.toml` is the dependency source of truth
-  - `./install.sh` is the official one-shot installer
-  - `./install.sh --recreate` rebuilds `.venv` from scratch
-  - `zhihu` is the preferred global entrypoint after installation
-  - `./zhihu` remains the repository-local fallback and prefers the local `.venv`
-
-PAGER
-  Exit manual / 退出说明书:
-  - press `q` in most terminals / 大多数终端按 `q`
-  - if pager is not active: `Ctrl+C` / 若分页器未接管可按 `Ctrl+C`
-
-HOME MENU
-  Open / 打开:
-  - `zhihu`
-  - `./zhihu`
-  - `python3 cli/app.py`
-
-  Controls / 操作方式:
-  - arrow keys: move / 方向键移动
-  - `Enter`: confirm / 回车确认
-  - `Space`: toggle checkbox options / 空格勾选复选项
-  - `Ctrl+C`: exit current screen / 退出当前界面
-
-COMMAND INDEX
-  - onboard
-  - fetch
-  - creator
-  - batch
-  - monitor
-  - query
-  - interactive
-  - config --show / --path
-  - check
-  - manual
-
-COMMAND REFERENCE
-
-1) fetch
-  Purpose:
-  - scrape one URL, or extract and scrape multiple Zhihu URLs from mixed text
-  - 支持从混合文本中自动识别多条知乎链接并抓取
-
-  Supported links:
-  - article: https://zhuanlan.zhihu.com/p/<id>
-  - answer:  https://www.zhihu.com/question/<qid>/answer/<aid>
-  - question page: https://www.zhihu.com/question/<qid>
-
-  Options:
-  - `-o, --output PATH` output base directory
-  - `-n, --limit INT` question-page answer count (must be >= 1)
-  - `-i, --no-images` skip image downloading
-  - `-b, --headless` browser headless switch for fallback path
-
-  Behavior:
-  - article path: protocol HTML fetch first, then one cookie-rotation retry, then Playwright fallback if still blocked
-  - `-n <= 20`: usually single page
-  - `-n > 20`: auto pagination with random waits
-  - `-n > 50`: higher anti-bot risk warning
-
-  Examples:
-  - `zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"`
-  - `zhihu fetch "text ... https://www.zhihu.com/question/28696373 ..."`
-  - `zhihu fetch "https://www.zhihu.com/question/28696373" -n 10`
-
-2) creator
-  Purpose:
-  - fetch creator answers + articles in batch
-  - 批量抓取作者回答和专栏
-
-  Input:
-  - profile URL: `https://www.zhihu.com/people/<url_token>`
-  - raw token: `<url_token>`
-
-  Options:
-  - `-o, --output PATH` output base directory
-  - `--answers INT` max answers (default 10, >= 0)
-  - `--articles INT` max articles (default 5, >= 0)
-  - `-i, --no-images` skip image downloading
-
-  Defaults:
-  - answers = 10
-  - articles = 5
-  - output base = `{default_output_dir}`
-
-  Examples:
-  - `zhihu creator "https://www.zhihu.com/people/iterator"`
-  - `zhihu creator iterator --answers 20 --articles 10`
-
-3) batch
-  Purpose:
-  - load URL list file and fetch concurrently
-  - 从文件读取 URL 列表并发抓取
-
-  Options:
-  - `-o, --output PATH`
-  - `-c, --concurrency INT` requested concurrency (effective cap: 8)
-  - `-i, --no-images`
-  - `-b, --headless`
-
-  Example:
-  - `zhihu batch urls.txt -c 4`
-
-4) monitor
-  Purpose:
-  - incremental monitoring for a Zhihu collection
-  - 知乎收藏夹增量监控与下载
-
-  Options:
-  - `-o, --output PATH`
-  - `-c, --concurrency INT` (effective cap: 8)
-  - `-i, --no-images`
-  - `-b, --headless`
-
-  Behavior:
-  - checks new items since last pointer
-  - pointer advances only when current round has no failures
-  - avoids skipping failed items in next run
-
-  Example:
-  - `zhihu monitor 78170682 -c 4`
-
-5) query
-  Purpose:
-  - query local `zhihu.db`
-  - 在本地数据库中检索标题与正文
-
-  Options:
-  - `-l, --limit INT` max rows (default 10)
-  - `-d, --data-dir PATH` where `zhihu.db` is located
-
-  Example:
-  - `zhihu query "Transformer" -l 20`
-
-6) interactive
-  Purpose:
-  - full-screen archive workbench with draft, queue, recent-result, and retry flow
-  - 全屏归档工作台，包含草案、队列、最近结果与失败重试
-
-  Current support:
-  - answer / article / question links
-  - `Enter`: build current draft
-  - `Ctrl+R`: execute current draft
-  - `Ctrl+Y`: load retry draft from the latest failed records
-  - does NOT parse `people/...` creator links in interactive mode
-  - use `creator` command for profile URLs
-  - `--legacy`: deprecated fallback to the old Rich/questionary flow
-
-7) config
-  Purpose:
-  - show loaded configuration
-
-  Options:
-  - `--show` print current config summary
-  - `--path` show config file path
-
-  Examples:
-  - `zhihu config --show`
-  - `zhihu config --path`
-
-8) check
-  Purpose:
-  - environment sanity checks
-
-  Checks:
-  - `config.yaml` existence
-  - configured cookie file validity
-  - Playwright availability under current browser config
-
-  Example:
-  - `zhihu check`
-
-9) manual
-  Purpose:
-  - open this built-in manual in pager
-
-OUTPUT STRUCTURE
-  Base: `{default_output_dir}`
-
-  - `entries/`
-    normal outputs from fetch / batch / monitor
-  - `creators/<url_token>/`
-    creator-mode outputs
-  - `zhihu.db`
-    shared SQLite database
-
-  Creator directory files:
-  - `creator.json`: creator metadata + sync state
-  - `README.md`: local index for this creator
-
-ARCHITECTURE (LAYER MAP)
-  CLI Layer
-  - `cli/app.py` command routing + orchestration
-  - `cli/interactive.py` Textual-based interactive workbench
-  - `cli/interactive_legacy.py` deprecated Rich/questionary fallback
-
-  Fetch Layer
-  - `core/scraper.py`
-    URL type detection, protocol-first fetch, question pagination,
-    creator pagination, image download
-
-  Access Layer
-  - `core/api_client.py` Zhihu API access + cookie-based requests
-  - `core/browser_fallback.py` Playwright fallback (mainly article path)
-
-  Data Layer
-  - `core/converter.py` HTML -> Markdown conversion
-  - `core/db.py` SQLite persistence and query
-  - `core/monitor.py` incremental collection pointer management
-
-  Config & Runtime
-  - `core/config.py` config loading + logging + humanized delay
-  - `core/cookie_manager.py` cookie file + cookie pool handling
-
-CURRENT LIMITS
-  - interactive mode does not accept creator profile URLs (`people/...`)
-  - article path is protocol-first, but some columns still need Playwright fallback under active WAF
-  - browser fallback is strongest on article path; answer/question stay API-first
-  - query uses SQLite keyword matching, not advanced ranking search
-
-QUICK START
-  - `./install.sh`
-  - `./install.sh --recreate`  # when the local environment is broken
-  - `zhihu`                    # open the home menu / 打开首页菜单
-  - `zhihu check`
-  - `zhihu manual`
-""".strip()
+    manual_text = build_manual_text(default_output_dir)
 
     with console.pager(styles=True):
         console.print(Text(manual_text, justify="left"))
@@ -1123,28 +633,14 @@ def config_cmd(
         cfg = _get_cfg()
         from core.cookie_manager import resolve_cookie_file_path, resolve_cookie_pool_dir
 
-        configured_cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
-        active_cookie_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-        active_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
-        log_path = resolve_project_path(cfg.logging.file) if cfg.logging.file else "disabled / 已关闭"
-        rprint(Panel(
-            Text(f"""
-[b]配置路径 (Config Path):[/] {Path(__file__).parent.parent / "config.yaml"}
-
-[b]输出目录 (Output Directory):[/] {cfg.output.directory}
-[b]Cookie文件 (Cookie File):[/] {configured_cookie_path}
-[b]当前生效Cookie (Active Cookie):[/] {active_cookie_path}
-[b]Cookie池目录 (Cookie Pool):[/] {active_pool_dir}
-[b]日志文件 (Log File):[/] {log_path}
-[b]日志级别 (Log Level):[/] {cfg.logging.level}
-[b]浏览器 (Browser):[/] {"Headless / 无头" if cfg.zhihu.browser.headless else "Visible / 有头"}
-[b]重试次数 (Retry Attempts):[/] {cfg.crawler.retry.max_attempts}
-[b]图片并发 (Image Concurrency):[/] {cfg.crawler.images.concurrency}
-[b]Cookie轮换 (Cookie Rotation):[/] {"Enabled / 启用" if hasattr(cfg, 'zhihu') and cfg.zhihu.cookies_required else "Disabled / 禁用"}
-            """.strip(), justify="left"),
-            title="🛠️ Current Configuration / 当前配置",
-            border_style="cyan"
-        ))
+        snapshot = build_config_snapshot(
+            cfg=cfg,
+            config_path=Path(__file__).parent.parent / "config.yaml",
+            resolve_project_path=resolve_project_path,
+            resolve_cookie_file_path=resolve_cookie_file_path,
+            resolve_cookie_pool_dir=resolve_cookie_pool_dir,
+        )
+        rprint(render_config_panel(snapshot))
 
 
 @app.command("check")
@@ -1158,49 +654,7 @@ def check() -> None:
     2. configured cookie file valid
     3. Playwright browser available
     """
-    cfg = _get_cfg()
-    rprint("🔍 System check... / 系统检查...\n")
-
-    # Check config file / 检查配置文件
-    config_path = Path(__file__).parent.parent / "config.yaml"
-    if config_path.exists():
-        rprint("✅ config.yaml exists / 存在")
-    else:
-        rprint("❌ config.yaml missing / 不存在")
-
-    # Check cookies / 检查 cookies
-    from core.cookie_manager import count_available_cookie_sources, has_real_cookie_values, resolve_cookie_file_path, resolve_cookie_pool_dir
-
-    cookies_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-    cookie_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
-    primary_cookie_ready = has_real_cookie_values(cookies_path)
-    available_sources = count_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
-    rprint(f"{'✅' if primary_cookie_ready else '⚠️'} 主 Cookie 文件 / Primary cookie file: {cookies_path}")
-    rprint(f"{'✅' if available_sources else '⚠️'} 可用号源数 / Available sessions: {available_sources} (pool: {cookie_pool_dir})")
-
-    # Check playwright / 检查 playwright
-    try:
-        asyncio.run(_check_playwright())
-        rprint("✅ Playwright OK / 正常")
-    except ModuleNotFoundError:
-        rprint(Text("⚠️ Playwright not installed / 未安装。专栏降级模式暂不可用，建议先执行 ./install.sh", justify="left"))
-    except Exception as e:
-        rprint(f"❌ Playwright error / 错误: {e}")
-
-
-async def _check_playwright() -> None:
-    """Check if playwright is available / 检查 playwright 是否可用"""
-    from playwright.async_api import async_playwright
-    from core.browser_fallback import _launch_browser_with_fallback
-
-    cfg = _get_cfg()
-    async with async_playwright() as pw:
-        browser = await _launch_browser_with_fallback(
-            pw,
-            cfg.zhihu.browser,
-            headless=cfg.zhihu.browser.headless,
-        )
-        await browser.close()
+    render_environment_check()
 
 
 # ============================================================
@@ -1316,25 +770,39 @@ async def _fetch_and_save(
         headless: Headless mode (not effective in API mode) / 无头模式 (API 模式下不生效)
         collection_id: Collection ID (for database record association) / 收藏夹 ID (关联数据库记录)
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    downloader = ZhihuDownloader(url)
-    fetch_kwargs = dict(scrape_config)
-    fetch_kwargs["headless"] = headless
-    data = await downloader.fetch_page(**fetch_kwargs)
-
-    if not data:
-        rprint("[yellow]⚠️  No content obtained / 未获取到内容[/yellow]")
-        return []
-
-    items = data if isinstance(data, list) else [data]
-    return await _save_items(
-        items=items,
-        content_root=resolve_entries_output_dir(output_dir),
-        db_root=output_dir,
+    return await run_fetch_and_save(
+        url=url,
+        output_dir=output_dir,
+        scrape_config=scrape_config,
+        settings=_get_save_pipeline_settings(),
         download_images=download_images,
-        source_url_fallback=url,
+        headless=headless,
         collection_id=collection_id,
+        printer=rprint,
+    )
+
+
+async def _fetch_and_save_result(
+    url: str,
+    output_dir: Path,
+    scrape_config: dict,
+    download_images: bool = True,
+    headless: bool = True,
+    collection_id: Optional[str] = None,
+):
+    """
+    Execute scraping and return the typed save result contract.
+    执行抓取，并返回类型化保存结果契约。
+    """
+    return await run_fetch_and_save_result(
+        url=url,
+        output_dir=output_dir,
+        scrape_config=scrape_config,
+        settings=_get_save_pipeline_settings(),
+        download_images=download_images,
+        headless=headless,
+        collection_id=collection_id,
+        printer=rprint,
     )
 
 
@@ -1349,298 +817,15 @@ async def _fetch_creator_and_save(
     Fetch creator content and save it using the standard local output pipeline.
     抓取作者内容，并复用标准本地输出流程保存。
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    downloader = ZhihuCreatorDownloader(creator)
-    result = await downloader.fetch_items(answer_limit=answer_limit, article_limit=article_limit)
-    creator_info = result.get("creator", {})
-    items = result.get("items", [])
-    sync_info = result.get("sync", {})
-
-    if not items:
-        rprint("[yellow]⚠️  No creator content obtained / 未获取到作者内容[/yellow]")
-        return
-
-    creator_name = creator_info.get("name", creator_info.get("url_token", creator))
-    rprint(f"[cyan]👤 Creator / 作者[/cyan]: {creator_name} ({creator_info.get('url_token', 'unknown')})")
-    if creator_info.get("follower_count") or creator_info.get("following_count"):
-        rprint(
-            f"   👥 Followers / 粉丝: {creator_info.get('follower_count', 0)}"
-            f" | Following / 关注: {creator_info.get('following_count', 0)}"
-        )
-
-    creator_root = resolve_creator_output_dir(output_dir, creator_info.get("url_token", creator))
-
-    saved_records = await _save_items(
-        items=items,
-        content_root=creator_root,
-        db_root=output_dir,
+    await run_fetch_creator_and_save(
+        creator=creator,
+        output_dir=output_dir,
+        answer_limit=answer_limit,
+        article_limit=article_limit,
+        settings=_get_save_pipeline_settings(),
         download_images=download_images,
-        source_url_fallback=f"https://www.zhihu.com/people/{creator_info.get('url_token', creator)}",
+        printer=rprint,
     )
-
-    _write_creator_metadata(creator_root, creator_info, saved_records, sync_info)
-
-
-async def _save_items(
-    *,
-    items: List[Dict[str, Any]],
-    content_root: Path,
-    db_root: Path,
-    download_images: bool,
-    source_url_fallback: str,
-    collection_id: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Save normalized content items to Markdown, images, and SQLite.
-    将标准化内容保存到 Markdown、图片目录和 SQLite。
-    """
-    from datetime import datetime
-
-    cfg = _get_cfg()
-    content_root.mkdir(parents=True, exist_ok=True)
-
-    image_cfg = cfg.crawler.images
-    images_subdir = cfg.output.images_subdir or "images"
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    from core.db import ZhihuDatabase
-
-    db = ZhihuDatabase(str(db_root / "zhihu.db"))
-    saved_records: List[Dict[str, Any]] = []
-    try:
-        for item in items:
-            title = sanitize_filename(item["title"])
-            author = sanitize_filename(item["author"])
-            item_date = item.get("date") or today
-            source_url = item.get("url") or source_url_fallback
-            item_key = sanitize_filename(f"{item.get('type', 'item')}-{item.get('id', 'unknown')}", max_length=80)
-
-            folder_name = build_output_folder_name(item_date, title, author, item_key)
-            folder = content_root / folder_name
-            folder.mkdir(parents=True, exist_ok=True)
-
-            # Download images / 下载图片
-            img_map = {}
-            if download_images:
-                img_urls = ZhihuConverter.extract_image_urls(item["html"])
-                if img_urls:
-                    rprint(f"   📥 Downloading {len(img_urls)} images... / 下载 {len(img_urls)} 张图片...")
-                    img_map = await ZhihuDownloader.download_images(
-                        img_urls,
-                        folder / images_subdir,
-                        concurrency=image_cfg.concurrency,
-                        timeout=image_cfg.timeout,
-                        relative_prefix=images_subdir,
-                    )
-
-            # Convert and save Markdown / 转换并保存 Markdown
-            converter = ZhihuConverter(img_map=img_map)
-            md = converter.convert(item["html"])
-
-            header = (
-                f"# {item['title']}\n\n"
-                f"> **Author / 作者**: {item['author']}  \n"
-                f"> **Source / 来源**: [{source_url}]({source_url})  \n"
-                f"> **Date / 日期**: {item_date}\n\n"
-                "---\n\n"
-            )
-
-            out_path = folder / "index.md"
-            full_md = header + md
-            out_path.write_text(full_md, encoding="utf-8")
-
-            db.save_article(item, full_md, collection_id=collection_id)
-            saved_records.append({
-                "item": item,
-                "folder": folder,
-                "markdown_path": out_path,
-            })
-
-            rprint(f"✅ Saved / 保存: [cyan]{author}[/] - {title[:25]}...")
-            rprint(f"   📁 {out_path} & DB / 入库 DB")
-    finally:
-        db.close()
-
-    return saved_records
-
-
-def _write_creator_metadata(
-    creator_root: Path,
-    creator_info: Dict[str, Any],
-    saved_records: List[Dict[str, Any]],
-    sync_info: Optional[Dict[str, Any]] = None,
-) -> None:
-    """
-    Write creator metadata files under the creator directory.
-    在作者目录下写入元信息文件。
-    """
-    from datetime import datetime
-
-    fetched_at = datetime.now().isoformat(timespec="seconds")
-    answer_records = [record for record in saved_records if record["item"].get("type") == "answer"]
-    article_records = [record for record in saved_records if record["item"].get("type") == "article"]
-    sync_info = sync_info or {}
-    answer_sync = sync_info.get("answers", {})
-    article_sync = sync_info.get("articles", {})
-    recent_records = sorted(
-        saved_records,
-        key=lambda record: record["item"].get("date", ""),
-        reverse=True,
-    )[:5]
-
-    creator_payload = {
-        "user_id": creator_info.get("user_id", ""),
-        "name": creator_info.get("name", creator_info.get("url_token", "unknown")),
-        "url_token": creator_info.get("url_token", "unknown"),
-        "profile_url": creator_info.get("profile_url", f"https://www.zhihu.com/people/{creator_info.get('url_token', 'unknown')}"),
-        "avatar_url": creator_info.get("avatar_url", ""),
-        "headline": creator_info.get("headline", ""),
-        "description": creator_info.get("description", ""),
-        "follower_count": creator_info.get("follower_count", 0),
-        "following_count": creator_info.get("following_count", 0),
-        "voteup_count": creator_info.get("voteup_count", 0),
-        "answer_count": creator_info.get("answer_count", 0),
-        "articles_count": creator_info.get("articles_count", 0),
-        "question_count": creator_info.get("question_count", 0),
-        "video_count": creator_info.get("video_count", 0),
-        "column_count": creator_info.get("column_count", 0),
-        "fetched_at": fetched_at,
-        "last_sync_at": fetched_at,
-        "saved_answers": len(answer_records),
-        "saved_articles": len(article_records),
-        "local_root": str(creator_root),
-        "sync": {
-            "answers": answer_sync,
-            "articles": article_sync,
-        },
-        "recent_items": [
-            {
-                "id": record["item"].get("id", ""),
-                "type": record["item"].get("type", ""),
-                "title": record["item"].get("title", ""),
-                "date": record["item"].get("date", ""),
-                "markdown_path": str(record["markdown_path"].relative_to(creator_root)),
-            }
-            for record in recent_records
-        ],
-        "items": [
-            {
-                "id": record["item"].get("id", ""),
-                "type": record["item"].get("type", ""),
-                "title": record["item"].get("title", ""),
-                "date": record["item"].get("date", ""),
-                "url": record["item"].get("url", ""),
-                "markdown_path": str(record["markdown_path"].relative_to(creator_root)),
-            }
-            for record in saved_records
-        ],
-    }
-
-    creator_json_path = creator_root / "creator.json"
-    creator_json_path.write_text(
-        json.dumps(creator_payload, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-
-    lines = [
-        f"# {creator_payload['name']}",
-        "",
-        f"> **User ID**: `{creator_payload['user_id'] or 'unknown'}`  ",
-        f"> **URL Token**: `{creator_payload['url_token']}`  ",
-        f"> **Zhihu Profile / 作者主页**: [{creator_payload['profile_url']}]({creator_payload['profile_url']})  ",
-        f"> **Fetched At / 抓取时间**: {creator_payload['fetched_at']}  ",
-        f"> **Last Sync / 最近同步**: {creator_payload['last_sync_at']}",
-        "",
-    ]
-
-    if creator_payload["avatar_url"]:
-        lines.extend([
-            f"> **Avatar / 头像**: {creator_payload['avatar_url']}",
-            "",
-        ])
-
-    if creator_payload["headline"]:
-        lines.extend([
-            f"> **Headline / 简介**: {creator_payload['headline']}",
-            "",
-        ])
-
-    if creator_payload["description"] and creator_payload["description"] != creator_payload["headline"]:
-        lines.extend([
-            f"> **Description / 描述**: {creator_payload['description']}",
-            "",
-        ])
-
-    lines.extend([
-        "## Summary / 概览",
-        "",
-        f"- Followers / 粉丝: {creator_payload['follower_count']}",
-        f"- Following / 关注: {creator_payload['following_count']}",
-        f"- Total upvotes / 总获赞: {creator_payload['voteup_count']}",
-        f"- Zhihu answers / 知乎回答数: {creator_payload['answer_count']}",
-        f"- Zhihu articles / 知乎专栏数: {creator_payload['articles_count']}",
-        f"- Zhihu questions / 提问数: {creator_payload['question_count']}",
-        f"- Zhihu videos / 视频数: {creator_payload['video_count']}",
-        f"- Zhihu columns / 专栏数: {creator_payload['column_count']}",
-        f"- Saved answers / 已保存回答: {creator_payload['saved_answers']}",
-        f"- Saved articles / 已保存专栏: {creator_payload['saved_articles']}",
-        f"- Local root / 本地目录: `{creator_payload['local_root']}`",
-        "",
-        "## Sync Status / 同步状态",
-        "",
-        f"- Answers: requested {answer_sync.get('requested_limit', 0)}, saved {answer_sync.get('saved_count', 0)}, pages {answer_sync.get('pages_fetched', 0)}, last_offset {answer_sync.get('last_offset', 0)}, reached_end {answer_sync.get('reached_end', False)}, stopped_early {answer_sync.get('stopped_early', False)}",
-        f"- Articles: requested {article_sync.get('requested_limit', 0)}, saved {article_sync.get('saved_count', 0)}, pages {article_sync.get('pages_fetched', 0)}, last_offset {article_sync.get('last_offset', 0)}, reached_end {article_sync.get('reached_end', False)}, stopped_early {article_sync.get('stopped_early', False)}",
-        "",
-        "## Recent Items / 最近内容",
-        "",
-    ])
-
-    if creator_payload["recent_items"]:
-        lines.extend([
-            "| Type | Title | Date | Markdown |",
-            "|---|---|---|---|",
-        ])
-        for item in creator_payload["recent_items"]:
-            escaped_title = item["title"].replace("|", "\\|")
-            lines.append(
-                f"| {item['type']} | {escaped_title} | {item['date']} | "
-                f"[index.md]({item['markdown_path']}) |"
-            )
-        lines.append("")
-
-    lines.extend([
-        "## Items / 内容列表",
-        "",
-    ])
-
-    for section_title, records in (
-        ("### Answers / 回答", answer_records),
-        ("### Articles / 专栏", article_records),
-    ):
-        lines.extend([section_title, ""])
-        if not records:
-            lines.extend(["- None / 暂无", ""])
-            continue
-
-        lines.extend([
-            "| Title | Date | Markdown | Source |",
-            "|---|---|---|---|",
-        ])
-        for record in records:
-            item = record["item"]
-            title = item.get("title", "").replace("|", "\\|")
-            item_date = item.get("date", "")
-            markdown_rel = record["markdown_path"].relative_to(creator_root)
-            source_url = item.get("url", "")
-            lines.append(
-                f"| {title} | {item_date} | "
-                f"[index.md]({markdown_rel.as_posix()}) | [source]({source_url}) |"
-            )
-        lines.append("")
-
-    creator_readme_path = creator_root / "README.md"
-    creator_readme_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 # ============================================================

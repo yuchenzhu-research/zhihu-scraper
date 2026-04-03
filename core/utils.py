@@ -130,7 +130,7 @@ def extract_creator_token(value: str) -> Optional[str]:
 # Filename Sanitization / 文件名清洗
 # ============================================================
 
-def sanitize_filename(name: str, max_length: int = 50) -> str:
+def sanitize_filename(name: str, max_length: int = 50, *, shell_safe: bool = False) -> str:
     """
     Sanitize string to be safely used as filename.
     清洗字符串以安全用作文件名。
@@ -146,7 +146,13 @@ def sanitize_filename(name: str, max_length: int = 50) -> str:
         Sanitized filename / 清洗后的文件名
     """
     name = re.sub(r"[/\\:*?\"<>|\x00-\x1f]", "_", name)
-    name = name.strip(" .")
+    if shell_safe:
+        name = re.sub(r"[\[\]\(\)\{\}`$&;!]", "_", name)
+        name = re.sub(r"\s+", "_", name)
+        name = re.sub(r"_+", "_", name)
+        name = name.strip(" ._-")
+    else:
+        name = name.strip(" .")
     return name[:max_length] or "untitled"
 
 

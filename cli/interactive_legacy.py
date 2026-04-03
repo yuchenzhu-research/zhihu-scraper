@@ -14,8 +14,6 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 
-import questionary
-from questionary import Style
 from rich.columns import Columns
 from rich.console import Console, Group
 from rich.panel import Panel
@@ -30,7 +28,7 @@ from core.config import get_config, resolve_project_path
 from core.cookie_manager import has_available_cookie_sources
 from core.utils import extract_urls
 from core.scraper import ZhihuDownloader
-from cli.app import _fetch_and_save
+from cli.app import _fetch_and_save, _get_questionary
 
 # ==========================================
 # Minimal Theme Tokens / 极简主题变量
@@ -49,15 +47,17 @@ THEME = {
 console = Console()
 executor = ThreadPoolExecutor(max_workers=1)
 
-q_style = Style([
-    ('question', f'fg:{THEME["accent"]} bold'),
-    ('answer', f'fg:{THEME["text"]}'),
-    ('pointer', f'fg:{THEME["accent"]} bold'),
-    ('highlighted', f'fg:{THEME["text"]} bg:{THEME["accent"]} bold'),
-    ('selected', f'fg:{THEME["success"]}'),
-    ('separator', f'fg:{THEME["line"]}'),
-    ('instruction', f'fg:{THEME["muted"]}'),
-])
+def _q_style():
+    Style = _get_questionary().Style
+    return Style([
+        ('question', f'fg:{THEME["accent"]} bold'),
+        ('answer', f'fg:{THEME["text"]}'),
+        ('pointer', f'fg:{THEME["accent"]} bold'),
+        ('highlighted', f'fg:{THEME["text"]} bg:{THEME["accent"]} bold'),
+        ('selected', f'fg:{THEME["success"]}'),
+        ('separator', f'fg:{THEME["line"]}'),
+        ('instruction', f'fg:{THEME["muted"]}'),
+    ])
 
 def _get_cfg():
     """Load runtime config lazily / 延迟加载运行时配置"""
@@ -205,6 +205,7 @@ async def parse_question_options(url: str) -> dict:
     Parse question scraping options interactively
     交互式解析问题抓取选项
     """
+    questionary = _get_questionary()
     downloader = ZhihuDownloader(url)
     if not downloader.has_valid_cookies():
         console.print(
@@ -218,7 +219,7 @@ async def parse_question_options(url: str) -> dict:
             "抓取指定数量（Top N）",
             "使用默认数量（Top 3）",
         ],
-        style=q_style
+        style=_q_style()
     ).ask_async()
 
     if not choice:
@@ -228,7 +229,7 @@ async def parse_question_options(url: str) -> dict:
         limit = await questionary.text(
             "请输入抓取数量:", default="20",
             validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数",
-            style=q_style
+            style=_q_style()
         ).ask_async()
         return {"start": 0, "limit": int(limit) if limit else 3}
 
