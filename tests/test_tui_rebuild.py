@@ -1,6 +1,6 @@
 import unittest
 
-from textual.widgets import Input, Static
+from textual.widgets import Static
 
 from cli.tui.app import ZhihuInteractiveShell
 from cli.tui.state import (
@@ -13,7 +13,7 @@ from cli.tui.state import (
     build_running_summary,
     parse_input_to_draft,
 )
-from cli.tui.widgets import DetailCard, HistoryCard, QueueCard, SummaryCard
+from cli.tui.widgets import ArchiveInput, DetailCard, HistoryCard, QueueCard, StatusPill, SummaryCard
 
 
 def _mixed_executor(draft, progress_callback=None):
@@ -78,6 +78,16 @@ class TuiStateTests(unittest.TestCase):
         self.assertEqual(len(retry_draft.targets), 1)
         self.assertEqual(retry_draft.targets[0].url_type, "article")
 
+    def test_multiline_paste_extracts_answer_url(self):
+        draft = parse_input_to_draft(
+            "你对下一代Transformer架构的预测是什么？ - 第欧根尼的回答 - 知乎\n"
+            "https://www.zhihu.com/question/1904728228213548260/answer/2018626185983215533",
+            True,
+        )
+        self.assertTrue(draft.ready_to_run)
+        self.assertEqual(len(draft.targets), 1)
+        self.assertEqual(draft.targets[0].url_type, "answer")
+
     def test_history_snapshot_contains_failure_hint(self):
         draft = parse_input_to_draft("https://zhuanlan.zhihu.com/p/789", True)
         report = ExecutionReport(
@@ -114,6 +124,10 @@ class TuiStateTests(unittest.TestCase):
         self.assertEqual(detail.title, "执行详情")
         self.assertTrue(any("blocked" in line for line in detail.lines))
 
+    def test_status_pill_renders_a_group(self):
+        pill = StatusPill("Cookie", "已就绪", "success")
+        self.assertEqual(type(pill.render()).__name__, "Group")
+
 
 class TuiWorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_recent_results_and_retry_flow(self):
@@ -128,7 +142,7 @@ class TuiWorkflowTests(unittest.IsolatedAsyncioTestCase):
                 "还没有可重试的结果",
             )
 
-            app.query_one("#url-input", Input).value = (
+            app.query_one("#url-input", ArchiveInput).load_text(
                 "https://www.zhihu.com/question/123/answer/456 "
                 "https://zhuanlan.zhihu.com/p/789"
             )
@@ -153,6 +167,21 @@ class TuiWorkflowTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(retry_title, "失败项重试草案")
             self.assertIn("专栏 #789", queue_body)
             self.assertNotIn("回答 #456", queue_body)
+
+    async def test_multiline_textarea_submit_builds_draft(self):
+        app = ZhihuInteractiveShell(draft_executor=_mixed_executor)
+        async with app.run_test(size=(100, 34)) as pilot:
+            await pilot.pause()
+            app.query_one("#url-input", ArchiveInput).load_text(
+                "你对下一代Transformer架构的预测是什么？ - 第欧根尼的回答 - 知乎\n"
+                "https://www.zhihu.com/question/1904728228213548260/answer/2018626185983215533"
+            )
+            await pilot.press("enter")
+            await pilot.pause()
+            summary_title = app.query_one(SummaryCard).query_one(".card-title", Static).content
+            summary_body = app.query_one(SummaryCard).query_one(".card-body", Static).content
+            self.assertEqual(summary_title, "已识别归档草案")
+            self.assertIn("回答 #2018626185983215533", summary_body)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Callable
 from textual.app import App, ComposeResult
 from textual.containers import Container, Grid
 from textual.events import Mount, Resize
-from textual.widgets import Footer, Input
+from textual.widgets import Footer
 
 from cli.tui.dialogs import QuestionLimitScreen
 from cli.tui.runner import ProgressCallback, execute_draft_run
@@ -25,7 +25,18 @@ from cli.tui.state import (
     build_running_summary,
     parse_input_to_draft,
 )
-from cli.tui.widgets import DetailCard, HistoryCard, HeroCard, HintCard, HomeStage, InputCard, QueueCard, StatusPill, SummaryCard
+from cli.tui.widgets import (
+    ArchiveInput,
+    DetailCard,
+    HistoryCard,
+    HeroCard,
+    HintCard,
+    HomeStage,
+    InputCard,
+    QueueCard,
+    StatusPill,
+    SummaryCard,
+)
 
 
 DraftExecutor = Callable[[DraftSummary, ProgressCallback | None], ExecutionReport]
@@ -90,13 +101,12 @@ class ZhihuInteractiveShell(App[None]):
         """Re-apply responsive layout classes whenever the terminal changes."""
         self._sync_layout_mode(event.size.width)
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
+    async def on_archive_input_submitted(self, event: ArchiveInput.Submitted) -> None:
         """Parse user input inside the TUI instead of delegating to questionary."""
         if event.input.id != "url-input":
             return
 
         draft = parse_input_to_draft(event.value, cookie_ready=self._snapshot.cookie_ready)
-        event.input.value = ""
 
         if draft.requires_question_limit:
             self._pending_question_draft = draft
@@ -109,7 +119,7 @@ class ZhihuInteractiveShell(App[None]):
 
     def action_focus_input(self) -> None:
         """Move keyboard focus back to the primary input field."""
-        self.query_one("#url-input", Input).focus()
+        self.query_one("#url-input", ArchiveInput).focus()
 
     def action_run_current_draft(self) -> None:
         """Execute the current draft in a background worker."""
@@ -157,7 +167,7 @@ class ZhihuInteractiveShell(App[None]):
 
         draft = self._draft
         self._is_running = True
-        self.query_one("#url-input", Input).disabled = True
+        self.query_one("#url-input", ArchiveInput).disabled = True
         self._set_draft(
             build_running_summary(
                 draft,
@@ -298,7 +308,7 @@ class ZhihuInteractiveShell(App[None]):
         self._is_running = False
         self._history.insert(0, report)
         self._history = self._history[:5]
-        input_widget = self.query_one("#url-input", Input)
+        input_widget = self.query_one("#url-input", ArchiveInput)
         input_widget.disabled = False
         self._set_draft(build_execution_summary(report))
         input_widget.focus()
@@ -306,7 +316,7 @@ class ZhihuInteractiveShell(App[None]):
     def _finish_run_with_error(self, error: str) -> None:
         """Restore the UI after an unexpected worker failure."""
         self._is_running = False
-        input_widget = self.query_one("#url-input", Input)
+        input_widget = self.query_one("#url-input", ArchiveInput)
         input_widget.disabled = False
         self._set_draft(
             DraftSummary(

@@ -2,10 +2,15 @@
 widgets.py - Reusable home screen widgets for the interactive TUI.
 """
 
+from rich.align import Align
+from rich.console import Group
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Vertical
+from textual.events import Key
+from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Input, Static
+from textual.widgets import Static, TextArea
 
 
 class HeroCard(Widget):
@@ -23,18 +28,26 @@ class HeroCard(Widget):
         yield Static(self._subtitle, classes="hero-subtitle")
 
 
-class StatusPill(Widget):
+class StatusPill(Static):
     """Compact status block for the home overview."""
 
+    _TONE_COLORS = {
+        "success": "#30d158",
+        "warn": "#ffd60a",
+        "accent": "#0a84ff",
+        "muted": "#8e8e93",
+    }
+
     def __init__(self, label: str, value: str, tone: str) -> None:
-        super().__init__(classes="status-pill")
+        super().__init__("", classes="status-pill")
         self._label = label
         self._value = value
         self._tone = tone
 
-    def compose(self) -> ComposeResult:
-        yield Static(self._label, classes="status-label")
-        yield Static(self._value, classes=f"status-value tone-{self._tone}")
+    def render(self) -> Group:
+        label = Align.center(Text(self._label, style="#8e8e93"))
+        value = Align.center(Text(self._value, style=f"bold {self._TONE_COLORS.get(self._tone, '#f5f5f7')}"))
+        return Group(label, value)
 
 
 class HintCard(Widget):
@@ -58,11 +71,42 @@ class InputCard(Widget):
 
     def compose(self) -> ComposeResult:
         yield Static("输入知乎链接", classes="section-label")
-        yield Input(
+        yield ArchiveInput(
             placeholder="粘贴回答、问题页或专栏链接；支持从混合文本中自动提取",
             id="url-input",
         )
-        yield Static("回车生成草案；Ctrl+R 执行；Ctrl+Y 载入失败重试；按 q 或 Esc 退出。", classes="section-caption")
+        yield Static("支持多行粘贴；按 Enter 生成草案，Ctrl+R 执行，Ctrl+Y 载入失败重试；按 q 或 Esc 退出。", classes="section-caption")
+
+
+class ArchiveInput(TextArea):
+    """Multiline-safe input surface that still submits on Enter."""
+
+    class Submitted(Message):
+        """Posted when the archive input should be parsed as a draft."""
+
+        def __init__(self, input_widget: "ArchiveInput", value: str) -> None:
+            super().__init__()
+            self.input = input_widget
+            self.value = value
+
+    def on_key(self, event: Key) -> None:
+        """Treat Enter as draft submission while preserving pasted multiline text."""
+        if event.key == "enter":
+            event.prevent_default()
+            event.stop()
+            self.post_message(self.Submitted(self, self.text))
+            return
+
+        if event.key == "ctrl+r":
+            event.prevent_default()
+            event.stop()
+            self.app.action_run_current_draft()
+            return
+
+        if event.key == "ctrl+y":
+            event.prevent_default()
+            event.stop()
+            self.app.action_load_retry_draft()
 
 
 class MutableCard(Widget):
