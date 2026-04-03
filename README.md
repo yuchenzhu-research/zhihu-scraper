@@ -18,6 +18,7 @@
 
 <p>
   <strong>Status:</strong> active ·
+  <strong>Focus:</strong> TUI 重构 + 跨平台兼容治理中 ·
   <strong>Install:</strong> <code>./install.sh</code> ·
   <strong>Manual:</strong> <code>zhihu manual</code>
 </p>
@@ -187,6 +188,9 @@ zhihu manual
 - 🎛️ **双入口**
   首选 `zhihu`，仓库内也可以继续用 `./zhihu` 或 `python3 cli/app.py`。
 
+- 🖥️ **默认交互工作台**
+  `interactive` 现在默认走新的 Textual TUI，旧版 Rich / questionary 只保留为回归排查入口。
+
 ## 支持范围 Coverage
 
 | 类型 | 当前状态 | 说明 |
@@ -199,6 +203,14 @@ zhihu manual
 | 收藏夹增量监控 | 已支持 | `monitor` 模式 |
 | 话题抓取 | 规划中 | 尚未开放 CLI |
 | JSON / CSV / MySQL 导出 | 规划中 | 当前主输出为 Markdown + SQLite |
+
+## 平台状态 Platform Status
+
+| 平台 | 当前状态 | 说明 |
+|---|---|---|
+| macOS | 主维护平台 | 日常开发、安装和交互工作台优先在这里验证 |
+| Linux | 持续兼容中 | CLI 主路径可用，正在补配置兼容和路径命名等回归 |
+| Windows | 待完整验证 | 路径、shell、浏览器依赖仍需专项调试与说明书补齐 |
 
 ## 推荐入口 Recommended Paths
 
@@ -267,14 +279,14 @@ zhihu manual
 ```text
 data/
 ├── entries/
-│   └── [2026-03-06] 标题 (answer-1234567890)/
+│   └── 2026-03-06_标题--answer-1234567890/
 │       ├── index.md
 │       └── images/
 ├── creators/
 │   └── hu-xi-jin/
 │       ├── creator.json
 │       ├── README.md
-│       └── [2026-03-06] 标题 (article-123456)/
+│       └── 2026-03-06_标题--article-123456/
 │           ├── index.md
 │           └── images/
 └── zhihu.db
@@ -291,6 +303,12 @@ data/
 - [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
 
 ## 配置说明 Configuration
+
+### 当前配置层状态
+
+- `config.yaml` 当前覆盖 Cookie、浏览器、重试、图片下载、输出目录和日志等核心配置。
+- 配置层正在做兼容治理，历史字段会逐步兼容或废弃；跨分支切换后建议重新执行一次 `pip install -e .` 或 `./install.sh --recreate`。
+- 当前最稳定的运行方式仍然是：先用默认配置跑通，再按需调整局部字段。
 
 ### Cookie
 
@@ -358,7 +376,7 @@ flowchart LR
 
 - Python 3.10+
 - Typer
-- Rich / Questionary
+- Rich / Questionary / Textual
 - curl_cffi / HTTPX
 - Playwright
 - PyYAML / structlog
@@ -366,6 +384,20 @@ flowchart LR
 
 > [!NOTE]
 > 项目规划里提到的 Pydantic、JSON / CSV / MySQL 导出、话题抓取，目前还没有在当前仓库里完整落地，所以它们被放在路线图，而不是现有能力里。
+
+## 当前工程重点 Current Engineering Focus
+
+- **交互工作台继续收口**
+  新的 Textual TUI 已经成为默认入口，但仍在继续做布局、输入流、执行状态和回归兼容整理。
+
+- **三平台兼容治理**
+  现在正在系统补 `macOS / Linux / Windows` 的安装、命令入口、路径、依赖和浏览器链路验证。
+
+- **文档与命令面同步**
+  README、中英文说明、manual、`--help` 和安装脚本正在逐步统一，避免继续出现实现与文档漂移。
+
+- **代码结构重构**
+  后续重点会放在 CLI 边界、配置 schema、TUI 模块边界和测试矩阵，防止继续向大单文件堆积。
 
 ## 开发路线图 Roadmap
 
@@ -375,9 +407,13 @@ flowchart LR
 - [x] 作者主页抓取（回答 + 专栏）
 - [x] 收藏夹增量监控
 - [x] Markdown + 图片 + SQLite 输出
+- [x] 默认交互工作台（Textual TUI）
 - [ ] 话题页抓取
 - [ ] JSON / CSV 导出
 - [ ] MySQL 落库
+- [ ] TUI 继续拆分与状态机收口
+- [ ] macOS / Linux / Windows 三平台验证矩阵
+- [ ] README / manual / help / install 同步检查
 - [ ] 更正式的代理配置层
 - [ ] GUI 图形界面
 - [ ] 基于 LLM 的内容摘要 / 标签 / 聚类分析
