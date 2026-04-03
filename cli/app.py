@@ -68,6 +68,7 @@ from cli.save_pipeline import (
     resolve_creator_output_dir as resolve_creator_output_path,
     resolve_entries_output_dir as resolve_entries_output_path,
 )
+from cli.workflow_service import ArchiveWorkflowService, WorkflowServiceConfig
 from core.config import get_config, get_logger, get_humanizer, resolve_project_path
 from core.utils import extract_urls
 from core.errors import handle_error
@@ -184,6 +185,16 @@ def _get_save_pipeline_settings() -> SavePipelineSettings:
         images_subdir=cfg.output.images_subdir or "images",
         image_concurrency=cfg.crawler.images.concurrency,
         image_timeout=cfg.crawler.images.timeout,
+    )
+
+
+def _get_workflow_service() -> ArchiveWorkflowService:
+    return ArchiveWorkflowService(
+        WorkflowServiceConfig(
+            save_settings=_get_save_pipeline_settings(),
+            printer=rprint,
+            logger=_get_log(),
+        )
     )
 
 
@@ -313,24 +324,23 @@ def fetch(
         if not temp_client._cookies_dict and cfg.zhihu.cookies_required:
             rprint("[yellow]⚠️  No valid Cookie detected, will use guest mode / 未检测到有效 Cookie，将使用游客模式[/yellow]")
 
-        for i, target_url in enumerate(urls):
-            if len(urls) > 1:
-                rprint(f"\n[bold green]🚀 Task {i+1}/{len(urls)}:[/] {target_url}")
+        if limit:
+            for target_url in urls:
+                if "/question/" in target_url and "/answer/" not in target_url:
+                    print_question_limit_warning(limit)
 
-            # Prepare scraping configuration / 准备抓取配置
-            scrape_config = {}
-            if limit and "/question/" in target_url and "/answer/" not in target_url:
-                print_question_limit_warning(limit)
-                scrape_config = {"start": 0, "limit": limit}
-
-            # Execute scraping / 执行抓取
-            asyncio.run(_fetch_and_save(
-                url=target_url,
+        result = asyncio.run(
+            _get_workflow_service().run_fetch_urls(
+                urls=urls,
                 output_dir=output_dir,
-                scrape_config=scrape_config,
+                limit=limit,
                 download_images=not no_images,
-                headless=headless_mode
-            ))
+                headless=headless_mode,
+                stop_on_error=True,
+            )
+        )
+        if result.has_failures:
+            raise SystemExit(1)
 
     except Exception as e:
         handle_error(e, log)
@@ -375,17 +385,19 @@ def batch(
     rprint(f"[bold]📋 Batch task / 批量任务: {len(urls)} links (concurrency / 并发: {max_concurrency})[/bold]")
 
     # Execute concurrently / 并发执行
-    results = asyncio.run(_batch_concurrent(
-        urls=urls,
-        output_dir=output_dir,
-        concurrency=max_concurrency,
-        download_images=not no_images,
-        headless=headless_mode
-    ))
+    results = asyncio.run(
+        _get_workflow_service().run_batch(
+            urls=urls,
+            output_dir=output_dir,
+            concurrency=max_concurrency,
+            download_images=not no_images,
+            headless=headless_mode,
+        )
+    )
 
     # Statistics / 统计结果
-    success = sum(1 for r in results if r["success"])
-    failed = len(results) - success
+    success = results.success_count
+    failed = results.failed_count
 
     rprint(f"\n[bold]📊 Batch completed / 批量完成: {success} success / 成功, {failed} failed / 失败[/bold]")
     log.info("batch_completed", success=success, failed=failed)
@@ -428,13 +440,17 @@ def creator(
 
         print_creator_limit_warning(answers, articles)
 
-        asyncio.run(_fetch_creator_and_save(
-            creator=creator,
-            output_dir=output_dir,
-            answer_limit=answers,
-            article_limit=articles,
-            download_images=not no_images,
-        ))
+        result = asyncio.run(
+            _get_workflow_service().run_creator(
+                creator=creator,
+                output_dir=output_dir,
+                answer_limit=answers,
+                article_limit=articles,
+                download_images=not no_images,
+            )
+        )
+        if not result.success:
+            raise SystemExit(1)
     except Exception as e:
         handle_error(e, log)
         raise SystemExit(1)
@@ -476,41 +492,32 @@ def monitor(
     log.info("monitor_started", collection_id=collection_id)
     rprint(f"[bold]📡 Starting incremental monitoring / 启动增量监控: Collection / 收藏夹 {collection_id}[/bold]")
 
-    from core.monitor import CollectionMonitor
-    m = CollectionMonitor(data_dir=str(output_dir))
-
     try:
-        new_items, new_last_id = m.get_new_items(collection_id)
+        result = asyncio.run(
+            _get_workflow_service().run_monitor(
+                collection_id=collection_id,
+                output_dir=output_dir,
+                concurrency=concurrency,
+                download_images=not no_images,
+                headless=headless_mode,
+            )
+        )
     except Exception as e:
         handle_error(e, log)
         raise SystemExit(1)
 
-    if not new_items:
+    if not result.has_new_items:
         rprint("[green]✨ No new content in collection, monitoring ends / 收藏夹没有新增内容，监控结束。[/green]")
         return
 
-    rprint(f"\n[bold]🛒 Preparing to download {len(new_items)} new items... / 准备下载 {len(new_items)} 个新内容...[/bold]")
-
-    urls = [item["url"] for item in new_items]
-    max_concurrency = min(concurrency, len(urls), 8)
-
-    results = asyncio.run(_batch_concurrent(
-        urls=urls,
-        output_dir=output_dir,
-        concurrency=max_concurrency,
-        download_images=not no_images,
-        headless=headless_mode,
-        collection_id=collection_id
-    ))
-
-    success = sum(1 for r in results if r["success"])
-    failed = len(results) - success
+    rprint(f"\n[bold]🛒 Preparing to download {result.discovered_count} new items... / 准备下载 {result.discovered_count} 个新内容...[/bold]")
+    success = result.batch.success_count
+    failed = result.batch.failed_count
 
     rprint(f"\n[bold]📊 Monitor download completed / 监控下载完成: {success} success / 成功, {failed} failed / 失败[/bold]")
 
-    if failed == 0 and success > 0:
-        m.mark_updated(collection_id, new_last_id)
-        rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {new_last_id}[/cyan]")
+    if result.pointer_advanced and result.next_pointer:
+        rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {result.next_pointer}[/cyan]")
     elif failed > 0:
         rprint("[yellow]⚠️ Partial failures detected, monitoring pointer was not advanced / 存在失败项，本次不会推进监控游标，避免漏抓。[/yellow]")
 
@@ -693,47 +700,18 @@ async def _batch_concurrent(
     Returns:
         Result list with success, url, etc. fields / 结果列表，每个元素包含 success, url 等字段
     """
-    semaphore = asyncio.Semaphore(concurrency)
-    humanizer = get_humanizer()
-    log = _get_log()
-
-    async def fetch_one(url: str, index: int) -> Dict[str, Any]:
-        async with semaphore:
-            # Random delay between tasks to avoid triggering anti-crawling
-            # 任务间随机延迟，避免触发反爬
-            # Delay increases with task index to reduce simultaneous requests probability
-            # 延迟时间随任务序号递增，降低同时发起的概率
-            if index > 0:
-                delay = uniform(0.5, 2.0) * (index % 3 + 1)
-                await asyncio.sleep(delay)
-
-            try:
-                await _fetch_and_save(
-                    url=url,
-                    output_dir=output_dir,
-                    scrape_config={},
-                    download_images=download_images,
-                    headless=headless,
-                    collection_id=collection_id
-                )
-                return {"url": url, "success": True}
-            except Exception as e:
-                handle_error(e, log)
-                return {"url": url, "success": False, "error": str(e)}
-
-    # Create all tasks / 创建所有任务
-    tasks = [fetch_one(url, i) for i, url in enumerate(urls)]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    # Clean up results / 清理结果
-    cleaned = []
-    for r in results:
-        if isinstance(r, dict):
-            cleaned.append(r)
-        else:
-            cleaned.append({"url": "unknown", "success": False})
-
-    return cleaned
+    result = await _get_workflow_service().run_batch(
+        urls=urls,
+        output_dir=output_dir,
+        concurrency=concurrency,
+        download_images=download_images,
+        headless=headless,
+        collection_id=collection_id,
+    )
+    return [
+        {"url": item.url, "success": item.success, **({"error": item.error} if item.error else {})}
+        for item in result.items
+    ]
 
 
 async def _fetch_and_save(
@@ -770,16 +748,17 @@ async def _fetch_and_save(
         headless: Headless mode (not effective in API mode) / 无头模式 (API 模式下不生效)
         collection_id: Collection ID (for database record association) / 收藏夹 ID (关联数据库记录)
     """
-    return await run_fetch_and_save(
+    result = await _get_workflow_service().run_single_fetch(
         url=url,
         output_dir=output_dir,
         scrape_config=scrape_config,
-        settings=_get_save_pipeline_settings(),
         download_images=download_images,
         headless=headless,
         collection_id=collection_id,
-        printer=rprint,
     )
+    if not result.success or result.save_result is None:
+        raise RuntimeError(result.error or f"Fetch failed for {url}")
+    return result.save_result.to_legacy_records()
 
 
 async def _fetch_and_save_result(
@@ -794,16 +773,17 @@ async def _fetch_and_save_result(
     Execute scraping and return the typed save result contract.
     执行抓取，并返回类型化保存结果契约。
     """
-    return await run_fetch_and_save_result(
+    result = await _get_workflow_service().run_single_fetch(
         url=url,
         output_dir=output_dir,
         scrape_config=scrape_config,
-        settings=_get_save_pipeline_settings(),
         download_images=download_images,
         headless=headless,
         collection_id=collection_id,
-        printer=rprint,
     )
+    if not result.success or result.save_result is None:
+        raise RuntimeError(result.error or f"Fetch failed for {url}")
+    return result.save_result
 
 
 async def _fetch_creator_and_save(
@@ -817,15 +797,15 @@ async def _fetch_creator_and_save(
     Fetch creator content and save it using the standard local output pipeline.
     抓取作者内容，并复用标准本地输出流程保存。
     """
-    await run_fetch_creator_and_save(
+    result = await _get_workflow_service().run_creator(
         creator=creator,
         output_dir=output_dir,
         answer_limit=answer_limit,
         article_limit=article_limit,
-        settings=_get_save_pipeline_settings(),
         download_images=download_images,
-        printer=rprint,
     )
+    if not result.success:
+        raise RuntimeError(f"Creator fetch failed for {creator}")
 
 
 # ============================================================
