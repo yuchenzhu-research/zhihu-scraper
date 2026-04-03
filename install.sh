@@ -10,7 +10,7 @@
 #   pyproject.toml (single source of truth)
 #
 # 会自动完成:
-# 1. 检测 Python 3.10+
+# 1. 检测 Python 3.14+
 # 2. 创建本地 .venv
 # 3. 用 .venv 里的 python 安装完整依赖
 # 4. 安装 Playwright Chromium
@@ -105,7 +105,7 @@ COOKIE_POOL_DIR="$LOCAL_DIR/cookie_pool"
 
 echo "📌 检测 Python 环境..."
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "   ❌ 未找到 python3，请先安装 Python 3.10+"
+    echo "   ❌ 未找到 python3，请先安装 Python 3.14+"
     exit 1
 fi
 

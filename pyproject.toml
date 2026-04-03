@@ -4,7 +4,7 @@ version = "3.0.0"
 description = "🕷️ 高质量知乎内容爬取工具"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 authors = [
     { name = "yuchenzhu-research", email = "zyc20070222@gmail.com" }
 ]
@@ -60,14 +60,14 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py314"
 line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "N"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.14"
 warn_return_any = true
 warn_unused_configs = true
 

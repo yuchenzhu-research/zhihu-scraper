@@ -1,39 +1,18 @@
 <div align="center">
 
 # Zhihu-Scraper
-### 知乎爬虫 | Local-First Zhihu Scraper
+### 知乎本地归档抓取工具
 
-<p><strong>一个面向本地归档的知乎抓取工具：优先走协议层，必要时回退 Playwright，结果直接保存为 Markdown、图片资源和 SQLite。</strong></p>
+<p><strong>一个本地优先的知乎抓取与归档项目：协议优先，必要时回退浏览器，输出直接落到 Markdown、图片目录和 SQLite。</strong></p>
 
 <p>
   <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
-  <img src="https://img.shields.io/github/v/release/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="Version Badge" />
+  <img src="https://img.shields.io/static/v1?label=python&message=3.14%2B&color=3776AB&style=flat-square&logo=python&logoColor=white" alt="Python Badge" />
   <img src="https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="License Badge" />
-  <img src="https://img.shields.io/static/v1?label=python&message=3.10%2B&color=3776AB&style=flat-square&logo=python&logoColor=white" alt="Python Badge" />
 </p>
 
 <p>
   <strong>简体中文</strong> · <a href="README_EN.md">English</a>
-</p>
-
-<p>
-  <strong>Status:</strong> active ·
-  <strong>Focus:</strong> TUI 重构 + 跨平台兼容治理中 ·
-  <strong>Install:</strong> <code>./install.sh</code> ·
-  <strong>Manual:</strong> <code>zhihu manual</code>
-</p>
-
-<p>
-  <code>fetch</code> · <code>creator</code> · <code>monitor</code> · <code>Markdown</code> · <code>images</code> · <code>SQLite</code>
-</p>
-
-<p>
-  <a href="#快速开始-quick-start">快速开始</a> ·
-  <a href="#核心特性-features">核心特性</a> ·
-  <a href="#示例输出-examples">示例输出</a> ·
-  <a href="#配置说明-configuration">配置说明</a> ·
-  <a href="#架构概览-architecture">架构概览</a> ·
-  <a href="#常见问题-faq">FAQ</a>
 </p>
 
 </div>
@@ -41,457 +20,478 @@
 > [!WARNING]
 > **免责声明 / Disclaimer**
 >
-> 本项目仅用于学习、研究、个人归档与技术交流。请遵守知乎服务条款、robots 约束和当地法律法规。**严禁将其用于未授权抓取、批量滥用、倒卖数据、撞库或其他非法用途。**
+> 本项目仅用于学习、研究、个人归档与技术交流。请遵守知乎服务条款、robots 约束和当地法律法规。不要将其用于未授权抓取、批量滥用、数据倒卖、撞库、账号滥用或任何非法用途。
 
-## 项目简介 Overview
+## 1. 这是什么
 
-`Zhihu-Scraper` 是一个 **本地优先** 的知乎归档工具，不是在线爬虫平台。
+`Zhihu-Scraper` 不是一个在线爬虫平台，也不是一个 SaaS 产品。  
+它是一个 **本地优先** 的归档工具，目标很明确：
 
-它解决的是一件很具体的事：
+- 输入知乎链接
+- 抓取正文和相关元信息
+- 转成 Markdown
+- 下载图片
+- 把归档结果和检索数据保存到本地
 
-- 把知乎内容抓下来
-- 转成适合人阅读的 Markdown
-- 同时保留图片和本地数据库
+它适合：
 
-它现在适合：
+- 个人知识归档
+- 研究材料收集
+- 命令行工作流
+- 本地文件 + 本地数据库双存储
+- 持续迭代的工程项目
 
-- 保存单条回答
-- 保存专栏文章
-- 抓问题页下最近 N 条回答
-- 抓作者主页下最近回答和专栏
-- 对收藏夹做增量监控
+它不适合：
 
-它现在还没有：
+- 大规模在线采集平台
+- 托管式抓取服务
+- 一键 GUI 成品
+- 即刻获得 JSON / CSV / MySQL 导出
+- 话题页 / 全站搜索 / 更大范围的数据覆盖
 
-- 话题维度抓取
-- JSON / CSV / MySQL 导出
+## 2. 当前项目状态
+
+当前仓库已经不再是早期脚本堆叠状态，而是经历了完整的一轮治理和重构。
+
+当前状态可以概括成：
+
+- CLI 主路径可用
+- Textual TUI 已成为默认交互入口
+- README / manual / `--help` / 测试矩阵已经开始同步治理
+- `test` 分支上的六阶段治理已合并回 `main`
+- 配置层和抓取结果契约已经开始类型化
+- 仍然有继续重构空间，尤其是 `core/config.py`、`core/scraper.py`、TUI 状态流和跨平台验证
+
+## 3. 现在支持什么
+
+### 支持的抓取对象
+
+- 单条回答
+- 专栏文章
+- 问题页下最近 N 条回答
+- 作者主页下最近回答
+- 作者主页下最近专栏
+- 收藏夹增量监控
+
+### 支持的输出
+
+- `index.md`
+- `images/`
+- `zhihu.db`
+- creator 元信息文件
+
+### 支持的入口
+
+- `zhihu`
+- `./zhihu`
+- `python3 cli/app.py`
+
+### 支持的交互方式
+
+- 传统命令行
+- 默认交互工作台：**Textual TUI**
+- 兼容回退：`interactive --legacy`
+
+## 4. 现在还不支持什么
+
+- 话题页抓取
+- JSON 导出
+- CSV 导出
+- MySQL 持久化
 - GUI 图形界面
-- 基于 LLM 的自动分析
+- LLM 自动分析
+- Windows 一等安装体验
 
-这些能力会放在后面的 [路线图](#开发路线图-roadmap)。
+这些仍然属于路线图，不应该被视为当前已交付能力。
 
-## 30 秒判断 Fit
+## 5. Python 与运行时基线
 
-| 适合 | 不适合 |
-|---|---|
-| 想把知乎内容保存成本地 Markdown | 想做大规模在线爬虫平台 |
-| 想保留图片、本地目录和 SQLite | 想立刻得到 JSON / CSV / MySQL 导出 |
-| 想用命令行或终端菜单快速归档内容 | 想直接使用完整 GUI |
-| 想抓回答、专栏、作者页、收藏夹 | 想抓话题页和全站搜索结果 |
+当前仓库已经统一提升到：
 
-## 一眼看懂 At a Glance
+- **Python 3.14+**
 
-| 输入 | 抓取链路 | 输出 |
-|---|---|---|
-| 回答 / 专栏 / 问题 / 作者 / 收藏夹 | 协议优先，专栏受限时自动补救 | `index.md + images/ + zhihu.db` |
+原因不是单纯追新，而是要和当前测试、`tomllib`、CI、文档和开发环境对齐。  
+现在仓库里的声明、CI 和 README 都统一按 3.14+ 维护。
 
-## 快速开始 Quick Start
+## 6. 快速开始
 
-目标：**3 分钟内完成第一次成功抓取。**
-
-### 1. 环境要求
-
-- Python 3.10+
-- 可选：Playwright
-- 可选：系统 Chrome
-
-### 2. 安装
-
-推荐直接使用项目内的一键安装脚本：
+### 6.1 克隆仓库
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
+```
+
+### 6.2 安装
+
+推荐直接运行：
+
+```bash
 ./install.sh
 ```
 
-如果你本地环境已经乱了，直接重建：
+如果你要彻底重建环境：
 
 ```bash
 ./install.sh --recreate
 ```
 
-安装完成后，推荐直接从首页菜单进入：
+### 6.3 配置 Cookie
 
-```bash
-zhihu
-```
-
-一次性最短路径：
-
-```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-./install.sh
-# 然后编辑 .local/cookies.json 填入你自己的 z_c0 / d_c0
-zhihu
-```
-
-### 3. 配置 Cookie
-
-复制模板：
+默认运行目录已经统一到 `.local/`：
 
 ```bash
 mkdir -p .local
 cp cookies.example.json .local/cookies.json
 ```
 
-更推荐直接运行 `./install.sh`，它会自动初始化 `.local/cookies.json` 模板。
+然后填入你自己的：
 
-填入你自己的 `z_c0` 和 `d_c0`。
+- `z_c0`
+- `d_c0`
 
-### 4. Hello World
+也支持：
 
-最简单的一次抓取：
+- `.local/cookie_pool/*.json`
+
+并兼容历史路径：
+
+- `cookies.json`
+- `cookie_pool/`
+
+### 6.4 Hello World
 
 ```bash
 zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-如果你更喜欢显式调用 Python：
+### 6.5 默认首页入口
 
 ```bash
-.venv/bin/python cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+zhihu
 ```
 
-### 5. 查看完整命令手册
-
-README 只保留首页级说明。完整命令说明统一在内置手册中：
+### 6.6 打开完整手册
 
 ```bash
 zhihu manual
 ```
 
-## 核心特性 Features
+## 7. 命令面总览
 
-- 🚀 **异步抓取**
-  批量任务、问题页分页和图片下载都走异步路径。
+当前核心命令如下：
 
-- 🧠 **协议优先**
-  默认先走 API / HTML 协议路径，不把浏览器当主路径。
+- `zhihu onboard`
+- `zhihu fetch`
+- `zhihu creator`
+- `zhihu batch`
+- `zhihu monitor`
+- `zhihu query`
+- `zhihu interactive`
+- `zhihu config --show`
+- `zhihu check`
+- `zhihu manual`
 
-- 🛟 **专栏自动补救**
-  专栏先走协议层，失败后会先轮换 Cookie，再尝试 Playwright。
-
-- 👤 **作者抓取**
-  支持作者主页 URL 或 `url_token`，可批量抓最近回答和专栏。
-
-- 📚 **本地归档友好**
-  输出直接落地为 `index.md + images/ + zhihu.db`。
-
-- 🔁 **Cookie 轮换**
-  支持 `.local/cookies.json` 与 `.local/cookie_pool/*.json`，并兼容历史上的 `cookies.json` 与 `cookie_pool/*.json`。
-
-- 📡 **收藏夹增量监控**
-  支持监控新内容并保留进度指针。
-
-- 🎛️ **双入口**
-  首选 `zhihu`，仓库内也可以继续用 `./zhihu` 或 `python3 cli/app.py`。
-
-- 🖥️ **默认交互工作台**
-  `interactive` 现在默认走新的 Textual TUI，旧版 Rich / questionary 只保留为回归排查入口。
-
-## 支持范围 Coverage
-
-| 类型 | 当前状态 | 说明 |
-|---|---|---|
-| 单条回答 | 已支持 | 最稳定 |
-| 专栏文章 | 已支持 | 可能回退到 Playwright |
-| 问题页回答列表 | 已支持 | 支持分页与风险提示 |
-| 作者主页回答 | 已支持 | `creator` 模式 |
-| 作者主页专栏 | 已支持 | `creator` 模式 |
-| 收藏夹增量监控 | 已支持 | `monitor` 模式 |
-| 话题抓取 | 规划中 | 尚未开放 CLI |
-| JSON / CSV / MySQL 导出 | 规划中 | 当前主输出为 Markdown + SQLite |
-
-## 平台状态 Platform Status
-
-| 平台 | 当前状态 | 说明 |
-|---|---|---|
-| macOS | 主维护平台 | 日常开发、安装和交互工作台优先在这里验证 |
-| Linux | 持续兼容中 | CLI 主路径可用，正在补配置兼容和路径命名等回归 |
-| Windows | 待完整验证 | 路径、shell、浏览器依赖仍需专项调试与说明书补齐 |
-
-更具体的平台支持边界见：
-
-- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
-- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
-## 推荐入口 Recommended Paths
-
-| 你想做什么 | 推荐命令 |
-|---|---|
-| 第一次进入项目 | `zhihu` |
-| 跑首次引导 | `zhihu onboard` |
-| 抓一条链接 | `zhihu fetch "<url>"` |
-| 抓作者主页 | `zhihu creator "<people url>"` |
-| 批量抓取 | `zhihu batch urls.txt` |
-| 监控收藏夹新增 | `zhihu monitor 78170682` |
-| 打开交互工作台 | `zhihu interactive` |
-| 本地检索 | `zhihu query "<keyword>"` |
-| 查看当前配置 | `zhihu config --show` |
-| 环境检查 | `zhihu check` |
-| 查看完整说明书 | `zhihu manual` |
-
-## 使用方式 Usage
-
-项目默认入口是全局命令 `zhihu`。仓库内也保留兜底入口：
+### 常用例子
 
 ```bash
-zhihu <command> ...
-./zhihu <command> ...
-python3 cli/app.py <command> ...
-```
-
-常用命令：
-
-- `onboard`
-- `fetch`
-- `creator`
-- `batch`
-- `monitor`
-- `query`
-- `interactive`
-- `config --show`
-- `check`
-- `manual`
-
-完整参数和示例请看：
-
-```bash
+zhihu onboard
+zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+zhihu creator "https://www.zhihu.com/people/iterator"
+zhihu batch urls.txt
+zhihu monitor 78170682
+zhihu query "Transformer"
+zhihu interactive
+zhihu interactive --legacy
+zhihu config --show
+zhihu check
 zhihu manual
 ```
 
-`interactive` 现在已经是新的默认交互工作台：
+## 8. 交互工作台（TUI）
 
-- `Enter` 生成当前草案
-- `Ctrl+R` 执行当前草案
-- `Ctrl+Y` 从最近一轮失败项生成重试草案
-- `zhihu interactive --legacy` 仅保留为旧版回退入口，方便回归排查
+`interactive` 现在默认已经是 **Textual TUI**。
 
-## 示例输出 Examples
+当前 TUI 已经有：
 
-仓库里保留了两份可以直接打开的样例输出：
+- 全屏交互工作台
+- 居中布局
+- 输入栏
+- 问题页数量选择
+- 当前草案
+- 最近执行结果
+- 失败重试
 
-| 展示项 | 你能看到什么 | 打开 |
-|---|---|---|
-| 超链接保留 | 目录页、外部链接、多层超链接 | [深度学习数学基础](examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
-| 图片与数学公式 | 本地图片引用、块公式、长文混排 | [线性代数学习笔记](examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
+当前 TUI 仍在继续推进：
 
-更详细的说明见：
+- 状态面板继续整理
+- 结果信息继续收口
+- 更多 typed contract 接入
+- 继续减少 legacy 路径依赖
 
-- [examples/README.md](examples/README.md)
-- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
+旧的 Rich / questionary 流程没有删除，但定位已经变成：
 
-## 输出结构 Output Layout
+- 回归排查
+- 兼容兜底
+- 不再是推荐主路径
 
-默认输出目录是 `data/`：
+使用方式：
+
+```bash
+zhihu interactive
+zhihu interactive --legacy
+```
+
+## 9. 输出结构
+
+默认输出根目录：
 
 ```text
 data/
-├── entries/
-│   └── 2026-03-06_标题--answer-1234567890/
-│       ├── index.md
-│       └── images/
-├── creators/
-│   └── hu-xi-jin/
-│       ├── creator.json
-│       ├── README.md
-│       └── 2026-03-06_标题--article-123456/
-│           ├── index.md
-│           └── images/
-└── zhihu.db
 ```
 
-- `entries/`：普通 `fetch / batch / monitor` 输出
-- `creators/<url_token>/`：作者模式输出
-- `creator.json`：作者元信息和同步状态
-- `README.md`：作者目录的本地索引页
-- `zhihu.db`：统一 SQLite 数据库
-
-仓库正式目录与本地运行目录的边界说明见：
-
-- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
-
-## 配置说明 Configuration
-
-### 当前配置层状态
-
-- `config.yaml` 当前覆盖 Cookie、浏览器、重试、图片下载、输出目录和日志等核心配置。
-- 配置层正在做兼容治理，历史字段会逐步兼容或废弃；跨分支切换后建议重新执行一次 `pip install -e .` 或 `./install.sh --recreate`。
-- 当前最稳定的运行方式仍然是：先用默认配置跑通，再按需调整局部字段。
-
-### Cookie
-
-默认 Cookie 文件是：
+当前主要结构：
 
 ```text
-.local/cookies.json
+data/
+├─ entries/
+│  └─ 2026-04-03_title--answer-123456/
+│     ├─ index.md
+│     └─ images/
+├─ creators/
+│  └─ demo-user/
+│     ├─ creator.json
+│     ├─ README.md
+│     └─ 2026-04-03_title--article-1/
+│        └─ index.md
+└─ zhihu.db
 ```
 
-模板文件是：
+说明：
+
+- 普通抓取输出在 `entries/`
+- 作者模式输出在 `creators/<url_token>/`
+- SQLite 数据库在根目录 `zhihu.db`
+- 输出目录命名已改成更适合 shell 的风格
+
+## 10. 平台支持边界
+
+当前平台边界不是“宣传语”，而是明确治理中的工程状态。
+
+### macOS
+
+- 主维护平台
+- 安装、CLI、TUI 优先在这里验证
+
+### Linux
+
+- 核心 CLI 可用
+- 仍在继续做路径、浏览器回退、安装体验兼容
+
+### Windows
+
+- 已承认是目标平台
+- 但还不是一等安装路径
+- 当前以 runbook 和手动路径为主
+
+相关文档：
+
+- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
+
+## 11. 配置系统
+
+配置文件默认位置：
 
 ```text
-cookies.example.json
+config.yaml
 ```
 
-如果你有多组登录态，可以放到：
+当前配置治理已经做了这些事：
 
-```text
-.local/cookie_pool/
-```
+- 配置 schema 独立
+- 配置运行时加载拆分
+- logging setup 拆分
+- relative path 统一走 project path 解析
+- 旧配置字段开始做兼容层
 
-### 代理
-
-> [!IMPORTANT]
-> 当前仓库还没有稳定开放的 `config.yaml` 代理字段。
-
-如果你的环境必须走代理，当前更稳的做法是先在系统或终端里设置代理，再运行本工具。
+你可以用下面命令看当前实际配置：
 
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
-zhihu check
+zhihu config --show
+zhihu config --path
 ```
 
-### 安全提示
+## 12. 架构与模块状态
 
-> [!CAUTION]
-> - 不要提交 `.local/` 目录和 `cookies.json`
-> - 泄露过的 Cookie 不要继续复用
-> - 多账号建议放在 `.local/cookie_pool/`，不要全塞进一个文件
+### CLI 层
 
-## 架构概览 Architecture
+当前 CLI 入口已经不再全部堆在一个文件里，主要边界有：
 
-```mermaid
-flowchart LR
-    A["CLI / Menu<br/>zhihu · ./zhihu · manual"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
-    B --> C["Protocol Access<br/>ZhihuAPIClient + CookieManager"]
-    B -. article blocked .-> D["Browser Fallback<br/>Playwright"]
-    B --> E["Persist Layer<br/>Markdown + images + SQLite"]
-    E --> F["Outputs<br/>data/entries · data/creators · zhihu.db"]
-```
+- `cli/app.py`
+- `cli/launcher_flow.py`
+- `cli/manual_content.py`
+- `cli/config_view.py`
+- `cli/healthcheck.py`
+- `cli/save_pipeline.py`
+- `cli/save_contracts.py`
+- `cli/creator_metadata.py`
 
-当前架构的核心取向：
+### Core 层
 
-- **CLI-first**
-  这是命令行工具，不是在线服务平台。
+当前 core 也已经开始从“大文件混合职责”往模块边界收：
 
-- **Protocol-first**
-  默认优先协议层，浏览器只作为补救路径。
+- `core/config.py` 现在是 facade
+- `core/config_runtime.py`
+- `core/config_schema.py`
+- `core/logging_setup.py`
+- `core/project_paths.py`
+- `core/scraper.py`
+- `core/scraper_payloads.py`
+- `core/scraper_contracts.py`
 
-- **File + DB 双输出**
-  一份给人看，一份给程序查。
+### 当前方向
 
-## 技术栈 Tech Stack
+当前真正的重构方向不是“继续加功能”，而是：
 
-- Python 3.10+
-- Typer
-- Rich / Questionary / Textual
-- curl_cffi / HTTPX
-- Playwright
-- PyYAML / structlog
-- SQLite
+- 稳定配置边界
+- 稳定 scraper/result contract
+- 减少大文件继续膨胀
+- 把 TUI / CLI / core 的职责继续拉开
 
-> [!NOTE]
-> 项目规划里提到的 Pydantic、JSON / CSV / MySQL 导出、话题抓取，目前还没有在当前仓库里完整落地，所以它们被放在路线图，而不是现有能力里。
+## 13. 今天这轮工程都做了什么
 
-## 当前工程重点 Current Engineering Focus
+这轮工程不是一两个 patch，而是完整做了多阶段治理。
 
-- **交互工作台继续收口**
-  新的 Textual TUI 已经成为默认入口，但仍在继续做布局、输入流、执行状态和回归兼容整理。
+### 阶段一：治理底座
 
-- **三平台兼容治理**
-  现在正在系统补 `macOS / Linux / Windows` 的安装、命令入口、路径、依赖和浏览器链路验证。
+- 整理 `references/`
+- 建立 skill 基础结构
+- 明确仓库边界和阶段文档
 
-- **文档与命令面同步**
-  README、中英文说明、manual、`--help` 和安装脚本正在逐步统一，避免继续出现实现与文档漂移。
+### 阶段二：系统审计
 
-- **代码结构重构**
-  后续重点会放在 CLI 边界、配置 schema、TUI 模块边界和测试矩阵，防止继续向大单文件堆积。
+- 审计命令面
+- 审计平台支持
+- 审计 README / manual 漂移
+- 形成阶段二质量报告
 
-- **验证矩阵收口**
-  当前测试与 smoke 检查见 [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)。
-## 开发路线图 Roadmap
+### 阶段三：P0 可用性修复
+
+- 收敛 `check`
+- 收敛依赖缺失提示
+- 加平台边界文档
+- 开始拆 `cli/app.py`
+
+### 阶段四：结构重构
+
+- 抽离保存链路
+- 抽离配置展示层
+- 抽离 scraper payload 归一化
+
+### 阶段五：验证矩阵
+
+- 加命令面测试
+- 加安装契约测试
+- 固化验证矩阵
+- 补 Windows runbook
+
+### 阶段六：收口与合并准备
+
+- 发布审查文档
+- issue 回复模板
+- merge playbook
+
+### 阶段六之后的新 tranche
+
+在六阶段完成后，又继续做了：
+
+- 配置 schema / runtime / logging / path 分层
+- typed save result contract
+- creator metadata 渲染抽离
+- 问题页分页统计进入 typed result contract
+
+## 14. 测试与验证
+
+现在仓库不是“看起来能跑”，而是有明确验证矩阵。
+
+当前主要验证包括：
+
+- `py_compile`
+- unit tests
+- command-surface 守卫
+- docs-sync 守卫
+- install contract 守卫
+- save pipeline 守卫
+- scraper payload / contract 守卫
+- TUI 基础回归
+- CLI `--help` smoke
+
+验证矩阵文档见：
+
+- [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)
+
+## 15. 仓库里有哪些重要文档
+
+- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
+- [docs/STAGE1_SKILL_FOUNDATION.md](docs/STAGE1_SKILL_FOUNDATION.md)
+- [docs/STAGE2_QUALITY_AUDIT.md](docs/STAGE2_QUALITY_AUDIT.md)
+- [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)
+- [docs/STAGE6_RELEASE_REVIEW.md](docs/STAGE6_RELEASE_REVIEW.md)
+- [docs/STAGE6_ISSUE_REPLY_TEMPLATES.md](docs/STAGE6_ISSUE_REPLY_TEMPLATES.md)
+- [docs/STAGE6_MERGE_PLAYBOOK.md](docs/STAGE6_MERGE_PLAYBOOK.md)
+
+## 16. 当前工程重点
+
+当前工程重点不是继续堆功能，而是：
+
+- 继续收 `core/config.py`
+- 继续收 `core/scraper.py`
+- 继续稳定 typed contract
+- 继续减轻 CLI / TUI / core 耦合
+- 持续补跨平台验证
+- 持续让 README / manual / tests / CI 对齐
+
+## 17. 路线图
+
+已完成：
 
 - [x] 单条回答抓取
 - [x] 专栏文章抓取
 - [x] 问题页分页抓取
-- [x] 作者主页抓取（回答 + 专栏）
+- [x] 作者主页抓取
 - [x] 收藏夹增量监控
 - [x] Markdown + 图片 + SQLite 输出
 - [x] 默认交互工作台（Textual TUI）
+- [x] 六阶段治理与主线合并
+
+未完成：
+
 - [ ] 话题页抓取
-- [ ] JSON / CSV 导出
-- [ ] MySQL 落库
-- [ ] TUI 继续拆分与状态机收口
-- [ ] macOS / Linux / Windows 三平台验证矩阵
-- [ ] README / manual / help / install 同步检查
-- [ ] 更正式的代理配置层
-- [ ] GUI 图形界面
-- [ ] 基于 LLM 的内容摘要 / 标签 / 聚类分析
-- [ ] 更完整的测试覆盖与更强的 CI 检查
+- [ ] JSON 导出
+- [ ] CSV 导出
+- [ ] MySQL
+- [ ] 更完整的 TUI 状态机
+- [ ] 更深入的 Windows 支持
+- [ ] 更强的浏览器回退自动验证
+- [ ] GUI
+- [ ] LLM 分析能力
 
-## 常见问题 FAQ
+## 18. FAQ
 
-### 为什么没有 Cookie 也能跑，但结果不完整？
+### 为什么要求 Python 3.14+？
 
-游客模式可以抓一部分公开内容，但稳定性和可见范围都更弱。问题页、作者页和收藏夹监控更依赖登录态。
+因为当前仓库已经把运行时、测试、CI 和文档统一到了 3.14+，不再继续维护 3.10 这条旧基线。
 
-### 为什么专栏更容易失败？
+### 为什么没有 Cookie 也能跑？
 
-专栏路径风控更强。当前真实链路是：
+游客模式可以跑一部分公开路径，但稳定性和可见范围明显更差。作者页、问题页和监控路径更依赖登录态。
 
-1. 先走协议层 HTML 直取
-2. 首轮失败后自动轮换 Cookie 再试一次
-3. 仍被拦截时再切到 Playwright
+### 为什么 `interactive --legacy` 还保留？
 
-### 为什么 README 不展开所有命令参数？
+因为它现在的角色是兼容回退和回归排查，而不是默认入口。
 
-因为首页应该优先完成三件事：
+### 为什么 README 现在很长？
 
-- 让新用户快速跑通
-- 说明能力边界
-- 告诉你完整手册在哪里
-
-详细命令说明统一收口到：
-
-```bash
-zhihu manual
-```
-
-### 为什么我输入 `zhihu` 没反应，或者执行成了别的东西？
-
-先执行：
-
-```bash
-type zhihu
-which zhihu
-zhihu --help
-```
-
-如果 `type zhihu` 显示它是 shell function、alias，或者指向了 Conda 激活函数，那就是你的 shell 配置把真正的 `zhihu` 命令覆盖了。
-
-这时要做的不是改项目，而是改你自己的 shell 配置，比如把：
-
-```bash
-zhihu () {
-    conda activate zhihu
-}
-```
-
-重命名成别的名字，例如 `zhihu_env`，然后重新执行：
-
-```bash
-source ~/.zshrc
-```
-
-### 首页菜单怎么操作？
-
-- 方向键移动
-- `Enter` 确认
-- `Space` 勾选复选项
-- `Ctrl+C` 退出当前界面
-
-## 许可协议 License
-
-本项目采用 [MIT License](LICENSE)。
+因为这一版目标不是“写得短”，而是先把项目现状、能力边界、平台状态、工程阶段和入口信息全部摊开，方便后续继续整理或交给其他模型再加工。

@@ -10,7 +10,7 @@ This runbook exists so Windows support is at least documented, bounded, and revi
 - `install.sh` is **not** a Windows installer
 - the recommended validation path is currently:
   - Git Bash or PowerShell for CLI
-  - a local Python 3.10+ installation
+  - a local Python 3.14+ installation
   - optional Playwright only after the pure API path is working
 
 ## Minimal Manual Setup / 最小手动安装路径
@@ -25,7 +25,7 @@ cd zhihu-scraper
 2. Create a virtual environment
 
 ```powershell
-py -3.10 -m venv .venv
+py -3.14 -m venv .venv
 ```
 
 3. Activate it

@@ -1,39 +1,18 @@
 <div align="center">
 
 # Zhihu-Scraper
-### Local-First Zhihu Scraper | 知乎爬虫
+### Local-First Zhihu Archival Scraper
 
-<p><strong>A local-first Zhihu archival tool: protocol-first by default, Playwright only when needed, with direct outputs to Markdown, image assets, and SQLite.</strong></p>
+<p><strong>A local-first Zhihu capture and archive project: protocol-first by default, browser fallback only when needed, with direct outputs to Markdown, image folders, and SQLite.</strong></p>
 
 <p>
   <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
-  <img src="https://img.shields.io/github/v/release/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="Version Badge" />
+  <img src="https://img.shields.io/static/v1?label=python&message=3.14%2B&color=3776AB&style=flat-square&logo=python&logoColor=white" alt="Python Badge" />
   <img src="https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper?style=flat-square" alt="License Badge" />
-  <img src="https://img.shields.io/static/v1?label=python&message=3.10%2B&color=3776AB&style=flat-square&logo=python&logoColor=white" alt="Python Badge" />
 </p>
 
 <p>
   <a href="README.md">简体中文</a> · <strong>English</strong>
-</p>
-
-<p>
-  <strong>Status:</strong> active ·
-  <strong>Focus:</strong> TUI rebuild + cross-platform hardening in progress ·
-  <strong>Install:</strong> <code>./install.sh</code> ·
-  <strong>Manual:</strong> <code>zhihu manual</code>
-</p>
-
-<p>
-  <code>fetch</code> · <code>creator</code> · <code>monitor</code> · <code>Markdown</code> · <code>images</code> · <code>SQLite</code>
-</p>
-
-<p>
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#features">Features</a> ·
-  <a href="#examples">Examples</a> ·
-  <a href="#configuration">Configuration</a> ·
-  <a href="#architecture">Architecture</a> ·
-  <a href="#faq">FAQ</a>
 </p>
 
 </div>
@@ -41,457 +20,479 @@
 > [!WARNING]
 > **Disclaimer**
 >
-> This project is for learning, research, personal archiving, and technical exploration only. Please comply with Zhihu's Terms of Service, robots restrictions, and local laws. **Do not use it for unauthorized scraping, resale, credential abuse, large-scale automation, or any illegal activity.**
+> This project is for learning, research, personal archiving, and technical exploration only. Follow Zhihu's Terms of Service, robots restrictions, and local laws. Do not use it for unauthorized scraping, resale, credential abuse, mass automation, or any illegal activity.
 
-## Overview
+## 1. What this project is
 
-`Zhihu-Scraper` is a **local-first** Zhihu archival tool, not a hosted scraping platform.
+`Zhihu-Scraper` is not a hosted scraping platform and not a SaaS product.  
+It is a **local-first** archival tool with a narrow goal:
 
-It focuses on one practical job:
+- take a Zhihu link
+- fetch the content and metadata
+- convert it to Markdown
+- download images
+- store the archive and search data locally
 
-- fetch Zhihu content
-- convert it into readable Markdown
-- keep both images and a local database
+Good fit:
 
-What it is good at today:
+- personal archiving
+- research collection
+- CLI-first workflows
+- local files plus local database
+- an engineering project that keeps evolving
 
-- saving single answers
-- saving column articles
-- fetching the latest N answers from a question page
-- fetching recent answers and articles from a creator profile
-- incrementally monitoring collections
+Not a fit:
 
-What it does not officially provide yet:
+- large-scale hosted scraping
+- turnkey GUI product
+- immediate JSON / CSV / MySQL export
+- topic pages, site-wide search, broader discovery coverage
 
-- topic-level scraping
-- JSON / CSV / MySQL export
-- GUI interface
+## 2. Current project status
+
+This repository is no longer in the early “stack scripts into one file” stage.  
+It has already gone through a full governance and restructuring cycle.
+
+Current status in plain terms:
+
+- core CLI paths work
+- the Textual TUI is now the default interactive entry
+- README / manual / `--help` / tests are being synchronized on purpose
+- the six-stage hardening branch has already been merged back to `main`
+- config and scraper result contracts are now moving toward typed boundaries
+- further refactoring is still expected, especially around `core/config.py`, `core/scraper.py`, TUI state flow, and cross-platform validation
+
+## 3. What works today
+
+### Supported fetch targets
+
+- single answers
+- column articles
+- latest N answers from a question page
+- recent answers from a creator profile
+- recent articles from a creator profile
+- incremental collection monitoring
+
+### Supported outputs
+
+- `index.md`
+- `images/`
+- `zhihu.db`
+- creator metadata files
+
+### Supported entry styles
+
+- `zhihu`
+- `./zhihu`
+- `python3 cli/app.py`
+
+### Supported interaction styles
+
+- regular CLI commands
+- default **Textual TUI**
+- compatibility fallback via `interactive --legacy`
+
+## 4. What does not exist yet
+
+- topic-page scraping
+- JSON export
+- CSV export
+- MySQL persistence
+- polished GUI
 - LLM-based analysis
+- first-class Windows installation experience
 
-Those belong in the [Roadmap](#roadmap), not in the present-tense feature list.
+Those remain roadmap items, not current delivered features.
 
-## 30-Second Fit Check
+## 5. Python baseline
 
-| Good fit | Not a fit |
-|---|---|
-| You want Zhihu content saved as local Markdown | You want a hosted scraping platform |
-| You want images, folders, and SQLite preserved together | You need JSON / CSV / MySQL export right now |
-| You prefer CLI or terminal-menu workflows | You want a full GUI today |
-| You want answers, columns, creator pages, and collections | You want topic pages and site-wide search scraping |
+The repository is now aligned to:
 
-## At a Glance
+- **Python 3.14+**
 
-| Input | Fetch path | Output |
-|---|---|---|
-| answer / article / question / creator / collection | protocol-first, automatic rescue for blocked articles | `index.md + images/ + zhihu.db` |
+This is not just a cosmetic version bump. The runtime, tests, CI, and docs now move together on the 3.14+ baseline.
 
-## Quick Start
+## 6. Quick start
 
-Goal: **complete your first successful fetch within 3 minutes.**
-
-### 1. Requirements
-
-- Python 3.10+
-- Optional: Playwright
-- Optional: local Chrome
-
-### 2. Install
-
-The recommended path is the built-in installer:
+### 6.1 Clone
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
+```
+
+### 6.2 Install
+
+Recommended path:
+
+```bash
 ./install.sh
 ```
 
-If your local environment is broken or messy, rebuild it:
+If you want to fully rebuild the environment:
 
 ```bash
 ./install.sh --recreate
 ```
 
-After installation, start from the home menu:
+### 6.3 Configure cookies
 
-```bash
-zhihu
-```
-
-Shortest end-to-end path:
-
-```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-./install.sh
-# then edit .local/cookies.json with your own z_c0 / d_c0
-zhihu
-```
-
-### 3. Configure Cookies
-
-Copy the template:
+The default runtime directory is now `.local/`:
 
 ```bash
 mkdir -p .local
 cp cookies.example.json .local/cookies.json
 ```
 
-Running `./install.sh` is preferred because it initializes `.local/cookies.json` for you.
+Then fill in your own:
 
-Then fill in your own `z_c0` and `d_c0`.
+- `z_c0`
+- `d_c0`
 
-### 4. Hello World
+The project also supports:
 
-The simplest fetch:
+- `.local/cookie_pool/*.json`
+
+And still keeps compatibility with legacy paths:
+
+- `cookies.json`
+- `cookie_pool/`
+
+### 6.4 Hello world
 
 ```bash
 zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-If you prefer explicit Python entrypoints:
+### 6.5 Default home entry
 
 ```bash
-.venv/bin/python cli/app.py fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+zhihu
 ```
 
-### 5. Open the Full Manual
-
-This README is intentionally homepage-level. Detailed command help lives in:
+### 6.6 Full manual
 
 ```bash
 zhihu manual
 ```
 
-## Features
+## 7. Command surface
 
-- 🚀 **Async pipeline**
-  Batch jobs, question pagination, and image downloads all use asynchronous paths.
+Current core commands:
 
-- 🧠 **Protocol-first**
-  The default path stays on API / HTML protocol access whenever possible.
+- `zhihu onboard`
+- `zhihu fetch`
+- `zhihu creator`
+- `zhihu batch`
+- `zhihu monitor`
+- `zhihu query`
+- `zhihu interactive`
+- `zhihu config --show`
+- `zhihu check`
+- `zhihu manual`
 
-- 🛟 **Article rescue path**
-  Column articles first try the protocol path, then one cookie-rotation retry, then Playwright if still blocked.
-
-- 👤 **Creator mode**
-  Accepts a creator profile URL or raw `url_token`, then fetches recent answers and articles.
-
-- 📚 **Archive-friendly outputs**
-  Results are written directly as `index.md + images/ + zhihu.db`.
-
-- 🔁 **Cookie rotation**
-  Supports `.local/cookies.json` and `.local/cookie_pool/*.json`, while remaining compatible with legacy `cookies.json` and `cookie_pool/*.json`.
-
-- 📡 **Incremental collection monitoring**
-  Monitors new items while keeping a stable progress pointer.
-
-- 🎛️ **Two entry styles**
-  Prefer `zhihu`; `./zhihu` and `python3 cli/app.py` remain available as fallback entry styles.
-
-- 🖥️ **Default terminal workbench**
-  `interactive` now uses the new Textual TUI by default; the old Rich / questionary flow remains only as a regression fallback.
-
-## Coverage
-
-| Type | Status | Notes |
-|---|---|---|
-| Single answer | Supported | Most stable path |
-| Column article | Supported | May fall back to Playwright |
-| Question page answers | Supported | Includes pagination and risk warnings |
-| Creator answers | Supported | Via `creator` mode |
-| Creator articles | Supported | Via `creator` mode |
-| Collection monitoring | Supported | Via `monitor` mode |
-| Topic scraping | Planned | No CLI path yet |
-| JSON / CSV / MySQL export | Planned | Current primary outputs are Markdown + SQLite |
-
-## Platform Status
-
-| Platform | Current status | Notes |
-|---|---|---|
-| macOS | Primary maintained platform | Day-to-day development, installation, and TUI validation happen here first |
-| Linux | Ongoing compatibility hardening | Core CLI paths work; config compatibility and path behavior are being tightened |
-| Windows | Needs fuller validation | Path handling, shell behavior, and browser dependencies still need dedicated verification |
-
-For the explicit support boundary, see:
-
-- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
-- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
-## Recommended Paths
-
-| What you want to do | Recommended command |
-|---|---|
-| Start from the home menu | `zhihu` |
-| Run first-time onboarding | `zhihu onboard` |
-| Fetch one link | `zhihu fetch "<url>"` |
-| Fetch a creator profile | `zhihu creator "<people url>"` |
-| Run batch capture | `zhihu batch urls.txt` |
-| Monitor a collection incrementally | `zhihu monitor 78170682` |
-| Open the interactive workbench | `zhihu interactive` |
-| Query the local archive | `zhihu query "<keyword>"` |
-| Show the current config | `zhihu config --show` |
-| Check your environment | `zhihu check` |
-| Open the full manual | `zhihu manual` |
-
-## Usage
-
-The default entrypoint is the global `zhihu` command. Repository-local fallbacks are still available:
+### Common examples
 
 ```bash
-zhihu <command> ...
-./zhihu <command> ...
-python3 cli/app.py <command> ...
-```
-
-Common commands:
-
-- `onboard`
-- `fetch`
-- `creator`
-- `batch`
-- `monitor`
-- `query`
-- `interactive`
-- `config --show`
-- `check`
-- `manual`
-
-Full arguments and examples are centralized in:
-
-```bash
+zhihu onboard
+zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+zhihu creator "https://www.zhihu.com/people/iterator"
+zhihu batch urls.txt
+zhihu monitor 78170682
+zhihu query "Transformer"
+zhihu interactive
+zhihu interactive --legacy
+zhihu config --show
+zhihu check
 zhihu manual
 ```
 
-`interactive` is now the default terminal workbench:
+## 8. Interactive workbench (TUI)
 
-- `Enter` builds the current draft
-- `Ctrl+R` executes the current draft
-- `Ctrl+Y` loads a retry draft from the latest failed records
-- `zhihu interactive --legacy` remains only as a fallback for regression checks
+`interactive` now defaults to the **Textual TUI**.
 
-## Examples
+Current TUI capabilities include:
 
-The repository keeps two ready-to-open showcase exports:
+- full-screen workbench
+- centered layout
+- input bar
+- question-page limit selection
+- current draft
+- recent execution results
+- retry flow
 
-| Showcase | What to look at | Open |
-|---|---|---|
-| Hyperlink preservation | table of contents, external links, nested links | [Deep Learning Math Basics](examples/outputs/[2026-03-24]%20【深度学习数学基础】序章%20+%20目录（已完结，共30章）%20(article-25643286963)/index.md) |
-| Images and math formulas | local image references, block math, long-form mixed layout | [Linear Algebra Notes](examples/outputs/[2026-03-24]%20线性代数(Linear%20Algebra)学习笔记%20(article-641433373)/index.md) |
+What is still being refined:
 
-More detail:
+- tighter state panels
+- clearer result summaries
+- more typed contract integration
+- less dependence on legacy flow
 
-- [examples/README.md](examples/README.md)
-- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
+The old Rich / questionary flow is still present, but only as:
 
-## Output Layout
+- regression fallback
+- compatibility path
+- non-default route
 
-The default output directory is `data/`:
+Use:
+
+```bash
+zhihu interactive
+zhihu interactive --legacy
+```
+
+## 9. Output structure
+
+Default output root:
 
 ```text
 data/
-├── entries/
-│   └── 2026-03-06_Title--answer-1234567890/
-│       ├── index.md
-│       └── images/
-├── creators/
-│   └── hu-xi-jin/
-│       ├── creator.json
-│       ├── README.md
-│       └── 2026-03-06_Title--article-123456/
-│           ├── index.md
-│           └── images/
-└── zhihu.db
 ```
 
-- `entries/`: normal `fetch / batch / monitor` outputs
-- `creators/<url_token>/`: creator-mode outputs
-- `creator.json`: creator metadata and sync state
-- `README.md`: local creator index page
-- `zhihu.db`: shared SQLite database
-
-For the official repository layout and the local-only runtime boundary, see:
-
-- [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
-
-## Configuration
-
-### Current configuration status
-
-- `config.yaml` currently covers the core cookie, browser, retry, image download, output, and logging settings.
-- The config layer is under active compatibility hardening. After switching branches, the safest path is to rerun `pip install -e .` or `./install.sh --recreate`.
-- The most reliable workflow today is still: start with defaults, confirm one successful run, then tune only the fields you actually need.
-
-### Cookies
-
-The default cookie file is:
+Typical structure:
 
 ```text
-.local/cookies.json
+data/
+├─ entries/
+│  └─ 2026-04-03_title--answer-123456/
+│     ├─ index.md
+│     └─ images/
+├─ creators/
+│  └─ demo-user/
+│     ├─ creator.json
+│     ├─ README.md
+│     └─ 2026-04-03_title--article-1/
+│        └─ index.md
+└─ zhihu.db
 ```
 
-The template file is:
+Meaning:
+
+- normal outputs go under `entries/`
+- creator mode goes under `creators/<url_token>/`
+- SQLite lives at `zhihu.db`
+- output naming has been moved toward shell-friendly patterns
+
+## 10. Platform support boundary
+
+Platform support here is an explicit engineering boundary, not a marketing sentence.
+
+### macOS
+
+- primary maintained platform
+- installation, CLI, and TUI are validated here first
+
+### Linux
+
+- core CLI is usable
+- path behavior, browser fallback, and install ergonomics are still being hardened
+
+### Windows
+
+- acknowledged as a target platform
+- not a first-class installation path yet
+- currently depends on runbook-style setup
+
+Related docs:
+
+- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
+
+## 11. Configuration system
+
+Default config location:
 
 ```text
-cookies.example.json
+config.yaml
 ```
 
-If you manage multiple sessions, place them under:
+Current config governance work already includes:
 
-```text
-.local/cookie_pool/
-```
+- separate config schema
+- separate config runtime loader
+- separate logging setup
+- centralized project-path resolution
+- backward-compatibility handling for older config fields
 
-### Proxy
-
-> [!IMPORTANT]
-> This repository does not currently expose a stable proxy field in `config.yaml`.
-
-If your environment requires a proxy, the reliable current path is to configure it in your shell or system environment first, then run the tool.
+Inspect current effective config with:
 
 ```bash
-export HTTP_PROXY=http://127.0.0.1:7890
-export HTTPS_PROXY=http://127.0.0.1:7890
-zhihu check
+zhihu config --show
+zhihu config --path
 ```
 
-### Security Notes
+## 12. Architecture and module state
 
-> [!CAUTION]
-> - Do not commit `.local/` or `cookies.json`
-> - If a cookie ever leaked, replace it
-> - Prefer `.local/cookie_pool/` for multi-account setups
+### CLI layer
 
-## Architecture
+The CLI entrypoint is no longer supposed to hold every responsibility directly.
+Important current boundaries include:
 
-```mermaid
-flowchart LR
-    A["CLI / Menu<br/>zhihu · ./zhihu · manual"] --> B["Scraper Layer<br/>fetch · creator · monitor"]
-    B --> C["Protocol Access<br/>ZhihuAPIClient + CookieManager"]
-    B -. article blocked .-> D["Browser Fallback<br/>Playwright"]
-    B --> E["Persist Layer<br/>Markdown + images + SQLite"]
-    E --> F["Outputs<br/>data/entries · data/creators · zhihu.db"]
-```
+- `cli/app.py`
+- `cli/launcher_flow.py`
+- `cli/manual_content.py`
+- `cli/config_view.py`
+- `cli/healthcheck.py`
+- `cli/save_pipeline.py`
+- `cli/save_contracts.py`
+- `cli/creator_metadata.py`
 
-Current design direction:
+### Core layer
 
-- **CLI-first**
-  This is a command-line tool, not a hosted service.
+The core layer has also started moving away from oversized mixed-responsibility files:
 
-- **Protocol-first**
-  Browser automation is a rescue path, not the default model.
+- `core/config.py` is now a facade
+- `core/config_runtime.py`
+- `core/config_schema.py`
+- `core/logging_setup.py`
+- `core/project_paths.py`
+- `core/scraper.py`
+- `core/scraper_payloads.py`
+- `core/scraper_contracts.py`
 
-- **Files + DB**
-  One output optimized for humans, one for programs.
+### Current direction
 
-## Tech Stack
+The real engineering direction is not “add more features at any cost”.  
+It is:
 
-- Python 3.10+
-- Typer
-- Rich / Questionary / Textual
-- curl_cffi / HTTPX
-- Playwright
-- PyYAML / structlog
-- SQLite
+- stabilize config boundaries
+- stabilize scraper/result contracts
+- keep large files from growing again
+- continue separating TUI / CLI / core responsibilities
 
-> [!NOTE]
-> The broader direction mentions Pydantic, JSON / CSV / MySQL export, and topic scraping, but those are not fully implemented in the current repository yet. They belong in the roadmap, not in the present-tense feature section.
+## 13. What today’s engineering work actually did
 
-## Current Engineering Focus
+This was not just one or two patches. It was a staged governance and restructuring effort.
 
-- **Continue tightening the terminal workbench**
-  The new Textual TUI is already the default interactive entry, but layout, input flow, execution state handling, and regression coverage are still being refined.
+### Stage 1: governance foundation
 
-- **Cross-platform hardening**
-  The project is actively being checked across `macOS / Linux / Windows` for installation, command entrypoints, path behavior, dependency handling, and browser fallback reliability.
+- reorganized `references/`
+- established skill foundation layout
+- documented repository boundaries and stage docs
 
-- **Docs and command-surface sync**
-  README, the bilingual docs, the built-in manual, `--help`, and the installer are being aligned to reduce documentation drift.
+### Stage 2: system audit
 
-- **Codebase restructuring**
-  The next refactor focus is on CLI boundaries, config schema, TUI module boundaries, and the test matrix so the repository does not keep growing into oversized files.
+- audited command surface
+- audited platform support
+- audited README / manual drift
+- produced the stage-2 quality audit
 
-- **Validation matrix consolidation**
-  The current test and smoke layers are tracked in [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md).
-## Roadmap
+### Stage 3: P0 usability fixes
 
-- [x] Single answer fetching
-- [x] Column article fetching
-- [x] Question-page pagination
-- [x] Creator fetching (answers + articles)
-- [x] Incremental collection monitoring
+- cleaned up `check`
+- cleaned up missing-dependency messaging
+- added platform boundary docs
+- started splitting `cli/app.py`
+
+### Stage 4: structural refactor
+
+- extracted save pipeline
+- extracted config view layer
+- extracted scraper payload normalization
+
+### Stage 5: validation matrix
+
+- added command-surface tests
+- added install-contract tests
+- formalized the validation matrix
+- added the Windows runbook
+
+### Stage 6: release readiness and merge prep
+
+- release review document
+- issue-reply templates
+- merge playbook
+
+### New tranche after Stage 6
+
+After the six stages, another engineering tranche continued with:
+
+- config schema / runtime / logging / path separation
+- typed save result contracts
+- creator metadata rendering extraction
+- pagination stats added to typed question fetch results
+
+## 14. Testing and validation
+
+The repository is no longer in “it seems to run on my machine” mode.
+
+Current validation includes:
+
+- `py_compile`
+- unit tests
+- command-surface guards
+- docs-sync guards
+- install-contract guards
+- save pipeline guards
+- scraper payload / contract guards
+- TUI regressions
+- CLI `--help` smoke checks
+
+Validation matrix doc:
+
+- [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)
+
+## 15. Important repository docs
+
+- [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
+- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
+- [docs/STAGE1_SKILL_FOUNDATION.md](docs/STAGE1_SKILL_FOUNDATION.md)
+- [docs/STAGE2_QUALITY_AUDIT.md](docs/STAGE2_QUALITY_AUDIT.md)
+- [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)
+- [docs/STAGE6_RELEASE_REVIEW.md](docs/STAGE6_RELEASE_REVIEW.md)
+- [docs/STAGE6_ISSUE_REPLY_TEMPLATES.md](docs/STAGE6_ISSUE_REPLY_TEMPLATES.md)
+- [docs/STAGE6_MERGE_PLAYBOOK.md](docs/STAGE6_MERGE_PLAYBOOK.md)
+
+## 16. Current engineering focus
+
+The current focus is not to pile on more surface features. It is to keep the project structurally healthy:
+
+- continue reducing `core/config.py`
+- continue reducing `core/scraper.py`
+- keep expanding typed contracts
+- keep lowering CLI / TUI / core coupling
+- keep improving cross-platform validation
+- keep README / manual / tests / CI aligned
+
+## 17. Roadmap
+
+Already done:
+
+- [x] single-answer fetching
+- [x] column-article fetching
+- [x] question-page pagination
+- [x] creator fetching
+- [x] incremental collection monitoring
 - [x] Markdown + images + SQLite outputs
-- [x] Default interactive workbench (Textual TUI)
-- [ ] Topic scraping
-- [ ] JSON / CSV export
+- [x] default interactive workbench (Textual TUI)
+- [x] six-stage governance and merge back to main
+
+Still not done:
+
+- [ ] topic-page scraping
+- [ ] JSON export
+- [ ] CSV export
 - [ ] MySQL persistence
-- [ ] Further TUI modularization and state-machine cleanup
-- [ ] macOS / Linux / Windows validation matrix
-- [ ] README / manual / help / install synchronization checks
-- [ ] Formal proxy configuration
-- [ ] GUI interface
-- [ ] LLM-based summarization / tagging / clustering
-- [ ] Broader test coverage and stronger CI
+- [ ] deeper TUI state-machine cleanup
+- [ ] stronger Windows support
+- [ ] stronger automated browser-fallback verification
+- [ ] GUI
+- [ ] LLM-based analysis features
 
-## FAQ
+## 18. FAQ
 
-### Why does it still run without cookies, but with incomplete results?
+### Why Python 3.14+ now?
 
-Guest mode can fetch some public content, but both visibility and stability are weaker. Question pages, creator pages, and collection monitoring depend much more on logged-in sessions.
+Because runtime expectations, tests, CI, and documentation have now been aligned to 3.14+ instead of keeping an older baseline alive.
 
-### Why are column articles more fragile?
+### Why can it still run without cookies?
 
-Columns are more aggressively protected. The real fetch chain is:
+Guest mode can handle some public paths, but visibility and stability are both weaker. Creator pages, question pages, and collection monitoring rely much more on logged-in sessions.
 
-1. protocol HTML fetch first
-2. one automatic cookie-rotation retry
-3. Playwright only if the protocol path is still blocked
+### Why is `interactive --legacy` still there?
 
-### Why doesn't the README document every flag in full?
+Because it is now a regression and fallback path, not the preferred interface.
 
-Because the homepage should do three things well:
+### Why is this README so long now?
 
-- get a new user running quickly
-- explain capability boundaries
-- point to the full manual
-
-Detailed command help is intentionally centralized in:
-
-```bash
-zhihu manual
-```
-
-### Why does typing `zhihu` do nothing or run the wrong thing?
-
-Run:
-
-```bash
-type zhihu
-which zhihu
-zhihu --help
-```
-
-If `type zhihu` says it is a shell function or alias, or points to a Conda activation helper, your shell config is shadowing the real `zhihu` command.
-
-In that case, fix your shell config instead of the project. For example, rename:
-
-```bash
-zhihu () {
-    conda activate zhihu
-}
-```
-
-to something like `zhihu_env`, then reload your shell:
-
-```bash
-source ~/.zshrc
-```
-
-### How do I operate the home menu?
-
-- arrow keys to move
-- `Enter` to confirm
-- `Space` to toggle checkboxes
-- `Ctrl+C` to exit the current screen
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+Because this version optimizes for “put the current state on the table” rather than polished brevity. It is meant to be broad, categorial, and easy to hand off for a second editing pass.
