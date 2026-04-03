@@ -44,24 +44,22 @@ class ConfigLoader:
 
         if not resolved_path.exists():
             self._log_missing_config(resolved_path)
-            self._config = build_default_config()
+            self._config = self._finalize_config(build_default_config(), override_level=override_level)
             return self._config
 
         try:
             with open(resolved_path, "r", encoding="utf-8") as f:
                 raw = yaml.safe_load(f) or {}
 
-            self._config = build_config_from_dict(raw)
-            if override_level:
-                self._config.logging.level = override_level
-
-            setup_logging(self._config)
+            self._config = self._finalize_config(
+                build_config_from_dict(raw),
+                override_level=override_level,
+            )
             return self._config
         except Exception as e:
             print(f"⚠️ Configuration file load failed: {e}")
             print("  Using default configuration / 使用默认配置")
-            self._config = build_default_config()
-            setup_logging(self._config)
+            self._config = self._finalize_config(build_default_config(), override_level=override_level)
             return self._config
 
     def get(self) -> Config:
@@ -76,6 +74,13 @@ class ConfigLoader:
     def _log_missing_config(self, path: Path) -> None:
         log = structlog.get_logger()
         log.warning("config_file_not_found", path=str(path), using_defaults=True)
+
+    @staticmethod
+    def _finalize_config(config: Config, *, override_level: Optional[str] = None) -> Config:
+        if override_level:
+            config.logging.level = override_level
+        setup_logging(config)
+        return config
 
 
 def get_config(config_path: Optional[Union[str, Path]] = None) -> Config:
