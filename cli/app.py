@@ -52,9 +52,9 @@ import sys
 import typer
 from rich import print as rprint
 from rich.console import Console
-from rich.panel import Panel
 from rich.text import Text
 
+from cli.config_view import build_config_snapshot, render_config_panel
 from cli.healthcheck import render_environment_check
 from cli.launcher_flow import LauncherCommands, LauncherRuntime, run_launcher, run_onboard_flow
 from cli.manual_content import build_manual_text
@@ -632,28 +632,14 @@ def config_cmd(
         cfg = _get_cfg()
         from core.cookie_manager import resolve_cookie_file_path, resolve_cookie_pool_dir
 
-        configured_cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
-        active_cookie_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-        active_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
-        log_path = resolve_project_path(cfg.logging.file) if cfg.logging.file else "disabled / 已关闭"
-        rprint(Panel(
-            Text(f"""
-[b]配置路径 (Config Path):[/] {Path(__file__).parent.parent / "config.yaml"}
-
-[b]输出目录 (Output Directory):[/] {cfg.output.directory}
-[b]Cookie文件 (Cookie File):[/] {configured_cookie_path}
-[b]当前生效Cookie (Active Cookie):[/] {active_cookie_path}
-[b]Cookie池目录 (Cookie Pool):[/] {active_pool_dir}
-[b]日志文件 (Log File):[/] {log_path}
-[b]日志级别 (Log Level):[/] {cfg.logging.level}
-[b]浏览器 (Browser):[/] {"Headless / 无头" if cfg.zhihu.browser.headless else "Visible / 有头"}
-[b]重试次数 (Retry Attempts):[/] {cfg.crawler.retry.max_attempts}
-[b]图片并发 (Image Concurrency):[/] {cfg.crawler.images.concurrency}
-[b]Cookie轮换 (Cookie Rotation):[/] {"Enabled / 启用" if hasattr(cfg, 'zhihu') and cfg.zhihu.cookies_required else "Disabled / 禁用"}
-            """.strip(), justify="left"),
-            title="🛠️ Current Configuration / 当前配置",
-            border_style="cyan"
-        ))
+        snapshot = build_config_snapshot(
+            cfg=cfg,
+            config_path=Path(__file__).parent.parent / "config.yaml",
+            resolve_project_path=resolve_project_path,
+            resolve_cookie_file_path=resolve_cookie_file_path,
+            resolve_cookie_pool_dir=resolve_cookie_pool_dir,
+        )
+        rprint(render_config_panel(snapshot))
 
 
 @app.command("check")
