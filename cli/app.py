@@ -45,8 +45,7 @@ app.py — CLI 增强模块
 """
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any
-from random import uniform
+from typing import Optional
 import asyncio
 import sys
 import typer
@@ -60,12 +59,7 @@ from cli.healthcheck import render_environment_check
 from cli.launcher_flow import LauncherCommands, LauncherRuntime, run_launcher, run_onboard_flow
 from cli.manual_content import build_manual_text
 from cli.optional_deps import get_questionary as _get_questionary
-from cli.save_pipeline import (
-    build_output_folder_name as render_output_folder_name,
-    resolve_creator_output_dir as resolve_creator_output_path,
-    resolve_entries_output_dir as resolve_entries_output_path,
-)
-from core.config import get_config, get_logger, get_humanizer, resolve_project_path
+from core.config import get_config, get_logger, resolve_project_path
 from core.utils import extract_urls
 from core.errors import handle_error
 
@@ -83,10 +77,6 @@ app = typer.Typer(
     no_args_is_help=False,
 )
 
-# Runtime defaults must stay side-effect free at import time.
-# 运行时默认值不能在 import 阶段触发配置加载或 Cookie 读取。
-DEFAULT_OUTPUT_DIR = Path("data")
-DEFAULT_BROWSER_HEADLESS = True
 console = Console()
 
 
@@ -126,54 +116,6 @@ def _resolve_output_dir(output: Optional[Path]) -> Path:
 def _resolve_headless(headless: Optional[bool]) -> bool:
     """Resolve CLI headless option with runtime fallback / 解析 CLI 无头参数并回落到运行时配置"""
     return _get_default_browser_headless() if headless is None else headless
-
-
-def print_result(
-    title: str,
-    author: str,
-    success: bool,
-    path: str = "",
-    error: Optional[str] = None
-) -> None:
-    """
-    Print single result / 打印单条结果
-    """
-    if success:
-        rprint(f"✅ [bold cyan]{author}[/] - [white]{title[:30]}...[/]")
-        rprint(f"   📁 {path}")
-    else:
-        rprint(f"❌ [bold cyan]{author}[/] - [yellow]{title[:30]}...[/]")
-        rprint(f"   💥 {error}")
-
-
-def build_output_folder_name(item_date: str, title: str, author: str, item_key: str) -> str:
-    """
-    Render output directory name from config template and append a stable unique suffix.
-    根据配置模板生成输出目录名，并附加稳定唯一后缀。
-    """
-    return render_output_folder_name(
-        item_date,
-        title,
-        author,
-        item_key,
-        folder_template=_get_cfg().output.folder_format,
-    )
-
-
-def resolve_entries_output_dir(base_dir: Path) -> Path:
-    """
-    Resolve the content root for normal fetch/batch/monitor outputs.
-    解析普通抓取输出的内容根目录。
-    """
-    return resolve_entries_output_path(base_dir)
-
-
-def resolve_creator_output_dir(base_dir: Path, url_token: str) -> Path:
-    """
-    Resolve the content root for creator outputs.
-    解析作者模式输出的内容根目录。
-    """
-    return resolve_creator_output_path(base_dir, url_token)
 
 
 def _get_workflow_service():
@@ -646,57 +588,6 @@ def check() -> None:
     3. Playwright browser available
     """
     render_environment_check()
-
-
-# ============================================================
-# Internal Helpers (内部助手)
-# ============================================================
-
-
-async def _batch_concurrent(
-    urls: List[str],
-    output_dir: Path,
-    concurrency: int,
-    download_images: bool,
-    headless: bool,
-    collection_id: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Core implementation of concurrent batch scraping.
-    并发批量抓取核心实现。
-
-    Anti-crawling strategies:
-    - Use semaphore to limit maximum concurrency
-    - Random delay between tasks (0.5~6 seconds)
-
-    防风控策略：
-    - 使用信号量限制最大并发数
-    - 任务间随机延迟 (0.5~6秒)
-
-    Args:
-        urls: URL list / URL 列表
-        output_dir: Output directory / 输出目录
-        concurrency: Concurrency count / 并发数
-        download_images: Whether to download images / 是否下载图片
-        headless: Headless mode / 无头模式
-        collection_id: Collection ID (for database association) / 收藏夹 ID (用于关联数据库记录)
-
-    Returns:
-        Result list with success, url, etc. fields / 结果列表，每个元素包含 success, url 等字段
-    """
-    result = await _get_workflow_service().run_batch(
-        urls=urls,
-        output_dir=output_dir,
-        concurrency=concurrency,
-        download_images=download_images,
-        headless=headless,
-        collection_id=collection_id,
-    )
-    return [
-        {"url": item.url, "success": item.success, **({"error": item.error} if item.error else {})}
-        for item in result.items
-    ]
-
 
 # ============================================================
 # Entry Point (入口点)

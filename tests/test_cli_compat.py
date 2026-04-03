@@ -5,8 +5,9 @@ from unittest.mock import patch
 import typer
 
 import cli.optional_deps as optional_deps
-from cli.app import _get_questionary, build_output_folder_name
+from cli.app import _get_questionary
 from cli.healthcheck import collect_environment_checks, summarize_playwright_failure
+from cli.save_pipeline import build_output_folder_name
 from core.config import Config
 from core.cookie_manager import RuntimePathResolution
 from core.utils import sanitize_filename

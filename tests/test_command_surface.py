@@ -62,6 +62,15 @@ class CommandSurfaceTests(unittest.TestCase):
         self.assertIn("`zhihu interactive` 会直达推荐的 Textual TUI", launcher_text)
         self.assertIn("`zhihu interactive --legacy` 仅用于兼容回退", launcher_text)
 
+    def test_cli_app_no_longer_keeps_dead_save_or_batch_helpers(self):
+        app_text = (REPO_ROOT / "cli" / "app.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("def print_result(", app_text)
+        self.assertNotIn("def build_output_folder_name(", app_text)
+        self.assertNotIn("def resolve_entries_output_dir(", app_text)
+        self.assertNotIn("def resolve_creator_output_dir(", app_text)
+        self.assertNotIn("def _batch_concurrent(", app_text)
+
     def test_bilingual_readmes_keep_core_command_snippets(self):
         readme_cn = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")
