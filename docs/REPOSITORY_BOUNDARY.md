@@ -100,7 +100,9 @@ This document defines two things:
 
 ## References / 参考资料
 
-- `references/` 保持原有参考资料用途，不纳入本轮运行时目录整理
-- 是否重构、精简或重新分类 `references/`，后续需要单独决策，不在这份边界文档里强行归类
+- `references/` 现在统一作为参考资料区
+- `references/skills/docs-writing/` 保存 README / 文档写作相关 skill
+- `references/skills/engineering/` 保存质量检测与工程推进相关 skill
+- `references/openclaw/` 继续作为外部参考占位，不纳入正式项目结构，也不参与运行时依赖
 
 后续如果要重构 Cookie 存储、运行时目录或配置层，应以这份边界文档为准，而不是继续把本地实验目录混进正式仓库。
