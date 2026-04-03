@@ -217,9 +217,10 @@ PLATFORM SUPPORT
   - Windows: not yet a first-class install path
   - see `docs/PLATFORM_SUPPORT.md` for the explicit support boundary
 
-ARCHITECTURE (LAYER MAP)
+  ARCHITECTURE (LAYER MAP)
   CLI Layer
   - `cli/app.py` command routing + orchestration
+  - `cli/launcher_flow.py` home menu + onboarding flow
   - `cli/manual_content.py` built-in manual source
   - `cli/interactive.py` Textual-based interactive workbench
   - `cli/interactive_legacy.py` deprecated Rich/questionary fallback

@@ -32,7 +32,7 @@ jobs:
         run: python -m compileall cli core
 
       - name: Run unit tests
-        run: python -m unittest -q tests.test_cli_compat tests.test_tui_rebuild
+        run: python -m unittest -q tests.test_cli_compat tests.test_tui_rebuild tests.test_docs_sync
 
       - name: CLI smoke check
         run: |

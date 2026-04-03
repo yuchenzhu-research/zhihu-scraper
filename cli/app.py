@@ -53,10 +53,10 @@ import sys
 import typer
 from rich import print as rprint
 from rich.console import Console
-from rich.panel import Panel
 from rich.text import Text
 
 from cli.healthcheck import render_environment_check
+from cli.launcher_flow import LauncherCommands, LauncherRuntime, run_launcher, run_onboard_flow
 from cli.manual_content import build_manual_text
 from cli.optional_deps import get_questionary as _get_questionary
 from core.config import get_config, get_logger, get_humanizer, resolve_project_path
@@ -201,303 +201,33 @@ def print_creator_limit_warning(answers: int, articles: int) -> None:
         rprint("   Requests above 20 items use paginated API access with built-in random delays.")
 
 
-def _launcher_style():
-    """Lazy questionary style builder / 延迟构建 questionary 主题"""
-    Style = _get_questionary().Style
-
-    return Style([
-        ("question", "fg:#00C8FF bold"),
-        ("answer", "fg:#FFFFFF"),
-        ("pointer", "fg:#FF1493 bold"),
-        ("highlighted", "fg:#00C8FF bold"),
-        ("selected", "fg:#00FF55"),
-        ("instruction", "fg:#777777"),
-        ("text", "fg:#FFFFFF"),
-    ])
-
-
-def _input_positive_int(prompt: str, default: str) -> int:
-    """Questionary helper for positive integers / 正整数输入助手"""
-    questionary = _get_questionary()
-
-    value = questionary.text(
-        prompt,
-        default=default,
-        validate=lambda text: text.isdigit() and int(text) > 0 or "请输入正整数",
-        style=_launcher_style(),
-    ).ask()
-    return int(value or default)
-
-
-def _input_non_negative_int(prompt: str, default: str) -> int:
-    """Questionary helper for non-negative integers / 非负整数输入助手"""
-    questionary = _get_questionary()
-
-    value = questionary.text(
-        prompt,
-        default=default,
-        validate=lambda text: text.isdigit() or "请输入非负整数",
-        style=_launcher_style(),
-    ).ask()
-    return int(value or default)
-
-
-def _collect_fetch_options(url: str) -> Dict[str, Any]:
-    """Collect quick-fetch options from launcher / 从首页菜单收集抓取参数"""
-    questionary = _get_questionary()
-
-    limit: Optional[int] = None
-    if "/question/" in url and "/answer/" not in url:
-        limit = _input_positive_int(
-            "问题页抓取多少条回答？",
-            "10",
-        )
-
-    selections = questionary.checkbox(
-        "附加设置：",
-        choices=[
-            questionary.Choice("下载图片", value="images", checked=True),
-        ],
-        style=_launcher_style(),
-    ).ask() or []
-
-    if "zhuanlan.zhihu.com" in url:
-        rprint("[dim]ℹ️ 如果专栏普通抓取失败，程序会自动启用浏览器补救。[/dim]")
-
-    return {
-        "limit": limit,
-        "no_images": "images" not in selections,
-        "headless": _get_default_browser_headless(),
-    }
-
-
-def _render_launcher_header() -> None:
-    """Print compact launcher banner / 打印精简首页横幅"""
-    cfg = _get_cfg()
-    default_output_dir = _get_default_output_dir()
-    from core.cookie_manager import has_available_cookie_sources
-    cookie_status = "已就绪" if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir) else "需要 Cookie"
-    browser_status = "后台运行" if cfg.zhihu.browser.headless else "显示窗口"
-    content = Text.assemble(
-        ("知乎爬虫", "bold cyan"),
-        ("  ·  知乎抓取首页\n", "white"),
-        ("输出目录: ", "bold magenta"),
-        (f"{default_output_dir}", "white"),
-        ("  |  登录状态: ", "bold magenta"),
-        (cookie_status, "white"),
-        ("  |  浏览器补救: ", "bold magenta"),
-        (browser_status, "white"),
+def _build_launcher_runtime() -> LauncherRuntime:
+    return LauncherRuntime(
+        console=console,
+        get_cfg=_get_cfg,
+        get_questionary=_get_questionary,
+        get_default_output_dir=_get_default_output_dir,
+        get_default_browser_headless=_get_default_browser_headless,
+        resolve_project_path=resolve_project_path,
+        commands=LauncherCommands(
+            fetch=fetch,
+            creator=creator,
+            batch=batch,
+            monitor=monitor,
+            query=query_db,
+            interactive=interactive,
+            check=check,
+            manual=manual,
+        ),
     )
-    console.print(Panel(content, border_style="cyan", expand=False))
 
 
 def _run_onboard_flow(*, from_command: bool = False) -> None:
-    """Minimal onboarding flow inspired by guided CLIs / 最小 onboarding 引导"""
-    questionary = _get_questionary()
-    from core.cookie_manager import has_available_cookie_sources, resolve_cookie_file_path
-
-    cfg = _get_cfg()
-    configured_cookie_path = resolve_project_path(cfg.zhihu.cookies_file)
-    active_cookie_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-    console.print(Panel(
-        Text(
-            "首次使用向导\n\n"
-            "1. 先运行 ./install.sh 安装环境\n"
-            f"2. 在 {configured_cookie_path} 中填入自己的 Cookie\n"
-            "3. 执行一次环境检查\n"
-            "4. 然后从首页菜单开始使用",
-            justify="left",
-        ),
-        border_style="magenta",
-        title="🚀 首次使用向导",
-        expand=False,
-    ))
-
-    cookie_ready = has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
-    rprint(f"📄 配置文件: [cyan]{Path(__file__).parent.parent / 'config.yaml'}[/]")
-    rprint(f"🍪 Cookie 文件: [cyan]{configured_cookie_path}[/] {'✅' if cookie_ready else '⚠️'}")
-    if active_cookie_path != configured_cookie_path:
-        rprint(f"↩️ 兼容旧路径: [cyan]{active_cookie_path}[/]")
-    rprint("🧰 安装入口: [cyan]./install.sh[/]")
-    rprint("🔁 重建环境: [cyan]./install.sh --recreate[/]")
-
-    should_check = questionary.confirm(
-        "现在执行环境检查吗？",
-        default=True,
-        style=_launcher_style(),
-    ).ask()
-    if should_check:
-        check()
-
-    should_open_home = questionary.confirm(
-        "现在进入首页菜单吗？",
-        default=not from_command,
-        style=_launcher_style(),
-    ).ask()
-    if should_open_home:
-        _run_launcher()
+    run_onboard_flow(_build_launcher_runtime(), from_command=from_command)
 
 
 def _run_launcher() -> None:
-    """Default home menu / 默认首页菜单"""
-    questionary = _get_questionary()
-
-    default_output_dir = _get_default_output_dir()
-    default_headless = _get_default_browser_headless()
-
-    def run_action(func, **kwargs) -> None:
-        try:
-            func(**kwargs)
-        except SystemExit:
-            # Keep launcher alive after sub-command finishes or fails.
-            # 子命令执行完成或报错后，仍回到首页菜单。
-            return
-
-    _render_launcher_header()
-
-    while True:
-        choice = questionary.select(
-            "请选择操作：",
-            choices=[
-                questionary.Choice("快速抓取", value="fetch"),
-                questionary.Choice("作者抓取", value="creator"),
-                questionary.Choice("批量抓取", value="batch"),
-                questionary.Choice("收藏夹监控", value="monitor"),
-                questionary.Choice("搜索本地数据库", value="query"),
-                questionary.Choice("归档工作台", value="interactive"),
-                questionary.Choice("首次使用向导", value="onboard"),
-                questionary.Choice("环境检查", value="check"),
-                questionary.Choice("查看说明书", value="manual"),
-                questionary.Choice("退出", value="exit"),
-            ],
-            use_shortcuts=False,
-            style=_launcher_style(),
-        ).ask()
-
-        if not choice or choice == "exit":
-            return
-
-        if choice == "fetch":
-            url = questionary.text(
-                "输入知乎链接或一段包含链接的文字：",
-                style=_launcher_style(),
-            ).ask()
-            if not url:
-                continue
-            options = _collect_fetch_options(url)
-            run_action(
-                fetch,
-                url=url,
-                output=default_output_dir,
-                limit=options["limit"],
-                no_images=options["no_images"],
-                headless=options["headless"],
-            )
-            continue
-
-        if choice == "creator":
-            creator_input = questionary.text(
-                "输入作者主页 URL 或 url_token：",
-                style=_launcher_style(),
-            ).ask()
-            if not creator_input:
-                continue
-            answers = _input_non_negative_int("抓多少条回答？", "10")
-            articles = _input_non_negative_int("抓多少篇专栏？", "5")
-            selections = questionary.checkbox(
-                "附加设置：",
-                choices=[
-                    questionary.Choice("下载图片", value="images", checked=True),
-                ],
-                style=_launcher_style(),
-            ).ask() or []
-            run_action(
-                creator,
-                creator=creator_input,
-                output=default_output_dir,
-                answers=answers,
-                articles=articles,
-                no_images="images" not in selections,
-            )
-            continue
-
-        if choice == "batch":
-            input_file = questionary.path(
-                "输入 URL 列表文件路径：",
-                only_files=True,
-                style=_launcher_style(),
-            ).ask()
-            if not input_file:
-                continue
-            concurrency = _input_positive_int("并发数：", "4")
-            selections = questionary.checkbox(
-                "附加设置：",
-                choices=[
-                    questionary.Choice("下载图片", value="images", checked=True),
-                ],
-                style=_launcher_style(),
-            ).ask() or []
-            run_action(
-                batch,
-                input_file=Path(input_file),
-                output=default_output_dir,
-                concurrency=concurrency,
-                no_images="images" not in selections,
-                headless=default_headless,
-            )
-            continue
-
-        if choice == "monitor":
-            collection_id = questionary.text(
-                "输入收藏夹 ID：",
-                style=_launcher_style(),
-            ).ask()
-            if not collection_id:
-                continue
-            concurrency = _input_positive_int("并发数：", "4")
-            selections = questionary.checkbox(
-                "附加设置：",
-                choices=[
-                    questionary.Choice("下载图片", value="images", checked=True),
-                ],
-                style=_launcher_style(),
-            ).ask() or []
-            run_action(
-                monitor,
-                collection_id=collection_id.strip(),
-                output=default_output_dir,
-                concurrency=concurrency,
-                no_images="images" not in selections,
-                headless=default_headless,
-            )
-            continue
-
-        if choice == "query":
-            keyword = questionary.text(
-                "输入搜索关键词：",
-                style=_launcher_style(),
-            ).ask()
-            if not keyword:
-                continue
-            limit = _input_positive_int("结果数量：", "10")
-            run_action(query_db, keyword=keyword, limit=limit, data_dir=str(default_output_dir))
-            continue
-
-        if choice == "interactive":
-            run_action(interactive)
-            continue
-
-        if choice == "onboard":
-            _run_onboard_flow()
-            continue
-
-        if choice == "check":
-            run_action(check)
-            continue
-
-        if choice == "manual":
-            run_action(manual)
-            continue
+    run_launcher(_build_launcher_runtime())
 
 
 # ============================================================
