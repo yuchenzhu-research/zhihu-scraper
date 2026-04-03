@@ -18,6 +18,7 @@
 
 <p>
   <strong>Status:</strong> active ·
+  <strong>Focus:</strong> TUI rebuild + cross-platform hardening in progress ·
   <strong>Install:</strong> <code>./install.sh</code> ·
   <strong>Manual:</strong> <code>zhihu manual</code>
 </p>
@@ -187,6 +188,9 @@ zhihu manual
 - 🎛️ **Two entry styles**
   Prefer `zhihu`; `./zhihu` and `python3 cli/app.py` remain available as fallback entry styles.
 
+- 🖥️ **Default terminal workbench**
+  `interactive` now uses the new Textual TUI by default; the old Rich / questionary flow remains only as a regression fallback.
+
 ## Coverage
 
 | Type | Status | Notes |
@@ -199,6 +203,14 @@ zhihu manual
 | Collection monitoring | Supported | Via `monitor` mode |
 | Topic scraping | Planned | No CLI path yet |
 | JSON / CSV / MySQL export | Planned | Current primary outputs are Markdown + SQLite |
+
+## Platform Status
+
+| Platform | Current status | Notes |
+|---|---|---|
+| macOS | Primary maintained platform | Day-to-day development, installation, and TUI validation happen here first |
+| Linux | Ongoing compatibility hardening | Core CLI paths work; config compatibility and path behavior are being tightened |
+| Windows | Needs fuller validation | Path handling, shell behavior, and browser dependencies still need dedicated verification |
 
 ## Recommended Paths
 
@@ -267,14 +279,14 @@ The default output directory is `data/`:
 ```text
 data/
 ├── entries/
-│   └── [2026-03-06] Title (answer-1234567890)/
+│   └── 2026-03-06_Title--answer-1234567890/
 │       ├── index.md
 │       └── images/
 ├── creators/
 │   └── hu-xi-jin/
 │       ├── creator.json
 │       ├── README.md
-│       └── [2026-03-06] Title (article-123456)/
+│       └── 2026-03-06_Title--article-123456/
 │           ├── index.md
 │           └── images/
 └── zhihu.db
@@ -291,6 +303,12 @@ For the official repository layout and the local-only runtime boundary, see:
 - [docs/REPOSITORY_BOUNDARY.md](docs/REPOSITORY_BOUNDARY.md)
 
 ## Configuration
+
+### Current configuration status
+
+- `config.yaml` currently covers the core cookie, browser, retry, image download, output, and logging settings.
+- The config layer is under active compatibility hardening. After switching branches, the safest path is to rerun `pip install -e .` or `./install.sh --recreate`.
+- The most reliable workflow today is still: start with defaults, confirm one successful run, then tune only the fields you actually need.
 
 ### Cookies
 
@@ -358,7 +376,7 @@ Current design direction:
 
 - Python 3.10+
 - Typer
-- Rich / Questionary
+- Rich / Questionary / Textual
 - curl_cffi / HTTPX
 - Playwright
 - PyYAML / structlog
@@ -366,6 +384,20 @@ Current design direction:
 
 > [!NOTE]
 > The broader direction mentions Pydantic, JSON / CSV / MySQL export, and topic scraping, but those are not fully implemented in the current repository yet. They belong in the roadmap, not in the present-tense feature section.
+
+## Current Engineering Focus
+
+- **Continue tightening the terminal workbench**
+  The new Textual TUI is already the default interactive entry, but layout, input flow, execution state handling, and regression coverage are still being refined.
+
+- **Cross-platform hardening**
+  The project is actively being checked across `macOS / Linux / Windows` for installation, command entrypoints, path behavior, dependency handling, and browser fallback reliability.
+
+- **Docs and command-surface sync**
+  README, the bilingual docs, the built-in manual, `--help`, and the installer are being aligned to reduce documentation drift.
+
+- **Codebase restructuring**
+  The next refactor focus is on CLI boundaries, config schema, TUI module boundaries, and the test matrix so the repository does not keep growing into oversized files.
 
 ## Roadmap
 
@@ -375,9 +407,13 @@ Current design direction:
 - [x] Creator fetching (answers + articles)
 - [x] Incremental collection monitoring
 - [x] Markdown + images + SQLite outputs
+- [x] Default interactive workbench (Textual TUI)
 - [ ] Topic scraping
 - [ ] JSON / CSV export
 - [ ] MySQL persistence
+- [ ] Further TUI modularization and state-machine cleanup
+- [ ] macOS / Linux / Windows validation matrix
+- [ ] README / manual / help / install synchronization checks
 - [ ] Formal proxy configuration
 - [ ] GUI interface
 - [ ] LLM-based summarization / tagging / clustering
