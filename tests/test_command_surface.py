@@ -39,9 +39,21 @@ class CommandSurfaceTests(unittest.TestCase):
 
     def test_manual_mentions_current_module_boundaries(self):
         manual_text = build_manual_text(Path("data"))
+        self.assertIn("cli/archive_execution.py", manual_text)
         self.assertIn("cli/config_view.py", manual_text)
         self.assertIn("cli/save_pipeline.py", manual_text)
         self.assertIn("core/scraper_payloads.py", manual_text)
+        self.assertIn("Textual TUI", manual_text)
+        self.assertIn("home launcher", manual_text)
+
+    def test_tui_and_legacy_use_execution_bridge_instead_of_cli_app_privates(self):
+        runner_text = (REPO_ROOT / "cli" / "tui" / "runner.py").read_text(encoding="utf-8")
+        legacy_text = (REPO_ROOT / "cli" / "interactive_legacy.py").read_text(encoding="utf-8")
+
+        self.assertIn("from cli.archive_execution import fetch_and_save_result", runner_text)
+        self.assertNotIn("from cli.app import _fetch_and_save_result", runner_text)
+        self.assertIn("from cli.archive_execution import fetch_and_save", legacy_text)
+        self.assertNotIn("from cli.app import _fetch_and_save", legacy_text)
 
     def test_bilingual_readmes_keep_core_command_snippets(self):
         readme_cn = (REPO_ROOT / "README.md").read_text(encoding="utf-8")

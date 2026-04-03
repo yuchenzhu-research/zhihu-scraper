@@ -19,6 +19,8 @@ class InstallContractTests(unittest.TestCase):
         self.assertIn('cli/app.py check', install_script)
         self.assertIn('install_global_launcher', install_script)
         self.assertIn('.local/cookies.json', install_script)
+        self.assertIn('sys.version_info >= (3, 14)', install_script)
+        self.assertNotIn('cli/app.py check || true', install_script)
 
     def test_platform_docs_reference_windows_runbook(self):
         platform_doc = (REPO_ROOT / "docs/PLATFORM_SUPPORT.md").read_text(encoding="utf-8")

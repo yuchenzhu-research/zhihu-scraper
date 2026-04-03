@@ -23,12 +23,18 @@ class DocsSyncTests(unittest.TestCase):
         self.assertIn("interactive --legacy", readme_cn)
         self.assertIn("Textual TUI", readme_en)
         self.assertIn("interactive --legacy", readme_en)
+        self.assertIn("首页 launcher", readme_cn)
+        self.assertIn("home launcher", readme_en)
+        self.assertIn("协议优先", readme_cn)
+        self.assertIn("protocol-first", readme_en)
 
     def test_manual_mentions_platform_boundary_and_launcher_flow(self):
         manual_text = build_manual_text(Path("data"))
         self.assertIn("docs/PLATFORM_SUPPORT.md", manual_text)
         self.assertIn("cli/launcher_flow.py", manual_text)
         self.assertIn("--legacy", manual_text)
+        self.assertIn("opens the home launcher", manual_text)
+        self.assertIn("zhihu interactive", manual_text)
 
 
 if __name__ == "__main__":

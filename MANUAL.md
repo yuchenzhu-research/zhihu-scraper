@@ -10,6 +10,7 @@
 本项目是一个**本地优先**的知乎抓取与归档工具，目标是：
 
 - 输入知乎链接或本地任务清单
+- 默认走协议优先抓取，必要时回退浏览器
 - 抓取正文和必要元数据
 - 转换为 Markdown
 - 下载图片并保存为本地文件
@@ -77,6 +78,8 @@
 
 - `cli/app.py`
   Typer 命令注册与总入口。
+- `cli/archive_execution.py`
+  CLI / TUI / legacy 共用的执行桥，避免其他入口反向依赖 `cli.app` 私有 helper。
 - `cli/workflow_service.py`
   应用服务层，统一 `fetch / batch / creator / monitor` 的任务编排。
 - `cli/workflow_contracts.py`
@@ -167,7 +170,9 @@
 - 文档同步
 - 命令面
 - 配置 schema / runtime
+- workflow service / 执行桥边界
 - 保存链路
+- SQLite contract / schema 迁移
 - scraper contracts / payloads
 - TUI 基础流程
 - 安装契约
@@ -281,19 +286,44 @@
 
 ## 6. 核心数据流 / 运行流程
 
-### 6.1 单条抓取
+### 6.1 入口拓扑
+
+```text
+zhihu
+-> cli/app.py main()
+-> 无参数时进入 cli/launcher_flow.py 首页 launcher
+
+zhihu interactive
+-> cli/interactive.py
+-> 直接启动 Textual TUI
+
+zhihu interactive --legacy
+-> cli/interactive_legacy.py
+-> 旧 Rich / questionary 回退路径
+
+zhihu fetch / creator / batch / monitor / query / config / check / manual
+-> cli/app.py Typer 命令入口
+```
+
+说明：
+
+- `zhihu` 是首页 launcher，不是 Textual TUI 的别名
+- `zhihu interactive` 是当前默认交互工作台的直达入口
+- `zhihu interactive --legacy` 仅用于兼容与排障
+
+### 6.2 单条抓取
 
 ```text
 用户输入 URL
--> cli/app.py 命令入口
+-> cli/app.py fetch 命令入口
 -> cli/workflow_service.py 统一抓取工作流
 -> core/scraper.py 识别页面类型并抓取
--> core/converter.py 转 Markdown
--> cli/save_pipeline.py 保存 Markdown / 图片 / SQLite
+-> article 路径优先走协议抓取，必要时回退浏览器
+-> cli/save_pipeline.py 内部调用 converter / db 完成保存
 -> cli/save_contracts.py 返回保存结果 contract
 ```
 
-### 6.2 creator 流程
+### 6.3 creator 流程
 
 ```text
 creator URL / token
@@ -304,17 +334,23 @@ creator URL / token
 -> cli/workflow_contracts.py / cli/save_contracts.py 返回聚合结果
 ```
 
-### 6.3 interactive 流程
+### 6.4 interactive 流程
 
 ```text
 zhihu interactive
 -> cli/interactive.py 启动 Textual TUI
 -> 应用内构建 draft
--> 调用 cli/workflow_service.py 或 save pipeline 执行保存链路
+-> cli/archive_execution.py 执行共享抓取入口
+-> cli/workflow_service.py / cli/save_pipeline.py
 -> 展示最近结果与重试草案
 ```
 
-### 6.4 monitor 流程
+说明：
+
+- `zhihu` 无参数时先进入首页 launcher，再由用户决定是否进入 TUI
+- `zhihu interactive --legacy` 不属于推荐主路径
+
+### 6.5 monitor 流程
 
 ```text
 收藏夹 ID

@@ -54,21 +54,17 @@ from rich import print as rprint
 from rich.console import Console
 from rich.text import Text
 
+from cli.archive_execution import get_workflow_service
 from cli.config_view import build_config_snapshot, render_config_panel
 from cli.healthcheck import render_environment_check
 from cli.launcher_flow import LauncherCommands, LauncherRuntime, run_launcher, run_onboard_flow
 from cli.manual_content import build_manual_text
 from cli.optional_deps import get_questionary as _get_questionary
 from cli.save_pipeline import (
-    SavePipelineSettings,
     build_output_folder_name as render_output_folder_name,
-    fetch_and_save as run_fetch_and_save,
-    fetch_and_save_result as run_fetch_and_save_result,
-    fetch_creator_and_save as run_fetch_creator_and_save,
     resolve_creator_output_dir as resolve_creator_output_path,
     resolve_entries_output_dir as resolve_entries_output_path,
 )
-from cli.workflow_service import ArchiveWorkflowService, WorkflowServiceConfig
 from core.config import get_config, get_logger, get_humanizer, resolve_project_path
 from core.utils import extract_urls
 from core.errors import handle_error
@@ -79,7 +75,10 @@ from core.errors import handle_error
 
 app = typer.Typer(
     name="zhihu",
-    help="🕷️ Zhihu High-Quality Content Scraper / 知乎高质量内容爬取工具",
+    help=(
+        "🕷️ Local-first Zhihu archiver / 本地优先的知乎归档工具. "
+        "Run without arguments to open the home launcher / 无参数时打开首页 launcher."
+    ),
     add_completion=False,
     no_args_is_help=False,
 )
@@ -177,25 +176,8 @@ def resolve_creator_output_dir(base_dir: Path, url_token: str) -> Path:
     return resolve_creator_output_path(base_dir, url_token)
 
 
-def _get_save_pipeline_settings() -> SavePipelineSettings:
-    """Resolve save-pipeline settings from runtime config / 从运行时配置解析保存链路参数"""
-    cfg = _get_cfg()
-    return SavePipelineSettings(
-        folder_template=cfg.output.folder_format or "[{date}] {title}",
-        images_subdir=cfg.output.images_subdir or "images",
-        image_concurrency=cfg.crawler.images.concurrency,
-        image_timeout=cfg.crawler.images.timeout,
-    )
-
-
-def _get_workflow_service() -> ArchiveWorkflowService:
-    return ArchiveWorkflowService(
-        WorkflowServiceConfig(
-            save_settings=_get_save_pipeline_settings(),
-            printer=rprint,
-            logger=_get_log(),
-        )
-    )
+def _get_workflow_service():
+    return get_workflow_service(printer=rprint, logger=_get_log())
 
 
 def print_question_limit_warning(limit: int) -> None:
@@ -534,7 +516,7 @@ def query_db(
 
     Database structure:
     - Table: articles
-    - Fields: answer_id, type, title, author, url, content_md, collection_id, created_at, updated_at
+    - Fields: answer_id, content_key, type, title, author, url, content_md, collection_id, created_at, updated_at
 
     Examples:
         zhihu query "深度学习"              # Search title and content / 搜索标题和内容
@@ -593,11 +575,13 @@ def interactive(
     - Full-screen archive workbench with in-app URL input
     - Responsive centered layout, question-page limit modal, queue, recent results, and retry flow
     - Deprecated legacy fallback for regression checks only
+    - `zhihu` without arguments opens the launcher first
 
     功能：
     - 内置链接输入栏的全屏归档工作台
     - 响应式居中布局、问题页数量弹层、队列、最近结果与失败重试
     - 仅用于回归检查的旧版回退入口
+    - `zhihu` 无参数时会先进入首页 launcher
 
     Example:
         zhihu interactive
@@ -638,14 +622,14 @@ def config_cmd(
 
     if show:
         cfg = _get_cfg()
-        from core.cookie_manager import resolve_cookie_file_path, resolve_cookie_pool_dir
+        from core.cookie_manager import describe_cookie_file_path, describe_cookie_pool_dir
 
         snapshot = build_config_snapshot(
             cfg=cfg,
             config_path=Path(__file__).parent.parent / "config.yaml",
             resolve_project_path=resolve_project_path,
-            resolve_cookie_file_path=resolve_cookie_file_path,
-            resolve_cookie_pool_dir=resolve_cookie_pool_dir,
+            describe_cookie_file_path=describe_cookie_file_path,
+            describe_cookie_pool_dir=describe_cookie_pool_dir,
         )
         rprint(render_config_panel(snapshot))
 
@@ -658,7 +642,7 @@ def check() -> None:
 
     Checks:
     1. config.yaml exists
-    2. configured cookie file valid
+    2. cookie readiness and configured/active path compatibility
     3. Playwright browser available
     """
     render_environment_check()
@@ -712,100 +696,6 @@ async def _batch_concurrent(
         {"url": item.url, "success": item.success, **({"error": item.error} if item.error else {})}
         for item in result.items
     ]
-
-
-async def _fetch_and_save(
-    url: str,
-    output_dir: Path,
-    scrape_config: dict,
-    download_images: bool = True,
-    headless: bool = True,
-    collection_id: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Execute scraping and save to local files and database.
-    执行抓取并保存到本地文件和数据库。
-
-    Complete workflow:
-    1. Use ZhihuDownloader to scrape page data
-    2. Extract image URLs and download to images/ directory
-    3. Use ZhihuConverter to convert HTML to Markdown
-    4. Save as index.md file
-    5. Save to SQLite database
-
-    完整执行流程：
-    1. 使用 ZhihuDownloader 抓取页面数据
-    2. 提取图片 URL 并下载到 images/ 目录
-    3. 使用 ZhihuConverter 将 HTML 转换为 Markdown
-    4. 保存为 index.md 文件
-    5. 保存到 SQLite 数据库
-
-    Args:
-        url: Zhihu link / 知乎链接
-        output_dir: Output directory / 输出目录
-        scrape_config: Scraping config (like limit, start) / 抓取配置 (如 limit, start)
-        download_images: Whether to download images / 是否下载图片
-        headless: Headless mode (not effective in API mode) / 无头模式 (API 模式下不生效)
-        collection_id: Collection ID (for database record association) / 收藏夹 ID (关联数据库记录)
-    """
-    result = await _get_workflow_service().run_single_fetch(
-        url=url,
-        output_dir=output_dir,
-        scrape_config=scrape_config,
-        download_images=download_images,
-        headless=headless,
-        collection_id=collection_id,
-    )
-    if not result.success or result.save_result is None:
-        raise RuntimeError(result.error or f"Fetch failed for {url}")
-    return result.save_result.to_legacy_records()
-
-
-async def _fetch_and_save_result(
-    url: str,
-    output_dir: Path,
-    scrape_config: dict,
-    download_images: bool = True,
-    headless: bool = True,
-    collection_id: Optional[str] = None,
-):
-    """
-    Execute scraping and return the typed save result contract.
-    执行抓取，并返回类型化保存结果契约。
-    """
-    result = await _get_workflow_service().run_single_fetch(
-        url=url,
-        output_dir=output_dir,
-        scrape_config=scrape_config,
-        download_images=download_images,
-        headless=headless,
-        collection_id=collection_id,
-    )
-    if not result.success or result.save_result is None:
-        raise RuntimeError(result.error or f"Fetch failed for {url}")
-    return result.save_result
-
-
-async def _fetch_creator_and_save(
-    creator: str,
-    output_dir: Path,
-    answer_limit: int,
-    article_limit: int,
-    download_images: bool = True,
-) -> None:
-    """
-    Fetch creator content and save it using the standard local output pipeline.
-    抓取作者内容，并复用标准本地输出流程保存。
-    """
-    result = await _get_workflow_service().run_creator(
-        creator=creator,
-        output_dir=output_dir,
-        answer_limit=answer_limit,
-        article_limit=article_limit,
-        download_images=download_images,
-    )
-    if not result.success:
-        raise RuntimeError(f"Creator fetch failed for {creator}")
 
 
 # ============================================================

@@ -39,11 +39,21 @@ HOME MENU
   - `./zhihu`
   - `python3 cli/app.py`
 
+  Behavior / 行为:
+  - opens the home launcher, not the Textual workbench itself
+  - 打开首页 launcher，而不是直接进入 Textual 工作台
+
   Controls / 操作方式:
   - arrow keys: move / 方向键移动
   - `Enter`: confirm / 回车确认
   - `Space`: toggle checkbox options / 空格勾选复选项
   - `Ctrl+C`: exit current screen / 退出当前界面
+
+INTERACTIVE MODES
+  - `zhihu interactive`
+    direct entry to the default Textual TUI / 直达默认 Textual TUI
+  - `zhihu interactive --legacy`
+    compatibility fallback to the old Rich/questionary flow / 兼容回退到旧版 Rich/questionary
 
 COMMAND INDEX
   - onboard
@@ -160,6 +170,11 @@ COMMAND REFERENCE
   - full-screen archive workbench with draft, queue, recent-result, and retry flow
   - 全屏归档工作台，包含草案、队列、最近结果与失败重试
 
+  Entrypoints:
+  - `zhihu` opens the launcher first
+  - `zhihu interactive` opens the Textual workbench directly
+  - `zhihu interactive --legacy` opens the deprecated fallback
+
   Current support:
   - answer / article / question links
   - `Enter`: build current draft
@@ -219,7 +234,8 @@ PLATFORM SUPPORT
 
   ARCHITECTURE (LAYER MAP)
   CLI Layer
-  - `cli/app.py` command routing + orchestration
+  - `cli/app.py` command routing + terminal entrypoint
+  - `cli/archive_execution.py` shared execution bridge for CLI / TUI / legacy
   - `cli/config_view.py` config summary rendering
   - `cli/launcher_flow.py` home menu + onboarding flow
   - `cli/manual_content.py` built-in manual source
@@ -257,6 +273,7 @@ QUICK START
   - `./install.sh`
   - `./install.sh --recreate`  # when the local environment is broken
   - `zhihu`                    # open the home menu / 打开首页菜单
+  - `zhihu interactive`        # open the Textual TUI directly / 直达 Textual 工作台
   - `zhihu check`
   - `zhihu manual`
 """.strip()

@@ -21,7 +21,30 @@
 6. 运行一次 `zhihu check`
 7. 安装全局命令 `zhihu`
 
-## 2. 单条抓取工作流
+## 2. 首页 / launcher 工作流
+
+入口命令：
+
+```bash
+zhihu
+```
+
+流程：
+
+```text
+cli/app.py main()
+-> 无参数分支
+-> cli/launcher_flow.py
+-> 首页菜单 / onboarding / 常用命令导航
+```
+
+说明：
+
+- `zhihu` 默认进入首页 launcher
+- `zhihu interactive` 才是直达 Textual TUI 的命令
+- `zhihu interactive --legacy` 是兼容回退路径
+
+## 3. 单条抓取工作流
 
 入口命令：
 
@@ -36,13 +59,13 @@ Typer command
 -> cli/app.py
 -> cli/workflow_service.py
 -> core/scraper.py
--> core/converter.py
--> cli/save_pipeline.py
+-> protocol-first fetch, with browser fallback when needed
+-> cli/save_pipeline.py (converter + Markdown/images/SQLite persistence)
 -> cli/save_contracts.py
 -> data/entries/... + zhihu.db
 ```
 
-## 3. creator 工作流
+## 4. creator 工作流
 
 入口命令：
 
@@ -61,7 +84,7 @@ cli/app.py
 -> data/creators/<url_token>/
 ```
 
-## 4. batch 工作流
+## 5. batch 工作流
 
 入口命令：
 
@@ -84,7 +107,7 @@ cli/app.py
 - 批量流程的汇总结果由 `cli/workflow_contracts.py` 提供
 - 单条失败不会污染其它成功结果的保存记录
 
-## 5. monitor 工作流
+## 6. monitor 工作流
 
 入口命令：
 
@@ -108,31 +131,52 @@ cli/app.py
 - 当本轮存在失败项时，不推进 pointer
 - 避免增量任务静默跳过失败内容
 
-## 6. interactive 工作流
+## 7. interactive 工作流
 
 入口命令：
 
 ```bash
+zhihu
 zhihu interactive
 zhihu interactive --legacy
 ```
 
 说明：
 
+- `zhihu` 打开首页 launcher，而不是直接进入 TUI
 - `interactive` 当前默认是 Textual TUI
 - `interactive --legacy` 为兼容与排障路径
 
 主流程：
 
 ```text
+zhihu interactive
+-> cli/interactive.py
+-> Textual TUI
+```
+
+通过首页进入时：
+
+```text
+zhihu
+-> cli/launcher_flow.py
+-> 选择 interactive
+-> cli/interactive.py
+-> Textual TUI
+```
+
+TUI 内部主流程：
+
+```text
 输入 URL / 文本
 -> 生成 draft
 -> 执行当前 draft
--> 调用 cli/workflow_service.py 或 save pipeline
+-> cli/archive_execution.py
+-> cli/workflow_service.py / cli/save_pipeline.py
 -> 展示最近执行结果 / 失败重试
 ```
 
-## 7. config / check / manual 工作流
+## 8. config / check / manual 工作流
 
 ### `zhihu config --show`
 
@@ -143,6 +187,7 @@ zhihu interactive --legacy
 
 - 检查配置文件
 - 检查 Cookie 状态
+- 检查 configured path / active path 是否仍在命中旧路径兼容
 - 检查 Playwright 可用性
 - 目标是诊断，不是打印原始崩溃日志
 - 当前诊断逻辑在 `cli/healthcheck.py`
@@ -152,7 +197,7 @@ zhihu interactive --legacy
 - 打开内置 terminal manual
 - 内容来源于 `cli/manual_content.py`
 
-## 8. 文档维护工作流
+## 9. 文档维护工作流
 
 当以下内容发生变化时，默认需要同步：
 
@@ -170,7 +215,7 @@ zhihu interactive --legacy
 4. `cli/manual_content.py`
 5. `docs/` 下相关专题文档
 
-## 9. 测试与回归工作流
+## 10. 测试与回归工作流
 
 最小回归集合：
 
@@ -182,7 +227,7 @@ zhihu interactive --legacy
 
 - `docs/STAGE5_VALIDATION_MATRIX.md`
 
-## 10. 当前维护建议
+## 11. 当前维护建议
 
 - 命令入口优先走 `cli/workflow_service.py`，不要再把 fetch/batch/monitor 编排堆回 `cli/app.py`
 - 新工作优先在稳定 contract 边界上推进

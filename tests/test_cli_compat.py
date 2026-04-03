@@ -1,12 +1,14 @@
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import typer
 
 import cli.optional_deps as optional_deps
 from cli.app import _get_questionary, build_output_folder_name
-from cli.healthcheck import summarize_playwright_failure
+from cli.healthcheck import collect_environment_checks, summarize_playwright_failure
 from core.config import Config
+from core.cookie_manager import RuntimePathResolution
 from core.utils import sanitize_filename
 
 
@@ -82,6 +84,52 @@ class HealthcheckSummaryTests(unittest.TestCase):
         self.assertIsNotNone(hint)
         assert hint is not None
         self.assertIn("playwright install chromium", hint)
+
+    def test_collect_environment_checks_reports_legacy_cookie_fallback(self):
+        cfg = Config.from_dict(
+            {
+                "zhihu": {
+                    "cookies": {
+                        "file": ".local/cookies.json",
+                        "pool_dir": ".local/cookie_pool",
+                        "required": True,
+                    }
+                }
+            }
+        )
+        with patch("cli.healthcheck.get_config", return_value=cfg):
+            with patch("core.cookie_manager.has_real_cookie_values", return_value=True):
+                with patch("core.cookie_manager.count_available_cookie_sources", return_value=2):
+                    with patch(
+                        "core.cookie_manager.describe_cookie_file_path",
+                        return_value=RuntimePathResolution(
+                            configured_path=Path("/repo/.local/cookies.json"),
+                            active_path=Path("/repo/cookies.json"),
+                            legacy_path=Path("/repo/cookies.json"),
+                            used_legacy_fallback=True,
+                        ),
+                    ):
+                        with patch(
+                            "core.cookie_manager.describe_cookie_pool_dir",
+                            return_value=RuntimePathResolution(
+                                configured_path=Path("/repo/.local/cookie_pool"),
+                                active_path=Path("/repo/.local/cookie_pool"),
+                                legacy_path=Path("/repo/cookie_pool"),
+                                used_legacy_fallback=False,
+                            ),
+                        ):
+                            with patch(
+                                "cli.healthcheck.asyncio.run",
+                                side_effect=lambda coro: coro.close(),
+                            ):
+                                items = collect_environment_checks()
+
+        compatibility = next(item for item in items if item.label == "Cookie 路径兼容 / Cookie path compatibility")
+        self.assertEqual(compatibility.status, "warn")
+        self.assertIn("configured /repo/.local/cookies.json -> active /repo/cookies.json", compatibility.detail)
+        self.assertIsNotNone(compatibility.hint)
+        assert compatibility.hint is not None
+        self.assertIn(".local/", compatibility.hint)
 
 
 if __name__ == "__main__":

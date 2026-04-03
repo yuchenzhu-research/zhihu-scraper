@@ -132,6 +132,8 @@ config.yaml
 
 - 仓库根目录不再推荐直接承载长期凭据
 - `.local/` 用于存放凭据、日志等运行态文件
+- `zhihu config --show` 会同时显示 configured path 和 active path
+- 如果由于兼容策略实际命中了仓库根目录旧路径，`zhihu config --show` 和 `zhihu check` 都会明确显示 legacy fallback 状态
 
 ## 5. 单例与 facade
 

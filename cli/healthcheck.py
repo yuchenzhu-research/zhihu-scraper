@@ -104,21 +104,21 @@ def collect_environment_checks() -> list[CheckItem]:
 
     from core.cookie_manager import (
         count_available_cookie_sources,
+        describe_cookie_file_path,
+        describe_cookie_pool_dir,
         has_real_cookie_values,
-        resolve_cookie_file_path,
-        resolve_cookie_pool_dir,
     )
 
-    cookies_path = resolve_cookie_file_path(cfg.zhihu.cookies_file)
-    cookie_pool_dir = resolve_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
-    primary_cookie_ready = has_real_cookie_values(cookies_path)
+    cookie_file = describe_cookie_file_path(cfg.zhihu.cookies_file)
+    cookie_pool = describe_cookie_pool_dir(cfg.zhihu.cookies_pool_dir)
+    primary_cookie_ready = has_real_cookie_values(cookie_file.active_path)
     available_sources = count_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
 
     items.append(
         CheckItem(
             label="主 Cookie 文件 / Primary cookie",
             status="ok" if primary_cookie_ready else "warn",
-            detail=str(cookies_path),
+            detail=str(cookie_file.active_path),
             hint=None if primary_cookie_ready else "当前主 Cookie 仍未就绪；游客模式可运行，但结果范围和稳定性更弱。",
         )
     )
@@ -126,10 +126,36 @@ def collect_environment_checks() -> list[CheckItem]:
         CheckItem(
             label="可用号源数 / Available sessions",
             status="ok" if available_sources else "warn",
-            detail=f"{available_sources} (pool: {cookie_pool_dir})",
+            detail=f"{available_sources} (pool: {cookie_pool.active_path})",
             hint=None if available_sources else "建议补上 `.local/cookie_pool/` 或至少一组有效登录态。",
         )
     )
+    if cookie_file.used_legacy_fallback or cookie_pool.used_legacy_fallback:
+        compatibility_detail_parts = []
+        if cookie_file.used_legacy_fallback:
+            compatibility_detail_parts.append(
+                f"cookie file: configured {cookie_file.configured_path} -> active {cookie_file.active_path}"
+            )
+        if cookie_pool.used_legacy_fallback:
+            compatibility_detail_parts.append(
+                f"cookie pool: configured {cookie_pool.configured_path} -> active {cookie_pool.active_path}"
+            )
+        items.append(
+            CheckItem(
+                label="Cookie 路径兼容 / Cookie path compatibility",
+                status="warn",
+                detail="; ".join(compatibility_detail_parts),
+                hint="当前仍命中仓库根目录旧路径兼容。建议逐步迁移到 `.local/`，把凭据和号源池收口到统一运行目录。",
+            )
+        )
+    else:
+        items.append(
+            CheckItem(
+                label="Cookie 路径兼容 / Cookie path compatibility",
+                status="ok",
+                detail="Using canonical .local runtime paths / 正在使用推荐的 .local 运行目录",
+            )
+        )
 
     try:
         asyncio.run(_probe_playwright())

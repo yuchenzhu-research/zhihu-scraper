@@ -9,7 +9,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from typing import Callable
 
-from cli.app import _fetch_and_save_result
+from cli.archive_execution import fetch_and_save_result
 from cli.tui.state import (
     DraftSummary,
     DraftTarget,
@@ -49,7 +49,7 @@ def execute_draft_run(
         try:
             with redirect_stdout(buffer), redirect_stderr(buffer):
                 save_result = asyncio.run(
-                    _fetch_and_save_result(
+                    fetch_and_save_result(
                         url=target.url,
                         output_dir=output_dir,
                         scrape_config=_build_scrape_config(target),

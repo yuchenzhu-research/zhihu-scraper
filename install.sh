@@ -110,6 +110,12 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 PYTHON_BIN="$(command -v python3)"
+if ! "$PYTHON_BIN" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 14) else 1)'; then
+    echo "   ❌ 当前 python3 不满足要求，必须使用 Python 3.14+"
+    "$PYTHON_BIN" --version || true
+    exit 1
+fi
+
 PYTHON_VER="$("$PYTHON_BIN" --version)"
 echo "   ✅ $PYTHON_VER ($PYTHON_BIN)"
 
@@ -177,7 +183,11 @@ fi
 
 echo ""
 echo "📌 运行环境检查..."
-"$VENV_PYTHON" cli/app.py check || true
+if "$VENV_PYTHON" cli/app.py check; then
+    echo "   ✅ 环境检查已完成"
+else
+    echo "   ⚠️ 环境检查未完全通过，请优先处理上面的诊断信息"
+fi
 
 echo ""
 echo "📌 安装全局命令入口..."

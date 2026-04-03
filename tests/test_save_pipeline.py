@@ -1,12 +1,16 @@
+import asyncio
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from cli.save_pipeline import (
+    SavePipelineSettings,
     build_output_folder_name,
     resolve_creator_output_dir,
     resolve_entries_output_dir,
+    save_items_result,
     write_creator_metadata,
 )
 
@@ -57,6 +61,7 @@ class CreatorMetadataTests(unittest.TestCase):
                     "url_token": "demo-user",
                     "profile_url": "https://www.zhihu.com/people/demo-user",
                     "headline": "writer",
+                    "description": '<a href="https://link.zhihu.com/?target=https%3A//example.com/">https://example.com/</a>',
                 },
                 [
                     {
@@ -79,8 +84,54 @@ class CreatorMetadataTests(unittest.TestCase):
 
             self.assertEqual(creator_json["url_token"], "demo-user")
             self.assertEqual(creator_json["saved_articles"], 1)
+            self.assertEqual(creator_json["description"], "https://example.com/")
             self.assertIn("## Summary / 概览", creator_readme)
+            self.assertIn("https://example.com/", creator_readme)
+            self.assertNotIn("<a href=", creator_readme)
             self.assertIn("[index.md](2026-04-03_demo--article-1/index.md)", creator_readme)
+
+
+class SavePipelineFailureTests(unittest.TestCase):
+    def test_save_items_result_raises_when_sqlite_write_fails(self):
+        class FailingDb:
+            def __init__(self, *_args, **_kwargs):
+                self.closed = False
+
+            def save_article(self, *_args, **_kwargs):
+                return False
+
+            def close(self):
+                self.closed = True
+
+        item = {
+            "id": "42",
+            "type": "answer",
+            "url": "https://www.zhihu.com/question/1/answer/42",
+            "title": "Demo",
+            "author": "Tester",
+            "html": "<p>hello</p>",
+            "date": "2026-04-03",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings = SavePipelineSettings(
+                folder_template="[{date}] {title}",
+                images_subdir="images",
+                image_concurrency=4,
+                image_timeout=30,
+            )
+            with patch("cli.save_pipeline.ZhihuDatabase", FailingDb):
+                with self.assertRaisesRegex(RuntimeError, "SQLite save failed"):
+                    asyncio.run(
+                        save_items_result(
+                            items=[item],
+                            content_root=Path(tmpdir) / "entries",
+                            db_root=Path(tmpdir),
+                            settings=settings,
+                            download_images=False,
+                            source_url_fallback=item["url"],
+                        )
+                    )
 
 
 if __name__ == "__main__":

@@ -111,8 +111,8 @@ def _render_launcher_header(runtime: LauncherRuntime) -> None:
     cookie_status = "已就绪" if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir) else "需要 Cookie"
     browser_status = "后台运行" if cfg.zhihu.browser.headless else "显示窗口"
     content = Text.assemble(
-        ("知乎爬虫", "bold cyan"),
-        ("  ·  知乎抓取首页\n", "white"),
+        ("知乎归档", "bold cyan"),
+        ("  ·  首页 launcher\n", "white"),
         ("输出目录: ", "bold magenta"),
         (f"{default_output_dir}", "white"),
         ("  |  登录状态: ", "bold magenta"),
@@ -171,7 +171,7 @@ def run_onboard_flow(runtime: LauncherRuntime, *, from_command: bool = False) ->
 
 
 def run_launcher(runtime: LauncherRuntime) -> None:
-    """Default home menu / 默认首页菜单"""
+    """Default home launcher / 默认首页 launcher"""
     questionary = runtime.get_questionary()
     default_output_dir = runtime.get_default_output_dir()
     default_headless = runtime.get_default_browser_headless()
