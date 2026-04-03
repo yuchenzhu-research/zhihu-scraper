@@ -49,6 +49,7 @@ from typing import Optional, List, Dict, Any
 from random import uniform
 import asyncio
 import json
+import importlib
 import sys
 import typer
 from rich import print as rprint
@@ -118,6 +119,17 @@ def _resolve_headless(headless: Optional[bool]) -> bool:
     return _get_default_browser_headless() if headless is None else headless
 
 
+def _get_questionary():
+    """Import questionary lazily with actionable guidance / 延迟导入 questionary 并提供明确提示"""
+    try:
+        return importlib.import_module("questionary")
+    except ModuleNotFoundError as exc:
+        rprint("[bold yellow]⚠️ Missing optional TTY dependency / 缺少交互式终端依赖：questionary[/bold yellow]")
+        rprint("请重新同步当前分支依赖，例如：")
+        rprint("[cyan]pip install -e .[/cyan]  或  [cyan]./install.sh --recreate[/cyan]")
+        raise typer.Exit(code=1) from exc
+
+
 def print_result(
     title: str,
     author: str,
@@ -148,8 +160,9 @@ def build_output_folder_name(item_date: str, title: str, author: str, item_key: 
     except KeyError:
         rendered = f"[{item_date}] {title}"
 
-    rendered = sanitize_filename(rendered, max_length=120)
-    return f"{rendered} ({item_key})"
+    rendered = sanitize_filename(rendered, max_length=100, shell_safe=True)
+    safe_item_key = sanitize_filename(item_key, max_length=80, shell_safe=True)
+    return f"{rendered}--{safe_item_key}"
 
 
 def resolve_entries_output_dir(base_dir: Path) -> Path:
@@ -199,7 +212,7 @@ def print_creator_limit_warning(answers: int, articles: int) -> None:
 
 def _launcher_style():
     """Lazy questionary style builder / 延迟构建 questionary 主题"""
-    from questionary import Style
+    Style = _get_questionary().Style
 
     return Style([
         ("question", "fg:#00C8FF bold"),
@@ -214,7 +227,7 @@ def _launcher_style():
 
 def _input_positive_int(prompt: str, default: str) -> int:
     """Questionary helper for positive integers / 正整数输入助手"""
-    import questionary
+    questionary = _get_questionary()
 
     value = questionary.text(
         prompt,
@@ -227,7 +240,7 @@ def _input_positive_int(prompt: str, default: str) -> int:
 
 def _input_non_negative_int(prompt: str, default: str) -> int:
     """Questionary helper for non-negative integers / 非负整数输入助手"""
-    import questionary
+    questionary = _get_questionary()
 
     value = questionary.text(
         prompt,
@@ -240,7 +253,7 @@ def _input_non_negative_int(prompt: str, default: str) -> int:
 
 def _collect_fetch_options(url: str) -> Dict[str, Any]:
     """Collect quick-fetch options from launcher / 从首页菜单收集抓取参数"""
-    import questionary
+    questionary = _get_questionary()
 
     limit: Optional[int] = None
     if "/question/" in url and "/answer/" not in url:
@@ -289,7 +302,7 @@ def _render_launcher_header() -> None:
 
 def _run_onboard_flow(*, from_command: bool = False) -> None:
     """Minimal onboarding flow inspired by guided CLIs / 最小 onboarding 引导"""
-    import questionary
+    questionary = _get_questionary()
     from core.cookie_manager import has_available_cookie_sources, resolve_cookie_file_path
 
     cfg = _get_cfg()
@@ -336,7 +349,7 @@ def _run_onboard_flow(*, from_command: bool = False) -> None:
 
 def _run_launcher() -> None:
     """Default home menu / 默认首页菜单"""
-    import questionary
+    questionary = _get_questionary()
 
     default_output_dir = _get_default_output_dir()
     default_headless = _get_default_browser_headless()

@@ -19,9 +19,9 @@ from typing import Any, Dict, Optional, Union
 from dataclasses import dataclass, field
 
 import yaml
-import structlog
 
 from .runtime_paths import DEFAULT_COOKIE_FILE, DEFAULT_COOKIE_POOL_DIR, DEFAULT_LOG_FILE
+from .structlog_compat import BoundLoggerBase, STRUCTLOG_AVAILABLE, setup_fallback_logging, structlog
 
 # ============================================================
 # Configuration Data Classes (配置数据类)
@@ -139,6 +139,7 @@ class OutputConfig:
     format: str = "markdown"
     images_subdir: str = "images"
     folder_format: str = "[{date}] {title}"
+    download_images: Optional[bool] = None
 
 @dataclass
 class LoggingConfig:
@@ -454,6 +455,13 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
     import logging
 
     log_level = getattr(logging, log_config.level.upper(), logging.INFO)
+    log_path = resolve_project_path(log_config.file) if log_config.file else None
+
+    if not STRUCTLOG_AVAILABLE:
+        if log_path is not None:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+        setup_fallback_logging(log_config.level, log_file=str(log_path) if log_path else None)
+        return
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,
@@ -473,8 +481,7 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
     )
 
     handlers = [logging.StreamHandler()]
-    if log_config.file:
-        log_path = resolve_project_path(log_config.file)
+    if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
 
@@ -503,7 +510,7 @@ from random import uniform
 from contextlib import asynccontextmanager
 
 
-def get_logger(name: str = "zhihu-scraper") -> structlog.BoundLoggerBase:
+def get_logger(name: str = "zhihu-scraper") -> BoundLoggerBase:
     """
     Get structured logger
     获取结构化日志记录器

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 from pathlib import Path
 
-import structlog
+from .structlog_compat import BoundLoggerBase, structlog
 
 
 class ErrorSeverity(Enum):
@@ -322,7 +322,7 @@ def classify_error(error: Exception) -> ZhihuScraperError:
     )
 
 
-def handle_error(error: Exception, logger: Optional[structlog.BoundLoggerBase] = None) -> None:
+def handle_error(error: Exception, logger: Optional[BoundLoggerBase] = None) -> None:
     """
     Unified entry point for exception handling
     处理异常的统一入口
