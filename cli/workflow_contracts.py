@@ -55,8 +55,13 @@ class MonitorWorkflowResult:
     discovered_count: int
     batch: BatchWorkflowResult
     pointer_advanced: bool
+    unsupported_count: int = 0
     next_pointer: Optional[str] = None
 
     @property
     def has_new_items(self) -> bool:
         return self.discovered_count > 0
+
+    @property
+    def has_new_activity(self) -> bool:
+        return self.discovered_count + self.unsupported_count > 0

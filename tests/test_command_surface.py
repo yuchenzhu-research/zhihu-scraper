@@ -71,6 +71,12 @@ class CommandSurfaceTests(unittest.TestCase):
         self.assertNotIn("def resolve_creator_output_dir(", app_text)
         self.assertNotIn("def _batch_concurrent(", app_text)
 
+    def test_tui_runner_reuses_workflow_scrape_config_helper(self):
+        runner_text = (REPO_ROOT / "cli" / "tui" / "runner.py").read_text(encoding="utf-8")
+
+        self.assertIn("build_scrape_config_for_url", runner_text)
+        self.assertNotIn("def _build_scrape_config(", runner_text)
+
     def test_bilingual_readmes_keep_core_command_snippets(self):
         readme_cn = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")

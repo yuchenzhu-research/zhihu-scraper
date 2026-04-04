@@ -430,8 +430,17 @@ def monitor(
         handle_error(e, log)
         raise SystemExit(1)
 
-    if not result.has_new_items:
+    if not result.has_new_activity:
         rprint("[green]✨ No new content in collection, monitoring ends / 收藏夹没有新增内容，监控结束。[/green]")
+        return
+
+    if not result.has_new_items:
+        rprint(
+            "[cyan]⏭️ Detected new collection activity, but no answer/article items were ready for archiving "
+            f"/ 检测到收藏夹有新增动态，但没有可归档的回答或文章（跳过 {result.unsupported_count} 个不支持条目）。[/cyan]"
+        )
+        if result.pointer_advanced and result.next_pointer:
+            rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {result.next_pointer}[/cyan]")
         return
 
     rprint(f"\n[bold]🛒 Preparing to download {result.discovered_count} new items... / 准备下载 {result.discovered_count} 个新内容...[/bold]")
