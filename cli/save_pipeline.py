@@ -18,6 +18,7 @@ from cli.creator_metadata import write_creator_metadata
 from cli.save_contracts import CreatorSaveResult, SavePipelineError, SaveRunResult, SavedContentRecord
 from core.converter import ZhihuConverter
 from core.db import ZhihuDatabase
+from core.media_downloader import MediaDownloader
 from core.scraper import ZhihuCreatorDownloader, ZhihuDownloader
 from core.scraper_contracts import ScrapedItem, to_scraped_items
 from core.utils import sanitize_filename
@@ -294,7 +295,7 @@ async def save_items_result(
                 img_urls = ZhihuConverter.extract_image_urls(item.html)
                 if img_urls:
                     printer(f"   📥 Downloading {len(img_urls)} images... / 下载 {len(img_urls)} 张图片...")
-                    img_map = await ZhihuDownloader.download_images(
+                    img_map = await MediaDownloader.download_images(
                         img_urls,
                         folder / settings.images_subdir,
                         concurrency=settings.image_concurrency,
