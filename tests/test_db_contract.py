@@ -7,6 +7,10 @@ from core.db import ZhihuDatabase
 
 
 class DatabaseContractTests(unittest.TestCase):
+    def test_build_content_key_normalizes_type_and_id(self):
+        self.assertEqual(ZhihuDatabase.build_content_key("42", "answer"), "answer:42")
+        self.assertEqual(ZhihuDatabase.build_content_key("42", None), "unknown:42")
+
     def test_content_key_allows_same_numeric_id_for_different_item_types(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db = ZhihuDatabase(str(Path(tmpdir) / "zhihu.db"))
@@ -112,6 +116,29 @@ class DatabaseContractTests(unittest.TestCase):
             db.close()
 
         self.assertEqual(count, 2)
+
+    def test_search_articles_returns_content_key_in_results(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db = ZhihuDatabase(str(Path(tmpdir) / "zhihu.db"))
+            self.assertTrue(
+                db.save_article(
+                    {
+                        "id": "99",
+                        "type": "article",
+                        "title": "Transformer 笔记",
+                        "author": "Demo",
+                        "url": "https://zhuanlan.zhihu.com/p/99",
+                    },
+                    "Transformer body",
+                )
+            )
+
+            rows = db.search_articles("Transformer", limit=5)
+            db.close()
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["content_key"], "article:99")
+        self.assertEqual(rows[0]["answer_id"], "99")
 
 
 if __name__ == "__main__":

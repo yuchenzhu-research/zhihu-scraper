@@ -85,6 +85,12 @@ class CommandSurfaceTests(unittest.TestCase):
             self.assertIn(snippet, readme_cn)
             self.assertIn(snippet, readme_en)
 
+    def test_query_surface_uses_content_key_label(self):
+        app_text = (REPO_ROOT / "cli" / "app.py").read_text(encoding="utf-8")
+
+        self.assertIn('table.add_column("Content Key"', app_text)
+        self.assertNotIn('table.add_column("Zhihu ID"', app_text)
+
 
 if __name__ == "__main__":
     unittest.main()

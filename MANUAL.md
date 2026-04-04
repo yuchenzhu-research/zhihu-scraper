@@ -395,6 +395,9 @@ zhihu interactive
 - `CreatorSaveResult`
   表示作者抓取+保存的聚合结果。
 
+数据库读取层当前以 `content_key = type:id` 作为稳定身份；
+`answer_id` 仅作为历史兼容字段保留，新的 query / search 展示也应优先使用 `content_key`。
+
 ### 7.3 设计意图
 
 这些 contracts 的目的不是“为了类型而类型”，而是：

@@ -142,6 +142,16 @@ class ZhihuDatabase:
         """)
         cursor.execute("DROP TABLE articles_legacy")
 
+    @staticmethod
+    def build_content_key(answer_id: str, item_type: Optional[str] = None) -> str:
+        """
+        Build the stable typed identity used by the current database schema.
+        构造当前数据库模式使用的稳定类型化主键。
+        """
+        normalized_id = str(answer_id)
+        normalized_type = str(item_type or "unknown") or "unknown"
+        return f"{normalized_type}:{normalized_id}"
+
     def save_article(self, item: Dict[str, Any], content_md: str, collection_id: Optional[str] = None) -> bool:
         """
         Save or update scraped article/answer (UPSERT).
@@ -155,7 +165,7 @@ class ZhihuDatabase:
             return False
 
         item_type = str(item.get("type", "unknown") or "unknown")
-        content_key = f"{item_type}:{answer_id}"
+        content_key = self.build_content_key(answer_id, item_type)
         title = item.get("title", "Untitled")
         author = item.get("author", "Unknown")
         url = item.get("url", "")
@@ -183,14 +193,15 @@ class ZhihuDatabase:
 
     def exists(self, answer_id: str, item_type: Optional[str] = None) -> bool:
         """
-        Check if specific ID already exists in database
-        检查特定 ID 是否已存在库中
+        Check whether a record already exists in the database.
+        When item_type is omitted, falls back to the legacy untyped answer_id lookup.
+        检查记录是否已存在库中；未传 item_type 时回退到旧的 answer_id 兼容查询。
         """
         cursor = self.conn.cursor()
         if item_type:
             cursor.execute(
                 "SELECT 1 FROM articles WHERE content_key = ?",
-                (f"{item_type}:{answer_id}",),
+                (self.build_content_key(answer_id, item_type),),
             )
         else:
             cursor.execute("SELECT 1 FROM articles WHERE answer_id = ?", (str(answer_id),))
@@ -204,7 +215,7 @@ class ZhihuDatabase:
         cursor = self.conn.cursor()
         search_term = f"%{keyword}%"
         cursor.execute("""
-            SELECT answer_id, type, title, author, url, created_at
+            SELECT answer_id, content_key, type, title, author, url, created_at
             FROM articles
             WHERE title LIKE ? OR content_md LIKE ?
             ORDER BY created_at DESC

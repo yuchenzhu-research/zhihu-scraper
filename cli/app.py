@@ -496,7 +496,7 @@ def query_db(
     table.add_column("Author", style="green")
     table.add_column("Title", style="magenta", overflow="fold")
     table.add_column("Captured At", style="dim")
-    table.add_column("Zhihu ID", justify="right", style="blue")
+    table.add_column("Content Key", style="blue")
 
     for row in results:
         table.add_row(
@@ -504,7 +504,7 @@ def query_db(
             row["author"],
             row["title"],
             row["created_at"].split("T")[0],
-            row["answer_id"]
+            row["content_key"],
         )
 
     rprint(table)
