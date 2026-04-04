@@ -390,6 +390,8 @@ zhihu interactive
   表示一条已保存内容及其落盘位置。
 - `SaveRunResult`
   表示一次保存任务的结果集合。
+- `SavePipelineError`
+  表示保存链路中途失败时的类型化异常，附带部分已保存结果与失败条目上下文。
 - `CreatorSaveResult`
   表示作者抓取+保存的聚合结果。
 

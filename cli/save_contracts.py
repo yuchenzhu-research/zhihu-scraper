@@ -56,10 +56,30 @@ class SaveRunResult:
         return [record.to_legacy_dict() for record in self.records]
 
 
+class SavePipelineError(RuntimeError):
+    """Typed save-pipeline failure with partial archive context."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        partial_result: SaveRunResult,
+        failed_item: ScrapedItem,
+        failed_markdown_path: Path,
+    ) -> None:
+        super().__init__(message)
+        self.partial_result = partial_result
+        self.failed_item = failed_item
+        self.failed_markdown_path = failed_markdown_path
+
+    @property
+    def saved_count(self) -> int:
+        return self.partial_result.saved_count
+
+
 @dataclass(frozen=True)
 class CreatorSaveResult:
     creator: CreatorProfileSummary
     save_result: SaveRunResult
     answers: PaginationStats
     articles: PaginationStats
-

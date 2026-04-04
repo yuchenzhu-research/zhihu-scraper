@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from cli.save_contracts import SaveRunResult
+from cli.save_contracts import SavePipelineError, SaveRunResult
 from cli.save_pipeline import SavePipelineSettings
 from cli.workflow_contracts import BatchWorkflowResult, UrlTaskResult
 from cli.workflow_service import (
@@ -11,6 +11,7 @@ from cli.workflow_service import (
     build_scrape_config_for_url,
 )
 from core.monitor import CollectionDelta
+from core.scraper_contracts import ScrapedItem
 
 
 class WorkflowContractTests(unittest.TestCase):
@@ -269,6 +270,43 @@ class WorkflowServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result.success)
         self.assertIn("boom", result.error)
+
+    async def test_run_single_fetch_keeps_partial_save_context_for_save_pipeline_error(self):
+        partial_result = SaveRunResult(
+            source_url="https://www.zhihu.com/question/1/answer/2",
+            content_root=Path("data/entries"),
+            records=(),
+        )
+        failed_item = ScrapedItem(
+            id="2",
+            type="answer",
+            url="https://www.zhihu.com/question/1/answer/2",
+            title="Demo",
+            author="Tester",
+            html="<p>hello</p>",
+            date="2026-04-03",
+        )
+
+        async def broken_fetch_runner(**_kwargs):
+            raise SavePipelineError(
+                "SQLite save failed after writing Markdown for answer:2; 0 item(s) were already archived to disk",
+                partial_result=partial_result,
+                failed_item=failed_item,
+                failed_markdown_path=Path("data/entries/demo/index.md"),
+            )
+
+        service = self._make_service(fetch_runner=broken_fetch_runner, error_handler=lambda *_args, **_kwargs: None)
+        result = await service.run_single_fetch(
+            url="https://www.zhihu.com/question/1/answer/2",
+            output_dir=Path("data"),
+            scrape_config={},
+            download_images=False,
+            headless=True,
+        )
+
+        self.assertFalse(result.success)
+        self.assertIs(result.partial_save_result, partial_result)
+        self.assertIn("SQLite save failed", result.error)
 
 
 if __name__ == "__main__":

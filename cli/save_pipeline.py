@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 from rich import print as rprint
 
 from cli.creator_metadata import write_creator_metadata
-from cli.save_contracts import CreatorSaveResult, SaveRunResult, SavedContentRecord
+from cli.save_contracts import CreatorSaveResult, SavePipelineError, SaveRunResult, SavedContentRecord
 from core.converter import ZhihuConverter
 from core.db import ZhihuDatabase
 from core.scraper import ZhihuCreatorDownloader, ZhihuDownloader
@@ -319,8 +319,20 @@ async def save_items_result(
 
             db_saved = db.save_article(item.to_dict(), full_md, collection_id=collection_id)
             if not db_saved:
-                raise RuntimeError(
-                    f"SQLite save failed after writing Markdown for {item.type}:{item.id}"
+                partial_result = SaveRunResult(
+                    source_url=source_url_fallback,
+                    content_root=content_root,
+                    records=tuple(saved_records),
+                    collection_id=collection_id,
+                )
+                raise SavePipelineError(
+                    (
+                        f"SQLite save failed after writing Markdown for {item.type}:{item.id}; "
+                        f"{partial_result.saved_count} item(s) were already archived to disk"
+                    ),
+                    partial_result=partial_result,
+                    failed_item=item,
+                    failed_markdown_path=out_path,
                 )
             saved_records.append(
                 SavedContentRecord(

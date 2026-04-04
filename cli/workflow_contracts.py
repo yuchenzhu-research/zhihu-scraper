@@ -15,6 +15,7 @@ class UrlTaskResult:
     url: str
     success: bool
     save_result: Optional[SaveRunResult] = None
+    partial_save_result: Optional[SaveRunResult] = None
     error: Optional[str] = None
 
 

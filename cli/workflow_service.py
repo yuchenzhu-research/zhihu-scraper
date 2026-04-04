@@ -15,7 +15,7 @@ from typing import Awaitable, Callable, Optional, Sequence
 
 from rich import print as rprint
 
-from cli.save_contracts import CreatorSaveResult, SaveRunResult
+from cli.save_contracts import CreatorSaveResult, SavePipelineError, SaveRunResult
 from cli.save_pipeline import SavePipelineSettings, fetch_and_save_result, fetch_creator_and_save_result
 from cli.workflow_contracts import BatchWorkflowResult, CreatorWorkflowResult, MonitorWorkflowResult, UrlTaskResult
 from core.errors import handle_error
@@ -166,6 +166,14 @@ class ArchiveWorkflowService:
                 printer=self._config.printer,
             )
             return UrlTaskResult(url=url, success=True, save_result=save_result)
+        except SavePipelineError as error:
+            self._error_handler(error, self._config.logger)
+            return UrlTaskResult(
+                url=url,
+                success=False,
+                partial_save_result=error.partial_result,
+                error=str(error),
+            )
         except Exception as error:
             self._error_handler(error, self._config.logger)
             return UrlTaskResult(url=url, success=False, error=str(error))

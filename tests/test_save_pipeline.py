@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from cli.save_contracts import SavePipelineError
 from cli.save_pipeline import (
     SavePipelineSettings,
     build_output_folder_name,
@@ -92,26 +93,39 @@ class CreatorMetadataTests(unittest.TestCase):
 
 
 class SavePipelineFailureTests(unittest.TestCase):
-    def test_save_items_result_raises_when_sqlite_write_fails(self):
+    def test_save_items_result_raises_typed_error_with_partial_context(self):
         class FailingDb:
             def __init__(self, *_args, **_kwargs):
                 self.closed = False
+                self.calls = 0
 
             def save_article(self, *_args, **_kwargs):
-                return False
+                self.calls += 1
+                return self.calls == 1
 
             def close(self):
                 self.closed = True
 
-        item = {
-            "id": "42",
-            "type": "answer",
-            "url": "https://www.zhihu.com/question/1/answer/42",
-            "title": "Demo",
-            "author": "Tester",
-            "html": "<p>hello</p>",
-            "date": "2026-04-03",
-        }
+        items = [
+            {
+                "id": "42",
+                "type": "answer",
+                "url": "https://www.zhihu.com/question/1/answer/42",
+                "title": "Demo",
+                "author": "Tester",
+                "html": "<p>hello</p>",
+                "date": "2026-04-03",
+            },
+            {
+                "id": "43",
+                "type": "article",
+                "url": "https://zhuanlan.zhihu.com/p/43",
+                "title": "Second",
+                "author": "Tester",
+                "html": "<p>world</p>",
+                "date": "2026-04-03",
+            },
+        ]
 
         with tempfile.TemporaryDirectory() as tmpdir:
             settings = SavePipelineSettings(
@@ -121,17 +135,25 @@ class SavePipelineFailureTests(unittest.TestCase):
                 image_timeout=30,
             )
             with patch("cli.save_pipeline.ZhihuDatabase", FailingDb):
-                with self.assertRaisesRegex(RuntimeError, "SQLite save failed"):
+                with self.assertRaises(SavePipelineError) as captured:
                     asyncio.run(
                         save_items_result(
-                            items=[item],
+                            items=items,
                             content_root=Path(tmpdir) / "entries",
                             db_root=Path(tmpdir),
                             settings=settings,
                             download_images=False,
-                            source_url_fallback=item["url"],
+                            source_url_fallback=items[0]["url"],
+                            printer=lambda *_args, **_kwargs: None,
                         )
                     )
+                error = captured.exception
+                self.assertEqual(error.saved_count, 1)
+                self.assertEqual(error.partial_result.saved_count, 1)
+                self.assertEqual(error.failed_item.id, "43")
+                self.assertTrue(error.failed_markdown_path.exists())
+                self.assertIn("SQLite save failed", str(error))
+                self.assertIn("1 item(s) were already archived to disk", str(error))
 
 
 if __name__ == "__main__":
