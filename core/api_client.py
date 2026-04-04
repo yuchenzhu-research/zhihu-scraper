@@ -21,7 +21,8 @@ from typing import Optional, Dict
 import execjs
 from curl_cffi import requests
 
-from .config import get_logger, summarize_text_for_logs
+import time
+from .config import get_logger, summarize_text_for_logs, get_config
 from .cookie_manager import cookie_manager
 
 # Default global JS signature interpreter path
@@ -51,9 +52,18 @@ class ZhihuAPIClient:
         """
         self._cookies_dict = cookie_manager.get_current_session() or {}
 
+        cfg = get_config()
+        proxies = None
+        if cfg.crawler.proxy:
+            proxies = {
+                "http": cfg.crawler.proxy,
+                "https": cfg.crawler.proxy,
+                "all": cfg.crawler.proxy,
+            }
+
         # Re-initialize underlying curl handshake even when switching proxies
         # 即使只切代理也重新初始化底层的 curl 握手
-        self.session = requests.Session(impersonate="chrome110")
+        self.session = requests.Session(impersonate="chrome110", proxies=proxies)
 
         # Base request headers / 基础请求头
         self.session.headers.update({
@@ -168,39 +178,57 @@ class ZhihuAPIClient:
         """
         url = f"https://www.zhihu.com{path}"
 
-        # Get dynamic signature for current path
-        # 获取针对当前路径的动态签名
-        sig_headers = self._get_signature(path)
+        cfg = get_config()
+        max_attempts = cfg.crawler.retry.max_attempts
+        base_delay = cfg.crawler.retry.base_delay
 
-        req_headers = {}
-        if sig_headers:
-            req_headers.update(sig_headers)
+        for attempt in range(1, max_attempts + 1):
+            # Get dynamic signature for current path
+            # 获取针对当前路径的动态签名
+            sig_headers = self._get_signature(path)
 
-        try:
-            self.log.info("api_request", url=url)
-            # Use curl_cffi for fingerprint-level request
-            # 使用 curl_cffi 进行指纹级请求
-            response = self.session.get(url, headers=req_headers, timeout=15.0)
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 403:
-                self.log.error(
-                    "api_forbidden",
-                    status=403,
-                    response_preview=summarize_text_for_logs(response.text, kind="response"),
-                )
-                # Trigger rotation and notify upstream to retry
-                # 触发轮换并通知上游进行一次重试
-                cookie_manager.rotate_session()
-                # Reload underlying session / 重新载入底层 session
-                self._init_session()
-                raise Exception("请求遭到知乎安全盾 403 拦截，已尝试轮换 Cookie 池。")
-            else:
-                self.log.error("api_error", status=response.status_code)
-                return None
-        except Exception as e:
-            self.log.error("api_fetch_failed", error=str(e))
-            raise
+            req_headers = {}
+            if sig_headers:
+                req_headers.update(sig_headers)
+
+            try:
+                self.log.info("api_request", url=url, attempt=attempt)
+                # Use curl_cffi for fingerprint-level request
+                # 使用 curl_cffi 进行指纹级请求
+                response = self.session.get(url, headers=req_headers, timeout=15.0)
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code in (403, 429):
+                    self.log.error(
+                        "api_ratelimit_or_forbidden",
+                        status=response.status_code,
+                        attempt=attempt,
+                        response_preview=summarize_text_for_logs(response.text, kind="response"),
+                    )
+                    
+                    if attempt < max_attempts:
+                        delay = min(base_delay * (cfg.crawler.retry.exponential_base ** (attempt - 1)), cfg.crawler.retry.max_delay)
+                        self.log.warning("api_retrying", delay=delay)
+                        time.sleep(delay)
+                        
+                        if response.status_code == 403:
+                            cookie_manager.rotate_session()
+                            self._init_session()
+                        continue
+                    else:
+                        if response.status_code == 403:
+                            cookie_manager.rotate_session()
+                            self._init_session()
+                        raise Exception(f"请求遭到 HTTP {response.status_code} 拦截，重试 {max_attempts} 次后仍失败。")
+                else:
+                    self.log.error("api_error", status=response.status_code)
+                    return None
+            except Exception as e:
+                self.log.error("api_fetch_failed", error=str(e), attempt=attempt)
+                if attempt == max_attempts:
+                    raise
+                delay = min(base_delay * (cfg.crawler.retry.exponential_base ** (attempt - 1)), cfg.crawler.retry.max_delay)
+                time.sleep(delay)
 
     def get_answer(self, answer_id: str) -> dict:
         """

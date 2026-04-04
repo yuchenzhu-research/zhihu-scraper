@@ -81,6 +81,12 @@ class InputCard(Widget):
 class ArchiveInput(TextArea):
     """Multiline-safe input surface that still submits on Enter."""
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        if hasattr(self, "soft_wrap"):
+            self.soft_wrap = True
+        self.show_line_numbers = False
+
     class Submitted(Message):
         """Posted when the archive input should be parsed as a draft."""
 

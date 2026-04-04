@@ -17,6 +17,7 @@ class BrowserConfig:
     viewport: Dict[str, int] = field(default_factory=lambda: {"width": 1920, "height": 1080})
     channel: str = "chrome"
     args: list = field(default_factory=list)
+    user_data_dir: Optional[str] = None
 
 
 @dataclass
@@ -89,6 +90,7 @@ class CrawlerConfig:
     scroll: ScrollConfig = field(default_factory=ScrollConfig)
     humanize: HumanizeConfig = field(default_factory=HumanizeConfig)
     images: ImagesConfig = field(default_factory=ImagesConfig)
+    proxy: Optional[str] = None
 
 
 @dataclass
@@ -138,6 +140,7 @@ def build_config_from_dict(raw: Dict[str, Any]) -> Config:
         scroll=ScrollConfig(**crawler_raw.get("scroll", {})),
         humanize=HumanizeConfig.from_dict(crawler_raw.get("humanize", {})),
         images=ImagesConfig(**crawler_raw.get("images", {})),
+        proxy=crawler_raw.get("proxy", None),
     )
 
     output = OutputConfig(**raw.get("output", {}))
