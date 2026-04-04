@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-04-05 / 核心抓取链路加固与 TUI 故障修复
+
+### 相关 commits
+- `302ccd5` feat: enhance scraper with proxy/retry and fix TUI layout issues
+
+### 本次修改
+- 清理了 `docs/` 目录下的阶段性历史过渡文件（如 STAGE 1~6 系列的梳理文档及 TUI 合并清单），减轻维护认知负担。
+- **硬核提升**：
+  - 在 `api_client.py` 引入全局隧道代理（Proxy）配置，并加上了智能延时+指数退避的防封抗拦截重试机制。
+  - 针对 `browser_fallback.py` 的 Playwright 环境抛出 `user_data_dir` 支持，依靠本地持久化降低降级强制唤醒时的二次风控率。
+- **UI & TUI 优化**：针对在 `zhihu interactive` 界面下，由于粘贴超长知乎链接时 Textual `TextArea` 未换行且无限侵占高度，引发“图三空框挤压坍塌”的渲染漏洞进行了 CSS 排版重构与 `soft_wrap` 软换行支持。
+
+### 解决的问题
+- 解决了在短时间大批量抓取触发知乎 403 / 429 后，原架构易直接崩溃抛错，无法缓冲延缓重试的问题。
+- 彻底封锁了 TUI `HomeStage` 中长 URL 输入撑破固定高度网格（StatusPill）导致界面悬停黑框的恶性视觉 Bug。
+- 移除了项目历史迭代中不再具有时效性的临时总结及计划 Markdown，收紧了 `/docs` 下的核心长效文档。
+
+### 影响范围
+- `docs/` 相关废弃文档
+- `core/api_client.py`
+- `core/browser_fallback.py`
+- `core/config_schema.py`
+- `cli/tui/theme.tcss`
+- `cli/tui/widgets.py`
+
+### 风险 / 未完成事项
+- `browser.channel` 启动失败回退等机制还需要在生产环境中跑跑看重试开销。
+
+### 下一步
+- 进一步观察现有代理配置在集群或重度使用中稳定情况。
+
+---
+
 ## 2026-04-04 / `structure-alignment` 十二阶段结构收口与主分支日志对齐
 
 ### 相关 commits
