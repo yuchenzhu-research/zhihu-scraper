@@ -34,7 +34,6 @@ from cli.tui.widgets import (
     HomeStage,
     InputCard,
     QueueCard,
-    StatusPill,
     SummaryCard,
 )
 
@@ -73,10 +72,6 @@ class ZhihuInteractiveShell(App[None]):
         yield Container(
             HomeStage(
                 HeroCard(self._snapshot.eyebrow, self._snapshot.title, self._snapshot.subtitle),
-                Grid(
-                    *(StatusPill(item.label, item.value, item.tone) for item in self._snapshot.statuses),
-                    id="status-grid",
-                ),
                 InputCard(),
                 SummaryCard(self._draft.title, self._draft.lines, self._draft.tone),
                 Grid(

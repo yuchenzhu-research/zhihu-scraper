@@ -11,22 +11,12 @@ from core.utils import detect_url_type, extract_id_from_url, extract_urls
 
 
 @dataclass(frozen=True)
-class StatusItem:
-    """Single status pill shown on the TUI home screen."""
-
-    label: str
-    value: str
-    tone: str
-
-
-@dataclass(frozen=True)
 class HomeSnapshot:
     """Static home screen snapshot."""
 
     eyebrow: str
     title: str
     subtitle: str
-    statuses: tuple[StatusItem, ...]
     notes: tuple[str, ...]
     cookie_ready: bool
 
@@ -115,11 +105,6 @@ def build_home_snapshot() -> HomeSnapshot:
         eyebrow="ZHIHU ARCHIVE",
         title="知乎归档台",
         subtitle="一个围绕抓取、归档与后续检索而设计的全屏终端工作台",
-        statuses=(
-            StatusItem("Cookie", "已就绪" if cookie_ready else "未检测到", "success" if cookie_ready else "warn"),
-            StatusItem("浏览器", browser_mode, "accent" if not cfg.zhihu.browser.headless else "muted"),
-            StatusItem("旧版回退", "--legacy", "muted"),
-        ),
         notes=(
             "回车会先生成归档草案，按 Ctrl+R 执行当前草案。",
             "按 Ctrl+Y 可载入最近一轮失败项，生成重试草案。",

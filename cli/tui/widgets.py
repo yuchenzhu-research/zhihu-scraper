@@ -28,28 +28,6 @@ class HeroCard(Widget):
         yield Static(self._subtitle, classes="hero-subtitle")
 
 
-class StatusPill(Static):
-    """Compact status block for the home overview."""
-
-    _TONE_COLORS = {
-        "success": "#30d158",
-        "warn": "#ffd60a",
-        "accent": "#0a84ff",
-        "muted": "#8e8e93",
-    }
-
-    def __init__(self, label: str, value: str, tone: str) -> None:
-        super().__init__("", classes="status-pill")
-        self._label = label
-        self._value = value
-        self._tone = tone
-
-    def render(self) -> Group:
-        label = Align.center(Text(self._label, style="#8e8e93"))
-        value = Align.center(Text(self._value, style=f"bold {self._TONE_COLORS.get(self._tone, '#f5f5f7')}"))
-        return Group(label, value)
-
-
 class HintCard(Widget):
     """Secondary copy block below the hero content."""
 

@@ -56,36 +56,6 @@ Screen {
     text-align: center;
 }
 
-#status-grid {
-    width: 100%;
-    height: auto;
-    min-height: 5;
-    layout: grid;
-    grid-size: 3 1;
-    grid-columns: 1fr 1fr 1fr;
-    grid-gutter: 1 1;
-    margin-bottom: 1;
-}
-
-.compact #status-grid {
-    grid-size: 2 2;
-    grid-columns: 1fr 1fr;
-}
-
-.narrow #status-grid {
-    grid-size: 1 3;
-    grid-columns: 1fr;
-}
-
-.status-pill {
-    height: 5;
-    padding: 1 1;
-    background: #171718;
-    border: round #3a3a3c;
-    content-align: center middle;
-    text-align: center;
-}
-
 .tone-success {
     color: #30d158;
 }
