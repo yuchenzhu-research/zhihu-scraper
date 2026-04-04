@@ -23,7 +23,38 @@
 - 无
 
 ### 迁移提示
-- 当前历史已经压缩进下方两个基线节点；新的版本记录建议从本节开始。
+- 当前历史已经压缩进下方三个基线节点；新的版本记录建议从本节开始。
+
+---
+
+## [2026-04-04：`structure-alignment` 十二阶段结构收口] - 2026-04-04
+
+### 新增
+- 新增 `cli/archive_execution.py` 作为 CLI、TUI、legacy 共享执行桥，减少入口层对私有 helper 的依赖。
+- 新增 SQLite `content_key = type:id` 读取/展示闭环，使 query 面与数据库真实主键一致。
+- 新增保存失败 typed context、monitor 增量状态和 creator 元数据清洗相关回归测试。
+
+### 变更
+- 以十二阶段方式完成一轮结构收口：文档真相层、入口拓扑、安装契约、配置运行时、CLI 瘦身、workflow 默认语义、保存闭环、数据库身份模型、creator/monitor 边角和最终验证矩阵全部串联整理。
+- `zhihu` / `interactive` / `interactive --legacy` 的主次路径表述与帮助文本进一步统一。
+- `config --show`、`check`、monitor pointer 规则、query 输出、creator README/JSON 元信息都对齐到当前主结构。
+
+### 修复
+- 修复了保存链路中 SQLite 写入失败会被静默吞掉的问题，现在失败会带上部分已保存结果和失败条目上下文。
+- 修复了 monitor 在收藏夹顶部只有不支持归档的新条目时可能反复扫描同一批头部噪音的问题。
+- 修复了 creator 元信息中遗留 HTML 片段直接落到 README/JSON 的问题。
+- 修复了 query 展示仍以裸 `answer_id` 作为公开身份、容易混淆 answer/article 同号内容的问题。
+
+### 移除
+- 进一步移除了 `cli/app.py` 中失去职责的死 helper 和重复编排压力。
+
+### 兼容性影响
+- 旧 Cookie 路径、旧 launcher/legacy 入口仍保留兼容，但状态已经被更明确地暴露和降权。
+- `answer_id` 仍保留为历史兼容字段，但数据库和 query 的稳定身份已收口到 `content_key`。
+
+### 迁移提示
+- 维护者后续应优先沿 `workflow service`、`save pipeline`、`content_key`、`monitor delta` 这些已收口边界继续演进，而不是把逻辑重新堆回命令层。
+- 建议继续把实际运行时凭据逐步迁移到 `.local/`，避免长期依赖仓库根目录 Cookie 兼容路径。
 
 ---
 

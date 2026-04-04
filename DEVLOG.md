@@ -2,6 +2,81 @@
 
 ---
 
+## 2026-04-04 / `structure-alignment` 十二阶段结构收口与主分支日志对齐
+
+### 相关 commits
+- `3e26f6a` Align archive structure and runtime contracts
+- `9e033c4` Clarify launcher as the recommended TUI path
+- `73fb9fe` Clarify install and platform support contracts
+- `2418b21` Stabilize config runtime fallback behavior
+- `a0c5d84` Trim dead helpers from CLI entry layer
+- `75f420b` Unify workflow defaults and monitor pointer handling
+- `783e0d3` Add typed save pipeline failure context
+- `3faadb3` Align query surface with typed content keys
+- `1b76514` Normalize creator metadata and monitor delta handling
+
+### 本次修改
+- 以十二阶段方式对 `structure-alignment` 做了一轮完整收口。
+- 阶段 1：冻结基线、跑通现状校验、建立 `structure-alignment` 工作分支。
+- 阶段 2：对齐 README / README_EN / MANUAL / built-in manual / workflows 中的产品定位、入口关系和协议优先表达。
+- 阶段 3：把 launcher、`interactive`、`interactive --legacy` 的主次关系压清楚。
+- 阶段 4：整理安装脚本、Python 基线、平台支持文档和安装契约。
+- 阶段 5：稳定配置运行时回退路径，并让配置缺失/损坏场景的行为一致。
+- 阶段 6：继续压薄 `cli/app.py`，清掉失去职责的 helper。
+- 阶段 7：统一 question-page scrape config 的默认语义，让不同入口复用同一套规则。
+- 阶段 8：收 monitor pointer 规则，明确 unsupported-only 新活动与失败项时的推进策略。
+- 阶段 9：把保存链路失败升级为 typed context，保留部分已保存结果与失败条目上下文。
+- 阶段 10：把 SQLite / query 的稳定身份统一到 `content_key = type:id`。
+- 阶段 11：清洗 creator 元信息里的 HTML 残留，并补上 monitor / creator 的直接回归测试。
+- 阶段 12：完成完整验证矩阵、命令面 smoke 和最终 branch 收口。
+- 同时把 `main` 上更新过的 `CHANGELOG.md` / `DEVLOG.md` 基线同步回 `structure-alignment`，避免两个分支的日志体系继续分叉。
+
+### 解决的问题
+- 解决了 `structure-alignment` 上日志文件仍停留在模板占位、无法反映真实阶段工作的情况。
+- 解决了入口、安装、配置、workflow、monitor、保存链路、数据库身份和 creator 元信息之间多处“表面清楚、底层不一致”的问题。
+- 解决了 query 仍展示裸 `answer_id`、monitor 可能反复扫描 unsupported 头部条目、creator README 落原始 HTML 等具体维护痛点。
+- 解决了 `cli/app.py` 继续承担过多历史 helper 的问题，进一步把职责下沉到更稳定的边界。
+- 解决了 `structure-alignment` 与 `main` 在 changelog/devlog 记录体系上的漂移。
+
+### 影响范围
+- `README.md`
+- `README_EN.md`
+- `MANUAL.md`
+- `cli/app.py`
+- `cli/archive_execution.py`
+- `cli/config_view.py`
+- `cli/creator_metadata.py`
+- `cli/healthcheck.py`
+- `cli/interactive_legacy.py`
+- `cli/launcher_flow.py`
+- `cli/manual_content.py`
+- `cli/save_contracts.py`
+- `cli/save_pipeline.py`
+- `cli/workflow_contracts.py`
+- `cli/workflow_service.py`
+- `core/config_runtime.py`
+- `core/cookie_manager.py`
+- `core/db.py`
+- `core/monitor.py`
+- `docs/`
+- `.github/workflows/ci.yml`
+- `tests/`
+- `CHANGELOG.md`
+- `DEVLOG.md`
+
+### 风险 / 未完成事项
+- `core/scraper.py` 仍然是主复杂度热点，这轮没有深拆。
+- 旧 Cookie 路径兼容仍然存在，`check` 已能诊断，但实际迁移还需要后续人工收口。
+- legacy / compatibility 路径已经明显降权，但还未完全移除。
+- 本轮以结构清晰度和契约收口为主，没有做全平台真机抓取验证。
+
+### 下一步
+- 后续新工作建议直接在 `Unreleased` 和新的 DEVLOG 条目里继续累积，不再回到模板占位文件。
+- 如继续演进，优先沿 `workflow service`、`save pipeline`、`content_key`、`monitor delta`、`config runtime/schema` 这些已收口边界推进。
+- 若准备下一轮大功能或发布，先做一次实网抓取回归和平台验证，再决定是否继续拆 `core/scraper.py`。
+
+---
+
 ## 2026-04-02 / 历史基线：项目启动到 TUI 重构落地前的整体沉淀
 
 ### 相关 commits
