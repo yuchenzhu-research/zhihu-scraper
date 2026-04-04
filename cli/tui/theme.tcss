@@ -132,6 +132,7 @@ Screen {
     background: #141415;
     border: round #3a3a3c;
     margin-bottom: 1;
+    transition: border 0.4s;
 }
 
 #workflow-grid {
@@ -226,6 +227,23 @@ Screen {
 #history-card.tone-danger .card-title,
 #detail-card.tone-danger .card-title {
     color: #ff453a;
+}
+
+/* --- Tone specific borders for visual effects --- */
+#draft-card.tone-accent, #queue-card.tone-accent, #history-card.tone-accent, #detail-card.tone-accent {
+    border: round #0a84ff;
+}
+
+#draft-card.tone-success, #queue-card.tone-success, #history-card.tone-success, #detail-card.tone-success {
+    border: round #30d158;
+}
+
+#draft-card.tone-warn, #queue-card.tone-warn, #history-card.tone-warn, #detail-card.tone-warn {
+    border: round #ffd60a;
+}
+
+#draft-card.tone-danger, #queue-card.tone-danger, #history-card.tone-danger, #detail-card.tone-danger {
+    border: round #ff453a;
 }
 
 Footer {
