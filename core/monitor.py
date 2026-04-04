@@ -36,6 +36,10 @@ class CollectionDelta:
     def has_supported_items(self) -> bool:
         return bool(self.items)
 
+    @property
+    def has_new_activity(self) -> bool:
+        return self.unseen_count > 0
+
 
 class CollectionMonitor:
     """
@@ -167,7 +171,7 @@ class CollectionMonitor:
         # 暂时不保存状态，待外部完全抓取成功后再调用 mark_updated 保存状态
         return CollectionDelta(
             items=tuple(new_items),
-            next_pointer=first_item_id_in_this_run,
+            next_pointer=first_item_id_in_this_run if unseen_count > 0 else None,
             unseen_count=unseen_count,
             unsupported_count=unsupported_count,
         )

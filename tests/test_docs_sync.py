@@ -36,6 +36,10 @@ class DocsSyncTests(unittest.TestCase):
         self.assertIn("opens the home launcher", manual_text)
         self.assertIn("zhihu interactive", manual_text)
 
+    def test_manual_mentions_monitor_pointer_rule_for_unsupported_items(self):
+        manual_text = build_manual_text(Path("data"))
+        self.assertIn("unsupported-only new collection items still advance the pointer", manual_text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from cli.creator_metadata import _normalize_creator_text
 from cli.save_contracts import SavePipelineError
 from cli.save_pipeline import (
     SavePipelineSettings,
@@ -61,8 +62,8 @@ class CreatorMetadataTests(unittest.TestCase):
                     "name": "Demo User",
                     "url_token": "demo-user",
                     "profile_url": "https://www.zhihu.com/people/demo-user",
-                    "headline": "writer",
-                    "description": '<a href="https://link.zhihu.com/?target=https%3A//example.com/">https://example.com/</a>',
+                    "headline": "https://example.com/",
+                    "description": '<a href="https://link.zhihu.com/?target=https%3A//example.com/" class="external"><span>example</span></a>',
                 },
                 [
                     {
@@ -87,9 +88,18 @@ class CreatorMetadataTests(unittest.TestCase):
             self.assertEqual(creator_json["saved_articles"], 1)
             self.assertEqual(creator_json["description"], "https://example.com/")
             self.assertIn("## Summary / 概览", creator_readme)
-            self.assertIn("https://example.com/", creator_readme)
+            self.assertIn("> **Headline / 简介**: https://example.com/", creator_readme)
+            self.assertNotIn("> **Description / 描述**:", creator_readme)
             self.assertNotIn("<a href=", creator_readme)
             self.assertIn("[index.md](2026-04-03_demo--article-1/index.md)", creator_readme)
+
+    def test_normalize_creator_text_collapses_html_and_whitespace(self):
+        self.assertEqual(
+            _normalize_creator_text(
+                '<div>  graphics   researcher <a href="https://link.zhihu.com/?target=https%3A//example.com/">link</a></div>'
+            ),
+            "graphics researcher https://example.com/",
+        )
 
 
 class SavePipelineFailureTests(unittest.TestCase):
