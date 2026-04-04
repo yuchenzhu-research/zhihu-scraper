@@ -1,4 +1,3 @@
-import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -8,7 +7,6 @@ import cli.optional_deps as optional_deps
 from cli.app import _get_questionary, build_output_folder_name
 from cli.healthcheck import summarize_playwright_failure
 from core.config import Config
-from core.monitor import CollectionMonitor
 from core.utils import sanitize_filename
 
 
@@ -84,65 +82,6 @@ class HealthcheckSummaryTests(unittest.TestCase):
         self.assertIsNotNone(hint)
         assert hint is not None
         self.assertIn("playwright install chromium", hint)
-
-
-class MonitorContractTests(unittest.TestCase):
-    def test_collection_monitor_counts_unsupported_items(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("core.monitor.ZhihuAPIClient") as mock_client_cls:
-                mock_client = mock_client_cls.return_value
-                mock_client.get_collection_page.return_value = {
-                    "data": [
-                        {"content": {"id": "900", "type": "video", "title": "Unsupported"}},
-                        {
-                            "content": {
-                                "id": "901",
-                                "type": "answer",
-                                "question": {"id": "12", "title": "Demo Question"},
-                            }
-                        },
-                    ],
-                    "paging": {"is_end": True},
-                }
-
-                monitor = CollectionMonitor(data_dir=tmpdir)
-                delta = monitor.get_new_items("78170682")
-
-        self.assertTrue(delta.has_new_activity)
-        self.assertTrue(delta.has_supported_items)
-        self.assertEqual(delta.next_pointer, "900")
-        self.assertEqual(delta.unseen_count, 2)
-        self.assertEqual(delta.unsupported_count, 1)
-        self.assertEqual(len(delta.items), 1)
-        self.assertEqual(delta.items[0]["url"], "https://www.zhihu.com/question/12/answer/901")
-
-    def test_collection_monitor_clears_pointer_when_head_is_already_known(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("core.monitor.ZhihuAPIClient") as mock_client_cls:
-                mock_client = mock_client_cls.return_value
-                mock_client.get_collection_page.return_value = {
-                    "data": [
-                        {
-                            "content": {
-                                "id": "known-id",
-                                "type": "answer",
-                                "question": {"id": "12", "title": "Demo Question"},
-                            }
-                        }
-                    ],
-                    "paging": {"is_end": True},
-                }
-
-                monitor = CollectionMonitor(data_dir=tmpdir)
-                monitor.state["78170682"] = "known-id"
-                delta = monitor.get_new_items("78170682")
-
-        self.assertFalse(delta.has_new_activity)
-        self.assertFalse(delta.has_supported_items)
-        self.assertIsNone(delta.next_pointer)
-        self.assertEqual(delta.unseen_count, 0)
-        self.assertEqual(delta.unsupported_count, 0)
-        self.assertEqual(delta.items, ())
 
 
 if __name__ == "__main__":

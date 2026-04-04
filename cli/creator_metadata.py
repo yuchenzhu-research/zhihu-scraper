@@ -7,11 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 import json
 from pathlib import Path
-import re
 from typing import Any, Optional, Sequence, Tuple
-from urllib.parse import parse_qs, unquote, urlparse
-
-from bs4 import BeautifulSoup
 
 from cli.save_contracts import CreatorSaveResult, SaveRunResult, SavedContentRecord
 from core.scraper_contracts import CreatorProfileSummary
@@ -48,8 +44,8 @@ def write_creator_metadata(
             f"https://www.zhihu.com/people/{creator_payload.get('url_token', 'unknown')}",
         ),
         "avatar_url": creator_payload.get("avatar_url", ""),
-        "headline": _normalize_creator_text(creator_payload.get("headline", "")),
-        "description": _normalize_creator_text(creator_payload.get("description", "")),
+        "headline": creator_payload.get("headline", ""),
+        "description": creator_payload.get("description", ""),
         "follower_count": creator_payload.get("follower_count", 0),
         "following_count": creator_payload.get("following_count", 0),
         "voteup_count": creator_payload.get("voteup_count", 0),
@@ -228,37 +224,3 @@ def _coerce_creator_sync(sync_info: Optional[dict[str, Any] | CreatorSaveResult]
     if not sync_info:
         return {}, {}
     return sync_info.get("answers", {}), sync_info.get("articles", {})
-
-
-def _normalize_creator_text(value: Any) -> str:
-    raw = str(value or "").strip()
-    if not raw:
-        return ""
-    if "<" not in raw or ">" not in raw:
-        return _collapse_whitespace(raw)
-
-    soup = BeautifulSoup(raw, "html.parser")
-    for anchor in soup.find_all("a"):
-        replacement = _extract_anchor_target(anchor.get("href")) or _collapse_whitespace(anchor.get_text("", strip=True))
-        anchor.replace_with(replacement)
-
-    text = soup.get_text(" ", strip=True)
-    text = _collapse_whitespace(text)
-    text = text.replace("https:// ", "https://").replace("http:// ", "http://")
-    text = text.replace(" /", "/")
-    return text
-
-
-def _extract_anchor_target(href: Optional[str]) -> str:
-    if not href:
-        return ""
-    parsed = urlparse(href)
-    if parsed.netloc == "link.zhihu.com":
-        target = parse_qs(parsed.query).get("target", [""])[0]
-        if target:
-            return unquote(target)
-    return href
-
-
-def _collapse_whitespace(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()

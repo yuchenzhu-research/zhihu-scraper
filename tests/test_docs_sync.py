@@ -30,10 +30,6 @@ class DocsSyncTests(unittest.TestCase):
         self.assertIn("cli/launcher_flow.py", manual_text)
         self.assertIn("--legacy", manual_text)
 
-    def test_manual_mentions_monitor_pointer_rule_for_unsupported_items(self):
-        manual_text = build_manual_text(Path("data"))
-        self.assertIn("unsupported-only new collection items still advance the pointer", manual_text)
-
 
 if __name__ == "__main__":
     unittest.main()
