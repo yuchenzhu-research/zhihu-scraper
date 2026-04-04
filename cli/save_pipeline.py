@@ -8,13 +8,14 @@ metadata writing from the main CLI module so command entrypoints stay thin.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 from rich import print as rprint
 
 from cli.creator_metadata import write_creator_metadata
-from cli.save_contracts import CreatorSaveResult, SaveRunResult, SavedContentRecord
+from cli.save_contracts import CreatorSaveResult, SavePipelineError, SaveRunResult, SavedContentRecord
 from core.converter import ZhihuConverter
 from core.db import ZhihuDatabase
 from core.scraper import ZhihuCreatorDownloader, ZhihuDownloader
@@ -316,7 +317,23 @@ async def save_items_result(
             full_md = header + md
             out_path.write_text(full_md, encoding="utf-8")
 
-            db.save_article(item.to_dict(), full_md, collection_id=collection_id)
+            db_saved = db.save_article(item.to_dict(), full_md, collection_id=collection_id)
+            if not db_saved:
+                partial_result = SaveRunResult(
+                    source_url=source_url_fallback,
+                    content_root=content_root,
+                    records=tuple(saved_records),
+                    collection_id=collection_id,
+                )
+                raise SavePipelineError(
+                    (
+                        f"SQLite save failed after writing Markdown for {item.type}:{item.id}; "
+                        f"{partial_result.saved_count} item(s) were already archived to disk"
+                    ),
+                    partial_result=partial_result,
+                    failed_item=item,
+                    failed_markdown_path=out_path,
+                )
             saved_records.append(
                 SavedContentRecord(
                     item=item,
@@ -336,6 +353,8 @@ async def save_items_result(
         records=tuple(saved_records),
         collection_id=collection_id,
     )
+
+
 def _coerce_scraped_items(items: Sequence[ScrapedItem] | Sequence[dict[str, Any]]) -> Tuple[ScrapedItem, ...]:
     if not items:
         return ()

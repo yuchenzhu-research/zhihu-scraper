@@ -105,6 +105,13 @@ cp cookies.example.json .local/cookies.json
 - `cookies.json`
 - `cookie_pool/`
 
+运行后可用以下命令确认当前是否仍在命中旧路径兼容：
+
+- `zhihu config --show`
+- `zhihu check`
+
+它们会显示 configured path、active path，以及是否仍在使用仓库根目录旧 Cookie 路径。
+
 ### 3.3 最小运行
 
 ```bash
@@ -118,6 +125,15 @@ zhihu
 zhihu interactive
 zhihu interactive --legacy
 ```
+
+入口关系：
+
+- `zhihu`
+  打开首页 launcher，适合首次使用、命令导航和环境检查。
+- `zhihu interactive`
+  直接进入默认的 Textual TUI 归档工作台。
+- `zhihu interactive --legacy`
+  进入旧 Rich / questionary 回退路径，仅用于兼容与排障。
 
 ## 4. 命令总览
 
@@ -134,6 +150,15 @@ zhihu interactive --legacy
 - `zhihu check`
 - `zhihu manual`
 
+主入口关系：
+
+- `zhihu`
+  无参数时进入首页 launcher，不直接进入 Textual 工作台。
+- `zhihu interactive`
+  直达当前推荐的 Textual TUI。
+- `zhihu interactive --legacy`
+  直达兼容回退路径。
+
 常用例子：
 
 ```bash
@@ -149,6 +174,11 @@ zhihu config --show
 zhihu check
 zhihu manual
 ```
+
+补充说明：
+
+- `zhihu query` 当前会显示稳定身份 `content_key = type:id`
+- `answer_id` 仍保留为历史兼容字段，但不再作为唯一公开标识
 
 ## 5. 输出结构
 
@@ -211,7 +241,8 @@ Windows 运行细节见：
 
 ## 9. 当前交互入口说明
 
-`interactive` 当前默认是 **Textual TUI**。
+`zhihu` 无参数时会打开首页 launcher。  
+`zhihu interactive` 才是直达 **Textual TUI** 的命令。
 
 旧的 Rich / questionary 路径仍然保留为：
 
@@ -219,4 +250,5 @@ Windows 运行细节见：
 zhihu interactive --legacy
 ```
 
-它的定位是兼容与排障，不再是推荐主路径。
+它的定位是兼容与排障，不再是推荐主路径。  
+抓取链路仍然以“协议优先，必要时浏览器回退”为基本策略。

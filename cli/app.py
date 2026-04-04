@@ -45,8 +45,7 @@ app.py — CLI 增强模块
 """
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any
-from random import uniform
+from typing import Optional
 import asyncio
 import sys
 import typer
@@ -54,22 +53,13 @@ from rich import print as rprint
 from rich.console import Console
 from rich.text import Text
 
+from cli.archive_execution import get_workflow_service
 from cli.config_view import build_config_snapshot, render_config_panel
 from cli.healthcheck import render_environment_check
 from cli.launcher_flow import LauncherCommands, LauncherRuntime, run_launcher, run_onboard_flow
 from cli.manual_content import build_manual_text
 from cli.optional_deps import get_questionary as _get_questionary
-from cli.save_pipeline import (
-    SavePipelineSettings,
-    build_output_folder_name as render_output_folder_name,
-    fetch_and_save as run_fetch_and_save,
-    fetch_and_save_result as run_fetch_and_save_result,
-    fetch_creator_and_save as run_fetch_creator_and_save,
-    resolve_creator_output_dir as resolve_creator_output_path,
-    resolve_entries_output_dir as resolve_entries_output_path,
-)
-from cli.workflow_service import ArchiveWorkflowService, WorkflowServiceConfig
-from core.config import get_config, get_logger, get_humanizer, resolve_project_path
+from core.config import get_config, get_logger, resolve_project_path
 from core.utils import extract_urls
 from core.errors import handle_error
 
@@ -79,15 +69,14 @@ from core.errors import handle_error
 
 app = typer.Typer(
     name="zhihu",
-    help="🕷️ Zhihu High-Quality Content Scraper / 知乎高质量内容爬取工具",
+    help=(
+        "🕷️ Local-first Zhihu archiver / 本地优先的知乎归档工具. "
+        "Run without arguments to open the home launcher / 无参数时打开首页 launcher."
+    ),
     add_completion=False,
     no_args_is_help=False,
 )
 
-# Runtime defaults must stay side-effect free at import time.
-# 运行时默认值不能在 import 阶段触发配置加载或 Cookie 读取。
-DEFAULT_OUTPUT_DIR = Path("data")
-DEFAULT_BROWSER_HEADLESS = True
 console = Console()
 
 
@@ -129,73 +118,8 @@ def _resolve_headless(headless: Optional[bool]) -> bool:
     return _get_default_browser_headless() if headless is None else headless
 
 
-def print_result(
-    title: str,
-    author: str,
-    success: bool,
-    path: str = "",
-    error: Optional[str] = None
-) -> None:
-    """
-    Print single result / 打印单条结果
-    """
-    if success:
-        rprint(f"✅ [bold cyan]{author}[/] - [white]{title[:30]}...[/]")
-        rprint(f"   📁 {path}")
-    else:
-        rprint(f"❌ [bold cyan]{author}[/] - [yellow]{title[:30]}...[/]")
-        rprint(f"   💥 {error}")
-
-
-def build_output_folder_name(item_date: str, title: str, author: str, item_key: str) -> str:
-    """
-    Render output directory name from config template and append a stable unique suffix.
-    根据配置模板生成输出目录名，并附加稳定唯一后缀。
-    """
-    return render_output_folder_name(
-        item_date,
-        title,
-        author,
-        item_key,
-        folder_template=_get_cfg().output.folder_format,
-    )
-
-
-def resolve_entries_output_dir(base_dir: Path) -> Path:
-    """
-    Resolve the content root for normal fetch/batch/monitor outputs.
-    解析普通抓取输出的内容根目录。
-    """
-    return resolve_entries_output_path(base_dir)
-
-
-def resolve_creator_output_dir(base_dir: Path, url_token: str) -> Path:
-    """
-    Resolve the content root for creator outputs.
-    解析作者模式输出的内容根目录。
-    """
-    return resolve_creator_output_path(base_dir, url_token)
-
-
-def _get_save_pipeline_settings() -> SavePipelineSettings:
-    """Resolve save-pipeline settings from runtime config / 从运行时配置解析保存链路参数"""
-    cfg = _get_cfg()
-    return SavePipelineSettings(
-        folder_template=cfg.output.folder_format or "[{date}] {title}",
-        images_subdir=cfg.output.images_subdir or "images",
-        image_concurrency=cfg.crawler.images.concurrency,
-        image_timeout=cfg.crawler.images.timeout,
-    )
-
-
-def _get_workflow_service() -> ArchiveWorkflowService:
-    return ArchiveWorkflowService(
-        WorkflowServiceConfig(
-            save_settings=_get_save_pipeline_settings(),
-            printer=rprint,
-            logger=_get_log(),
-        )
-    )
+def _get_workflow_service():
+    return get_workflow_service(printer=rprint, logger=_get_log())
 
 
 def print_question_limit_warning(limit: int) -> None:
@@ -506,8 +430,17 @@ def monitor(
         handle_error(e, log)
         raise SystemExit(1)
 
-    if not result.has_new_items:
+    if not result.has_new_activity:
         rprint("[green]✨ No new content in collection, monitoring ends / 收藏夹没有新增内容，监控结束。[/green]")
+        return
+
+    if not result.has_new_items:
+        rprint(
+            "[cyan]⏭️ Detected new collection activity, but no answer/article items were ready for archiving "
+            f"/ 检测到收藏夹有新增动态，但没有可归档的回答或文章（跳过 {result.unsupported_count} 个不支持条目）。[/cyan]"
+        )
+        if result.pointer_advanced and result.next_pointer:
+            rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {result.next_pointer}[/cyan]")
         return
 
     rprint(f"\n[bold]🛒 Preparing to download {result.discovered_count} new items... / 准备下载 {result.discovered_count} 个新内容...[/bold]")
@@ -534,7 +467,7 @@ def query_db(
 
     Database structure:
     - Table: articles
-    - Fields: answer_id, type, title, author, url, content_md, collection_id, created_at, updated_at
+    - Fields: answer_id, content_key, type, title, author, url, content_md, collection_id, created_at, updated_at
 
     Examples:
         zhihu query "深度学习"              # Search title and content / 搜索标题和内容
@@ -563,7 +496,7 @@ def query_db(
     table.add_column("Author", style="green")
     table.add_column("Title", style="magenta", overflow="fold")
     table.add_column("Captured At", style="dim")
-    table.add_column("Zhihu ID", justify="right", style="blue")
+    table.add_column("Content Key", style="blue")
 
     for row in results:
         table.add_row(
@@ -571,7 +504,7 @@ def query_db(
             row["author"],
             row["title"],
             row["created_at"].split("T")[0],
-            row["answer_id"]
+            row["content_key"],
         )
 
     rprint(table)
@@ -593,11 +526,13 @@ def interactive(
     - Full-screen archive workbench with in-app URL input
     - Responsive centered layout, question-page limit modal, queue, recent results, and retry flow
     - Deprecated legacy fallback for regression checks only
+    - `zhihu` without arguments opens the launcher first
 
     功能：
     - 内置链接输入栏的全屏归档工作台
     - 响应式居中布局、问题页数量弹层、队列、最近结果与失败重试
     - 仅用于回归检查的旧版回退入口
+    - `zhihu` 无参数时会先进入首页 launcher
 
     Example:
         zhihu interactive
@@ -638,14 +573,14 @@ def config_cmd(
 
     if show:
         cfg = _get_cfg()
-        from core.cookie_manager import resolve_cookie_file_path, resolve_cookie_pool_dir
+        from core.cookie_manager import describe_cookie_file_path, describe_cookie_pool_dir
 
         snapshot = build_config_snapshot(
             cfg=cfg,
             config_path=Path(__file__).parent.parent / "config.yaml",
             resolve_project_path=resolve_project_path,
-            resolve_cookie_file_path=resolve_cookie_file_path,
-            resolve_cookie_pool_dir=resolve_cookie_pool_dir,
+            describe_cookie_file_path=describe_cookie_file_path,
+            describe_cookie_pool_dir=describe_cookie_pool_dir,
         )
         rprint(render_config_panel(snapshot))
 
@@ -658,155 +593,10 @@ def check() -> None:
 
     Checks:
     1. config.yaml exists
-    2. configured cookie file valid
+    2. cookie readiness and configured/active path compatibility
     3. Playwright browser available
     """
     render_environment_check()
-
-
-# ============================================================
-# Internal Helpers (内部助手)
-# ============================================================
-
-
-async def _batch_concurrent(
-    urls: List[str],
-    output_dir: Path,
-    concurrency: int,
-    download_images: bool,
-    headless: bool,
-    collection_id: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Core implementation of concurrent batch scraping.
-    并发批量抓取核心实现。
-
-    Anti-crawling strategies:
-    - Use semaphore to limit maximum concurrency
-    - Random delay between tasks (0.5~6 seconds)
-
-    防风控策略：
-    - 使用信号量限制最大并发数
-    - 任务间随机延迟 (0.5~6秒)
-
-    Args:
-        urls: URL list / URL 列表
-        output_dir: Output directory / 输出目录
-        concurrency: Concurrency count / 并发数
-        download_images: Whether to download images / 是否下载图片
-        headless: Headless mode / 无头模式
-        collection_id: Collection ID (for database association) / 收藏夹 ID (用于关联数据库记录)
-
-    Returns:
-        Result list with success, url, etc. fields / 结果列表，每个元素包含 success, url 等字段
-    """
-    result = await _get_workflow_service().run_batch(
-        urls=urls,
-        output_dir=output_dir,
-        concurrency=concurrency,
-        download_images=download_images,
-        headless=headless,
-        collection_id=collection_id,
-    )
-    return [
-        {"url": item.url, "success": item.success, **({"error": item.error} if item.error else {})}
-        for item in result.items
-    ]
-
-
-async def _fetch_and_save(
-    url: str,
-    output_dir: Path,
-    scrape_config: dict,
-    download_images: bool = True,
-    headless: bool = True,
-    collection_id: Optional[str] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Execute scraping and save to local files and database.
-    执行抓取并保存到本地文件和数据库。
-
-    Complete workflow:
-    1. Use ZhihuDownloader to scrape page data
-    2. Extract image URLs and download to images/ directory
-    3. Use ZhihuConverter to convert HTML to Markdown
-    4. Save as index.md file
-    5. Save to SQLite database
-
-    完整执行流程：
-    1. 使用 ZhihuDownloader 抓取页面数据
-    2. 提取图片 URL 并下载到 images/ 目录
-    3. 使用 ZhihuConverter 将 HTML 转换为 Markdown
-    4. 保存为 index.md 文件
-    5. 保存到 SQLite 数据库
-
-    Args:
-        url: Zhihu link / 知乎链接
-        output_dir: Output directory / 输出目录
-        scrape_config: Scraping config (like limit, start) / 抓取配置 (如 limit, start)
-        download_images: Whether to download images / 是否下载图片
-        headless: Headless mode (not effective in API mode) / 无头模式 (API 模式下不生效)
-        collection_id: Collection ID (for database record association) / 收藏夹 ID (关联数据库记录)
-    """
-    result = await _get_workflow_service().run_single_fetch(
-        url=url,
-        output_dir=output_dir,
-        scrape_config=scrape_config,
-        download_images=download_images,
-        headless=headless,
-        collection_id=collection_id,
-    )
-    if not result.success or result.save_result is None:
-        raise RuntimeError(result.error or f"Fetch failed for {url}")
-    return result.save_result.to_legacy_records()
-
-
-async def _fetch_and_save_result(
-    url: str,
-    output_dir: Path,
-    scrape_config: dict,
-    download_images: bool = True,
-    headless: bool = True,
-    collection_id: Optional[str] = None,
-):
-    """
-    Execute scraping and return the typed save result contract.
-    执行抓取，并返回类型化保存结果契约。
-    """
-    result = await _get_workflow_service().run_single_fetch(
-        url=url,
-        output_dir=output_dir,
-        scrape_config=scrape_config,
-        download_images=download_images,
-        headless=headless,
-        collection_id=collection_id,
-    )
-    if not result.success or result.save_result is None:
-        raise RuntimeError(result.error or f"Fetch failed for {url}")
-    return result.save_result
-
-
-async def _fetch_creator_and_save(
-    creator: str,
-    output_dir: Path,
-    answer_limit: int,
-    article_limit: int,
-    download_images: bool = True,
-) -> None:
-    """
-    Fetch creator content and save it using the standard local output pipeline.
-    抓取作者内容，并复用标准本地输出流程保存。
-    """
-    result = await _get_workflow_service().run_creator(
-        creator=creator,
-        output_dir=output_dir,
-        answer_limit=answer_limit,
-        article_limit=article_limit,
-        download_images=download_images,
-    )
-    if not result.success:
-        raise RuntimeError(f"Creator fetch failed for {creator}")
-
 
 # ============================================================
 # Entry Point (入口点)

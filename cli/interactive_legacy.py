@@ -24,11 +24,12 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TaskPr
 from rich import box
 from rich.live import Live
 
+from cli.archive_execution import fetch_and_save
+from cli.optional_deps import get_questionary
 from core.config import get_config, resolve_project_path
 from core.cookie_manager import has_available_cookie_sources
 from core.utils import extract_urls
 from core.scraper import ZhihuDownloader
-from cli.app import _fetch_and_save, _get_questionary
 
 # ==========================================
 # Minimal Theme Tokens / 极简主题变量
@@ -48,7 +49,7 @@ console = Console()
 executor = ThreadPoolExecutor(max_workers=1)
 
 def _q_style():
-    Style = _get_questionary().Style
+    Style = get_questionary().Style
     return Style([
         ('question', f'fg:{THEME["accent"]} bold'),
         ('answer', f'fg:{THEME["text"]}'),
@@ -205,7 +206,7 @@ async def parse_question_options(url: str) -> dict:
     Parse question scraping options interactively
     交互式解析问题抓取选项
     """
-    questionary = _get_questionary()
+    questionary = get_questionary()
     downloader = ZhihuDownloader(url)
     if not downloader.has_valid_cookies():
         console.print(
@@ -284,7 +285,7 @@ async def run_interactive():
                 with Live(progress, console=console, refresh_per_second=10):
                     task_id = progress.add_task("正在抓取内容并写入归档", total=None)
 
-                    await _fetch_and_save(
+                    await fetch_and_save(
                         url=url,
                         output_dir=data_dir,
                         scrape_config=scrape_config,

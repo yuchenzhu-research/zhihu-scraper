@@ -9,7 +9,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from typing import Callable
 
-from cli.app import _fetch_and_save_result
+from cli.archive_execution import fetch_and_save_result
 from cli.tui.state import (
     DraftSummary,
     DraftTarget,
@@ -17,6 +17,7 @@ from cli.tui.state import (
     ExecutionReport,
     build_running_summary,
 )
+from cli.workflow_service import DEFAULT_QUESTION_LIMIT, build_scrape_config_for_url
 from core.config import get_config, resolve_project_path
 
 
@@ -49,10 +50,14 @@ def execute_draft_run(
         try:
             with redirect_stdout(buffer), redirect_stderr(buffer):
                 save_result = asyncio.run(
-                    _fetch_and_save_result(
+                    fetch_and_save_result(
                         url=target.url,
                         output_dir=output_dir,
-                        scrape_config=_build_scrape_config(target),
+                        scrape_config=build_scrape_config_for_url(
+                            target.url,
+                            question_limit=target.limit,
+                            default_question_limit=DEFAULT_QUESTION_LIMIT,
+                        ),
                         download_images=True,
                         headless=cfg.zhihu.browser.headless,
                     )
@@ -88,15 +93,6 @@ def execute_draft_run(
             )
 
     return ExecutionReport(output_dir=str(output_dir), records=tuple(records))
-
-
-def _build_scrape_config(target: DraftTarget) -> dict:
-    """Convert one parsed target into the existing fetch configuration shape."""
-    if target.url_type == "question":
-        return {"start": 0, "limit": target.limit or 3}
-    return {}
-
-
 def _tail_lines(buffer: StringIO, limit: int = 3) -> tuple[str, ...]:
     """Return the last few non-empty log lines captured from stdout/stderr."""
     lines = [line.strip() for line in buffer.getvalue().splitlines() if line.strip()]

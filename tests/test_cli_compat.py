@@ -1,12 +1,17 @@
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import typer
 
 import cli.optional_deps as optional_deps
-from cli.app import _get_questionary, build_output_folder_name
-from cli.healthcheck import summarize_playwright_failure
+from cli.app import _get_questionary
+from cli.healthcheck import collect_environment_checks, summarize_playwright_failure
+from cli.save_pipeline import build_output_folder_name
 from core.config import Config
+from core.cookie_manager import RuntimePathResolution
+from core.monitor import CollectionMonitor
 from core.utils import sanitize_filename
 
 
@@ -82,6 +87,111 @@ class HealthcheckSummaryTests(unittest.TestCase):
         self.assertIsNotNone(hint)
         assert hint is not None
         self.assertIn("playwright install chromium", hint)
+
+    def test_collect_environment_checks_reports_legacy_cookie_fallback(self):
+        cfg = Config.from_dict(
+            {
+                "zhihu": {
+                    "cookies": {
+                        "file": ".local/cookies.json",
+                        "pool_dir": ".local/cookie_pool",
+                        "required": True,
+                    }
+                }
+            }
+        )
+        with patch("cli.healthcheck.get_config", return_value=cfg):
+            with patch("core.cookie_manager.has_real_cookie_values", return_value=True):
+                with patch("core.cookie_manager.count_available_cookie_sources", return_value=2):
+                    with patch(
+                        "core.cookie_manager.describe_cookie_file_path",
+                        return_value=RuntimePathResolution(
+                            configured_path=Path("/repo/.local/cookies.json"),
+                            active_path=Path("/repo/cookies.json"),
+                            legacy_path=Path("/repo/cookies.json"),
+                            used_legacy_fallback=True,
+                        ),
+                    ):
+                        with patch(
+                            "core.cookie_manager.describe_cookie_pool_dir",
+                            return_value=RuntimePathResolution(
+                                configured_path=Path("/repo/.local/cookie_pool"),
+                                active_path=Path("/repo/.local/cookie_pool"),
+                                legacy_path=Path("/repo/cookie_pool"),
+                                used_legacy_fallback=False,
+                            ),
+                        ):
+                            with patch(
+                                "cli.healthcheck.asyncio.run",
+                                side_effect=lambda coro: coro.close(),
+                            ):
+                                items = collect_environment_checks()
+
+        compatibility = next(item for item in items if item.label == "Cookie 路径兼容 / Cookie path compatibility")
+        self.assertEqual(compatibility.status, "warn")
+        self.assertIn("configured /repo/.local/cookies.json -> active /repo/cookies.json", compatibility.detail)
+        self.assertIsNotNone(compatibility.hint)
+        assert compatibility.hint is not None
+        self.assertIn(".local/", compatibility.hint)
+
+
+class MonitorContractTests(unittest.TestCase):
+    def test_collection_monitor_counts_unsupported_items(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("core.monitor.ZhihuAPIClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value
+                mock_client.get_collection_page.return_value = {
+                    "data": [
+                        {"content": {"id": "900", "type": "video", "title": "Unsupported"}},
+                        {
+                            "content": {
+                                "id": "901",
+                                "type": "answer",
+                                "question": {"id": "12", "title": "Demo Question"},
+                            }
+                        },
+                    ],
+                    "paging": {"is_end": True},
+                }
+
+                monitor = CollectionMonitor(data_dir=tmpdir)
+                delta = monitor.get_new_items("78170682")
+
+        self.assertTrue(delta.has_new_activity)
+        self.assertTrue(delta.has_supported_items)
+        self.assertEqual(delta.next_pointer, "900")
+        self.assertEqual(delta.unseen_count, 2)
+        self.assertEqual(delta.unsupported_count, 1)
+        self.assertEqual(len(delta.items), 1)
+        self.assertEqual(delta.items[0]["url"], "https://www.zhihu.com/question/12/answer/901")
+
+    def test_collection_monitor_clears_pointer_when_head_is_already_known(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("core.monitor.ZhihuAPIClient") as mock_client_cls:
+                mock_client = mock_client_cls.return_value
+                mock_client.get_collection_page.return_value = {
+                    "data": [
+                        {
+                            "content": {
+                                "id": "known-id",
+                                "type": "answer",
+                                "question": {"id": "12", "title": "Demo Question"},
+                            }
+                        }
+                    ],
+                    "paging": {"is_end": True},
+                }
+
+                monitor = CollectionMonitor(data_dir=tmpdir)
+                monitor.state["78170682"] = "known-id"
+                delta = monitor.get_new_items("78170682")
+
+        self.assertFalse(delta.has_new_activity)
+        self.assertFalse(delta.has_supported_items)
+        self.assertIsNone(delta.next_pointer)
+        self.assertEqual(delta.unseen_count, 0)
+        self.assertEqual(delta.unsupported_count, 0)
+        self.assertEqual(delta.items, ())
 
 
 if __name__ == "__main__":

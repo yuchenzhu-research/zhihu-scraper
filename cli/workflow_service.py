@@ -15,7 +15,7 @@ from typing import Awaitable, Callable, Optional, Sequence
 
 from rich import print as rprint
 
-from cli.save_contracts import CreatorSaveResult, SaveRunResult
+from cli.save_contracts import CreatorSaveResult, SavePipelineError, SaveRunResult
 from cli.save_pipeline import SavePipelineSettings, fetch_and_save_result, fetch_creator_and_save_result
 from cli.workflow_contracts import BatchWorkflowResult, CreatorWorkflowResult, MonitorWorkflowResult, UrlTaskResult
 from core.errors import handle_error
@@ -29,6 +29,33 @@ MonitorFactory = Callable[..., CollectionMonitor]
 Printer = Callable[[str], None]
 ErrorHandler = Callable[[Exception, Optional[BoundLoggerBase]], object]
 SleepFn = Callable[[float], Awaitable[None]]
+DEFAULT_QUESTION_LIMIT = 3
+
+
+def is_question_listing_url(url: str) -> bool:
+    """Return whether the URL points to a question page instead of a single answer."""
+    return "/question/" in url and "/answer/" not in url
+
+
+def build_scrape_config_for_url(
+    url: str,
+    *,
+    question_limit: Optional[int] = None,
+    default_question_limit: Optional[int] = None,
+    question_start: int = 0,
+) -> dict:
+    """
+    Normalize URL-specific scrape config in one place.
+    在一个地方统一归一化不同 URL 的抓取配置。
+    """
+    if not is_question_listing_url(url):
+        return {}
+
+    resolved_limit = question_limit if question_limit is not None else default_question_limit
+    if resolved_limit is None:
+        return {}
+
+    return {"start": question_start, "limit": resolved_limit}
 
 
 @dataclass(frozen=True)
@@ -74,7 +101,7 @@ class ArchiveWorkflowService:
     ) -> BatchWorkflowResult:
         items: list[UrlTaskResult] = []
         for url in urls:
-            scrape_config = self._build_scrape_config(url, limit)
+            scrape_config = build_scrape_config_for_url(url, question_limit=limit)
             result = await self.run_single_fetch(
                 url=url,
                 output_dir=output_dir,
@@ -109,7 +136,7 @@ class ArchiveWorkflowService:
                 return await self.run_single_fetch(
                     url=url,
                     output_dir=output_dir,
-                    scrape_config={},
+                    scrape_config=build_scrape_config_for_url(url),
                     download_images=download_images,
                     headless=headless,
                     collection_id=collection_id,
@@ -139,6 +166,14 @@ class ArchiveWorkflowService:
                 printer=self._config.printer,
             )
             return UrlTaskResult(url=url, success=True, save_result=save_result)
+        except SavePipelineError as error:
+            self._error_handler(error, self._config.logger)
+            return UrlTaskResult(
+                url=url,
+                success=False,
+                partial_save_result=error.partial_result,
+                error=str(error),
+            )
         except Exception as error:
             self._error_handler(error, self._config.logger)
             return UrlTaskResult(url=url, success=False, error=str(error))
@@ -177,40 +212,51 @@ class ArchiveWorkflowService:
         headless: bool,
     ) -> MonitorWorkflowResult:
         monitor = self._monitor_factory(data_dir=str(output_dir))
-        new_items, new_last_id = monitor.get_new_items(collection_id)
-        if not new_items:
+        delta = monitor.get_new_items(collection_id)
+        if not delta.has_unseen_items:
             return MonitorWorkflowResult(
                 collection_id=collection_id,
                 discovered_count=0,
                 batch=BatchWorkflowResult(items=()),
                 pointer_advanced=False,
+                unsupported_count=0,
                 next_pointer=None,
             )
 
+        if not delta.has_supported_items:
+            pointer_advanced = False
+            if delta.next_pointer:
+                monitor.mark_updated(collection_id, delta.next_pointer)
+                pointer_advanced = True
+
+            return MonitorWorkflowResult(
+                collection_id=collection_id,
+                discovered_count=0,
+                batch=BatchWorkflowResult(items=()),
+                pointer_advanced=pointer_advanced,
+                unsupported_count=delta.unsupported_count,
+                next_pointer=delta.next_pointer,
+            )
+
         batch = await self.run_batch(
-            urls=[item["url"] for item in new_items],
+            urls=[item["url"] for item in delta.items],
             output_dir=output_dir,
-            concurrency=min(concurrency, len(new_items), 8),
+            concurrency=min(concurrency, len(delta.items), 8),
             download_images=download_images,
             headless=headless,
             collection_id=collection_id,
         )
 
         pointer_advanced = False
-        if batch.failed_count == 0 and batch.success_count > 0:
-            monitor.mark_updated(collection_id, new_last_id)
+        if delta.next_pointer and batch.failed_count == 0 and batch.success_count > 0:
+            monitor.mark_updated(collection_id, delta.next_pointer)
             pointer_advanced = True
 
         return MonitorWorkflowResult(
             collection_id=collection_id,
-            discovered_count=len(new_items),
+            discovered_count=len(delta.items),
             batch=batch,
             pointer_advanced=pointer_advanced,
-            next_pointer=new_last_id,
+            unsupported_count=delta.unsupported_count,
+            next_pointer=delta.next_pointer,
         )
-
-    @staticmethod
-    def _build_scrape_config(url: str, limit: Optional[int]) -> dict:
-        if limit and "/question/" in url and "/answer/" not in url:
-            return {"start": 0, "limit": limit}
-        return {}

@@ -3,7 +3,7 @@
 # Zhihu-Scraper
 ### Local-first Zhihu Archiving Tool
 
-<p><strong>A local-first Zhihu extraction and archiving project that writes directly to Markdown, image folders, and SQLite.</strong></p>
+<p><strong>A local-first Zhihu extraction and archiving project: protocol-first, with browser fallback when needed, writing directly to Markdown, image folders, and SQLite.</strong></p>
 
 <p>
   <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
@@ -105,6 +105,15 @@ Historical paths are still compatible:
 - `cookies.json`
 - `cookie_pool/`
 
+After setup, use the following commands to confirm whether runtime resolution
+is still hitting legacy repo-root compatibility paths:
+
+- `zhihu config --show`
+- `zhihu check`
+
+They show the configured path, active path, and whether legacy cookie-path
+fallback is still active.
+
 ### 3.3 Minimal Run
 
 ```bash
@@ -118,6 +127,15 @@ zhihu
 zhihu interactive
 zhihu interactive --legacy
 ```
+
+Entry topology:
+
+- `zhihu`
+  opens the home launcher for first-run guidance, command navigation, and checks
+- `zhihu interactive`
+  opens the default Textual TUI archive workbench directly
+- `zhihu interactive --legacy`
+  opens the old Rich / questionary fallback for compatibility and troubleshooting
 
 ## 4. Command Overview
 
@@ -134,6 +152,15 @@ Current core commands:
 - `zhihu check`
 - `zhihu manual`
 
+Entry topology:
+
+- `zhihu`
+  enters the home launcher when invoked without arguments
+- `zhihu interactive`
+  goes straight to the recommended Textual TUI
+- `zhihu interactive --legacy`
+  goes straight to the compatibility fallback
+
 Common examples:
 
 ```bash
@@ -149,6 +176,11 @@ zhihu config --show
 zhihu check
 zhihu manual
 ```
+
+Notes:
+
+- `zhihu query` now shows the stable identity `content_key = type:id`
+- `answer_id` remains as a compatibility field, but is no longer the primary public identifier
 
 ## 5. Output Layout
 
@@ -211,7 +243,8 @@ For maintenance and collaboration details, continue with:
 
 ## 9. Interactive Entry Notes
 
-`interactive` now defaults to the **Textual TUI**.
+`zhihu` without arguments opens the home launcher.  
+`zhihu interactive` is the direct command for the **Textual TUI**.
 
 The old Rich / questionary path is still available via:
 
@@ -219,4 +252,5 @@ The old Rich / questionary path is still available via:
 zhihu interactive --legacy
 ```
 
-It is kept for compatibility and troubleshooting, not as the preferred path.
+It is kept for compatibility and troubleshooting, not as the preferred path.  
+The scraping pipeline remains protocol-first, with browser fallback only when needed.

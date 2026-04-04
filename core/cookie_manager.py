@@ -18,6 +18,7 @@ cookie_manager.py — 多账号 Cookie 轮询池
 
 import json
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -35,6 +36,19 @@ PLACEHOLDER_COOKIE_VALUES = {
     "YOUR_Z_C0_HERE",
     "YOUR_D_C0_HERE",
 }
+
+
+@dataclass(frozen=True)
+class RuntimePathResolution:
+    """
+    Resolved runtime path plus legacy-fallback diagnostics.
+    运行时路径解析结果，以及旧路径兼容诊断。
+    """
+
+    configured_path: Path
+    active_path: Path
+    legacy_path: Path
+    used_legacy_fallback: bool
 
 
 def is_placeholder_cookie_value(value: Optional[str]) -> bool:
@@ -117,17 +131,50 @@ def has_available_cookie_sources(
     return count_available_cookie_sources(base_cookies_path, pool_dir) > 0
 
 
-def _prefer_legacy_path(configured: Path, *, default_path: Path, legacy_path: Path) -> Path:
+def _resolve_runtime_path(configured: Path, *, default_path: Path, legacy_path: Path) -> RuntimePathResolution:
     """
-    Keep old repo-root paths working when users upgrade in place.
-    在用户原地升级时，继续兼容旧的仓库根目录路径。
+    Keep old repo-root paths working when users upgrade in place, while exposing
+    whether the legacy fallback was actually used.
+    在用户原地升级时继续兼容旧的仓库根目录路径，同时暴露是否真实命中了旧路径兼容。
     """
     default_abs = resolve_project_path(default_path)
     legacy_abs = resolve_project_path(legacy_path)
 
-    if configured == default_abs and not configured.exists() and legacy_abs.exists():
-        return legacy_abs
-    return configured
+    use_legacy = configured == default_abs and not configured.exists() and legacy_abs.exists()
+    return RuntimePathResolution(
+        configured_path=configured,
+        active_path=legacy_abs if use_legacy else configured,
+        legacy_path=legacy_abs,
+        used_legacy_fallback=use_legacy,
+    )
+
+
+def describe_cookie_file_path(configured_path: Optional[str] = None) -> RuntimePathResolution:
+    """
+    Resolve the cookie file path and report whether legacy fallback is active.
+    解析 Cookie 文件路径，并报告是否命中了旧路径兼容。
+    """
+    cfg = get_config()
+    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_file)
+    return _resolve_runtime_path(
+        configured,
+        default_path=DEFAULT_COOKIE_FILE,
+        legacy_path=LEGACY_COOKIE_FILE,
+    )
+
+
+def describe_cookie_pool_dir(configured_path: Optional[str] = None) -> RuntimePathResolution:
+    """
+    Resolve the cookie pool directory and report whether legacy fallback is active.
+    解析 Cookie 池目录，并报告是否命中了旧路径兼容。
+    """
+    cfg = get_config()
+    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_pool_dir)
+    return _resolve_runtime_path(
+        configured,
+        default_path=DEFAULT_COOKIE_POOL_DIR,
+        legacy_path=LEGACY_COOKIE_POOL_DIR,
+    )
 
 
 def resolve_cookie_file_path(configured_path: Optional[str] = None) -> Path:
@@ -135,13 +182,7 @@ def resolve_cookie_file_path(configured_path: Optional[str] = None) -> Path:
     Resolve the active cookie file path with legacy fallback.
     解析当前生效的 Cookie 文件路径，并兼容旧路径。
     """
-    cfg = get_config()
-    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_file)
-    return _prefer_legacy_path(
-        configured,
-        default_path=DEFAULT_COOKIE_FILE,
-        legacy_path=LEGACY_COOKIE_FILE,
-    )
+    return describe_cookie_file_path(configured_path).active_path
 
 
 def resolve_cookie_pool_dir(configured_path: Optional[str] = None) -> Path:
@@ -149,13 +190,7 @@ def resolve_cookie_pool_dir(configured_path: Optional[str] = None) -> Path:
     Resolve the active cookie pool directory with legacy fallback.
     解析当前生效的 Cookie 池目录，并兼容旧路径。
     """
-    cfg = get_config()
-    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_pool_dir)
-    return _prefer_legacy_path(
-        configured,
-        default_path=DEFAULT_COOKIE_POOL_DIR,
-        legacy_path=LEGACY_COOKIE_POOL_DIR,
-    )
+    return describe_cookie_pool_dir(configured_path).active_path
 
 
 class CookieManager:

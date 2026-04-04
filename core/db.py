@@ -45,12 +45,37 @@ class ZhihuDatabase:
 
         cursor = conn.cursor()
 
-        # Create articles table
-        # 创建文章表
+        self._ensure_articles_schema(cursor)
+
+        conn.commit()
+        return conn
+
+    def _ensure_articles_schema(self, cursor: sqlite3.Cursor) -> None:
+        """
+        Create or migrate the articles table to the current content-key schema.
+        创建或迁移 articles 表到当前的 content_key 模型。
+        """
+        row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='articles'"
+        ).fetchone()
+        if row is None:
+            self._create_articles_table(cursor)
+            self._create_indexes(cursor)
+            return
+
+        table_sql = row["sql"] or ""
+        if "content_key" not in table_sql or "answer_id TEXT UNIQUE" in table_sql:
+            self._migrate_articles_table(cursor)
+
+        self._create_indexes(cursor)
+
+    @staticmethod
+    def _create_articles_table(cursor: sqlite3.Cursor) -> None:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS articles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                answer_id TEXT UNIQUE NOT NULL,
+                answer_id TEXT NOT NULL,
+                content_key TEXT UNIQUE NOT NULL,
                 type TEXT NOT NULL,
                 title TEXT,
                 author TEXT,
@@ -62,13 +87,70 @@ class ZhihuDatabase:
             )
         """)
 
+    @staticmethod
+    def _create_indexes(cursor: sqlite3.Cursor) -> None:
         # Create indexes for query acceleration
         # 创建全文索引或普通索引加速查询
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_answer_id ON articles(answer_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_author ON articles(author)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_collection ON articles(collection_id)")
 
-        conn.commit()
-        return conn
+    def _migrate_articles_table(self, cursor: sqlite3.Cursor) -> None:
+        """
+        Migrate legacy `answer_id UNIQUE` schema to `content_key = type:id`.
+        将旧的 `answer_id UNIQUE` 结构迁移到 `content_key = type:id`。
+        """
+        cursor.execute("ALTER TABLE articles RENAME TO articles_legacy")
+        legacy_columns = {
+            row["name"] for row in cursor.execute("PRAGMA table_info(articles_legacy)").fetchall()
+        }
+
+        content_key_expr = (
+            "COALESCE(NULLIF(content_key, ''), CASE "
+            "WHEN COALESCE(type, '') <> '' AND COALESCE(answer_id, '') <> '' "
+            "THEN type || ':' || answer_id ELSE answer_id END)"
+            if "content_key" in legacy_columns
+            else "CASE WHEN COALESCE(type, '') <> '' AND COALESCE(answer_id, '') <> '' THEN type || ':' || answer_id ELSE answer_id END"
+        )
+
+        self._create_articles_table(cursor)
+        cursor.execute(f"""
+            INSERT INTO articles (
+                answer_id,
+                content_key,
+                type,
+                title,
+                author,
+                url,
+                content_md,
+                collection_id,
+                created_at,
+                updated_at
+            )
+            SELECT
+                answer_id,
+                {content_key_expr},
+                COALESCE(type, 'unknown'),
+                title,
+                author,
+                url,
+                content_md,
+                collection_id,
+                COALESCE(created_at, CURRENT_TIMESTAMP),
+                COALESCE(updated_at, CURRENT_TIMESTAMP)
+            FROM articles_legacy
+        """)
+        cursor.execute("DROP TABLE articles_legacy")
+
+    @staticmethod
+    def build_content_key(answer_id: str, item_type: Optional[str] = None) -> str:
+        """
+        Build the stable typed identity used by the current database schema.
+        构造当前数据库模式使用的稳定类型化主键。
+        """
+        normalized_id = str(answer_id)
+        normalized_type = str(item_type or "unknown") or "unknown"
+        return f"{normalized_type}:{normalized_id}"
 
     def save_article(self, item: Dict[str, Any], content_md: str, collection_id: Optional[str] = None) -> bool:
         """
@@ -82,7 +164,8 @@ class ZhihuDatabase:
         if not answer_id:
             return False
 
-        item_type = item.get("type", "unknown")
+        item_type = str(item.get("type", "unknown") or "unknown")
+        content_key = self.build_content_key(answer_id, item_type)
         title = item.get("title", "Untitled")
         author = item.get("author", "Unknown")
         url = item.get("url", "")
@@ -91,30 +174,37 @@ class ZhihuDatabase:
         try:
             cursor = self.conn.cursor()
             cursor.execute("""
-                INSERT INTO articles (answer_id, type, title, author, url, content_md, collection_id, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(answer_id) DO UPDATE SET
+                INSERT INTO articles (answer_id, content_key, type, title, author, url, content_md, collection_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(content_key) DO UPDATE SET
                     title = excluded.title,
                     author = excluded.author,
                     url = excluded.url,
                     content_md = excluded.content_md,
                     collection_id = COALESCE(excluded.collection_id, articles.collection_id),
                     updated_at = excluded.updated_at
-            """, (answer_id, item_type, title, author, url, content_md, collection_id, now, now))
+            """, (answer_id, content_key, item_type, title, author, url, content_md, collection_id, now, now))
             self.conn.commit()
             return True
         except Exception as e:
-            self.log.error("db_save_failed", answer_id=answer_id, error=str(e))
+            self.log.error("db_save_failed", answer_id=answer_id, content_key=content_key, error=str(e))
             self.conn.rollback()
             return False
 
-    def exists(self, answer_id: str) -> bool:
+    def exists(self, answer_id: str, item_type: Optional[str] = None) -> bool:
         """
-        Check if specific ID already exists in database
-        检查特定 ID 是否已存在库中
+        Check whether a record already exists in the database.
+        When item_type is omitted, falls back to the legacy untyped answer_id lookup.
+        检查记录是否已存在库中；未传 item_type 时回退到旧的 answer_id 兼容查询。
         """
         cursor = self.conn.cursor()
-        cursor.execute("SELECT 1 FROM articles WHERE answer_id = ?", (str(answer_id),))
+        if item_type:
+            cursor.execute(
+                "SELECT 1 FROM articles WHERE content_key = ?",
+                (self.build_content_key(answer_id, item_type),),
+            )
+        else:
+            cursor.execute("SELECT 1 FROM articles WHERE answer_id = ?", (str(answer_id),))
         return cursor.fetchone() is not None
 
     def search_articles(self, keyword: str, limit: int = 10) -> list:
@@ -125,7 +215,7 @@ class ZhihuDatabase:
         cursor = self.conn.cursor()
         search_term = f"%{keyword}%"
         cursor.execute("""
-            SELECT answer_id, type, title, author, url, created_at
+            SELECT answer_id, content_key, type, title, author, url, created_at
             FROM articles
             WHERE title LIKE ? OR content_md LIKE ?
             ORDER BY created_at DESC

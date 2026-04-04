@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from core.config import Config, resolve_project_path, summarize_text_for_logs
 from core.config_runtime import ConfigLoader
@@ -36,6 +37,27 @@ class ConfigRuntimeTests(unittest.TestCase):
         config = self.loader.load(Path("/tmp/definitely-missing-config.yaml"))
         self.assertEqual(config.output.directory, "data")
         self.assertTrue(config.zhihu.cookies_required)
+
+    def test_loader_missing_file_still_initializes_logging_and_override_level(self):
+        with patch("core.config_runtime.setup_logging") as mocked_setup_logging:
+            config = self.loader.load(
+                Path("/tmp/definitely-missing-config.yaml"),
+                override_level="DEBUG",
+            )
+
+        self.assertEqual(config.logging.level, "DEBUG")
+        mocked_setup_logging.assert_called_once_with(config)
+
+    def test_loader_invalid_yaml_still_initializes_logging_and_override_level(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_path.write_text("zhihu: [broken", encoding="utf-8")
+
+            with patch("core.config_runtime.setup_logging") as mocked_setup_logging:
+                config = self.loader.load(config_path, override_level="WARNING")
+
+        self.assertEqual(config.logging.level, "WARNING")
+        mocked_setup_logging.assert_called_once_with(config)
 
     def test_config_facade_reexports_path_and_log_helpers(self):
         project_path = resolve_project_path("data")

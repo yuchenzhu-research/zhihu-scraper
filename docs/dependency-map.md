@@ -92,6 +92,18 @@
 pip install -e ".[full]"
 ```
 
+CI 当前执行的是：
+
+```bash
+pip install -e .
+```
+
+说明：
+
+- `pip install -e .` 代表基础协议抓取 + CLI/TUI 命令面验证
+- `pip install -e ".[full]"` 才包含浏览器回退依赖
+- 因此 CI 通过不等于 Playwright / browser fallback 已被完整验证
+
 ## 4. 子目录中的历史依赖文件
 
 当前仓库内还存在：

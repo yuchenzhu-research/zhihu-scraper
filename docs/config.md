@@ -35,11 +35,13 @@ config.yaml
 
 - 记录警告
 - 回退默认配置
+- 仍会完成 logging setup，并继续走统一 facade
 
 如果配置文件存在但字段不兼容：
 
 - 尽量兼容旧字段
 - 兼容失败时回退默认配置，并输出提示
+- `override_level` 这类运行时覆盖仍会应用到回退后的默认配置
 
 ## 3. 配置结构
 
@@ -132,6 +134,8 @@ config.yaml
 
 - 仓库根目录不再推荐直接承载长期凭据
 - `.local/` 用于存放凭据、日志等运行态文件
+- `zhihu config --show` 会同时显示 configured path 和 active path
+- 如果由于兼容策略实际命中了仓库根目录旧路径，`zhihu config --show` 和 `zhihu check` 都会明确显示 legacy fallback 状态
 
 ## 5. 单例与 facade
 

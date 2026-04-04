@@ -13,11 +13,32 @@ monitor.py — 收藏夹增量监控模块
 """
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from .config import get_logger
 from .api_client import ZhihuAPIClient
+
+
+@dataclass(frozen=True)
+class CollectionDelta:
+    items: tuple[dict, ...]
+    next_pointer: Optional[str]
+    unseen_count: int
+    unsupported_count: int
+
+    @property
+    def has_unseen_items(self) -> bool:
+        return self.unseen_count > 0
+
+    @property
+    def has_supported_items(self) -> bool:
+        return bool(self.items)
+
+    @property
+    def has_new_activity(self) -> bool:
+        return self.unseen_count > 0
 
 
 class CollectionMonitor:
@@ -59,7 +80,7 @@ class CollectionMonitor:
         except Exception as e:
             self.log.error("save_monitor_state_failed", error=str(e))
 
-    def get_new_items(self, collection_id: str) -> Tuple[List[dict], Optional[str]]:
+    def get_new_items(self, collection_id: str) -> CollectionDelta:
         """
         Get new items from collection.
         Returned data structure contains basic info needed for scraping: url, type, title, etc.
@@ -73,6 +94,8 @@ class CollectionMonitor:
         offset = 0
         limit = 20
         new_items = []
+        unseen_count = 0
+        unsupported_count = 0
         is_end = False
 
         first_item_id_in_this_run = None
@@ -110,6 +133,8 @@ class CollectionMonitor:
                     is_end = True
                     break
 
+                unseen_count += 1
+
                 # Filter content types that support scraping (mainly answers and column articles)
                 # 过滤出支持抓取的内容类型 (主要是回答和专栏文章)
                 url = ""
@@ -126,15 +151,30 @@ class CollectionMonitor:
                         "url": url,
                         "title": content.get("question", {}).get("title") if item_type == "answer" else content.get("title", "Unknown")
                     })
+                else:
+                    unsupported_count += 1
 
             offset += limit
 
-        self.log.info("collection_delta_found", count=len(new_items))
-        print(f"✨ Found {len(new_items)} new items!")
+        self.log.info(
+            "collection_delta_found",
+            supported_count=len(new_items),
+            unsupported_count=unsupported_count,
+            unseen_count=unseen_count,
+        )
+        summary = f"✨ Found {len(new_items)} new archiveable items!"
+        if unsupported_count:
+            summary = f"{summary} Skipped {unsupported_count} unsupported new items."
+        print(summary)
 
         # Don't save state yet, wait for external complete fetch then call mark_updated
         # 暂时不保存状态，待外部完全抓取成功后再调用 mark_updated 保存状态
-        return new_items, first_item_id_in_this_run
+        return CollectionDelta(
+            items=tuple(new_items),
+            next_pointer=first_item_id_in_this_run if unseen_count > 0 else None,
+            unseen_count=unseen_count,
+            unsupported_count=unsupported_count,
+        )
 
     def mark_updated(self, collection_id: str, new_last_id: Optional[str]):
         """

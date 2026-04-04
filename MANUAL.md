@@ -10,6 +10,7 @@
 本项目是一个**本地优先**的知乎抓取与归档工具，目标是：
 
 - 输入知乎链接或本地任务清单
+- 默认走协议优先抓取，必要时回退浏览器
 - 抓取正文和必要元数据
 - 转换为 Markdown
 - 下载图片并保存为本地文件
@@ -77,6 +78,8 @@
 
 - `cli/app.py`
   Typer 命令注册与总入口。
+- `cli/archive_execution.py`
+  CLI / TUI / legacy 共用的执行桥，避免其他入口反向依赖 `cli.app` 私有 helper。
 - `cli/workflow_service.py`
   应用服务层，统一 `fetch / batch / creator / monitor` 的任务编排。
 - `cli/workflow_contracts.py`
@@ -167,7 +170,9 @@
 - 文档同步
 - 命令面
 - 配置 schema / runtime
+- workflow service / 执行桥边界
 - 保存链路
+- SQLite contract / schema 迁移
 - scraper contracts / payloads
 - TUI 基础流程
 - 安装契约
@@ -273,6 +278,12 @@
 - `cookies.json`
 - `cookie_pool/`
 
+当前 `zhihu config --show` 与 `zhihu check` 会同时展示：
+
+- configured path
+- active path
+- 是否仍命中仓库根目录旧路径兼容
+
 ### 5.4 配置兼容原则
 
 - 优先兼容旧字段和旧路径
@@ -281,19 +292,49 @@
 
 ## 6. 核心数据流 / 运行流程
 
-### 6.1 单条抓取
+### 6.1 入口拓扑
+
+```text
+zhihu
+-> cli/app.py main()
+-> 无参数时进入 cli/launcher_flow.py 首页 launcher
+
+zhihu interactive
+-> cli/interactive.py
+-> 直接启动 Textual TUI
+
+zhihu interactive --legacy
+-> cli/interactive_legacy.py
+-> 旧 Rich / questionary 回退路径
+
+zhihu fetch / creator / batch / monitor / query / config / check / manual
+-> cli/app.py Typer 命令入口
+```
+
+说明：
+
+- `zhihu` 是首页 launcher，不是 Textual TUI 的别名
+- `zhihu interactive` 是当前默认交互工作台的直达入口
+- `zhihu interactive --legacy` 仅用于兼容与排障
+
+### 6.2 单条抓取
 
 ```text
 用户输入 URL
--> cli/app.py 命令入口
+-> cli/app.py fetch 命令入口
 -> cli/workflow_service.py 统一抓取工作流
 -> core/scraper.py 识别页面类型并抓取
--> core/converter.py 转 Markdown
--> cli/save_pipeline.py 保存 Markdown / 图片 / SQLite
+-> article 路径优先走协议抓取，必要时回退浏览器
+-> cli/save_pipeline.py 内部调用 converter / db 完成保存
 -> cli/save_contracts.py 返回保存结果 contract
 ```
 
-### 6.2 creator 流程
+说明：
+
+- 若 SQLite 写入在 Markdown 已落盘后失败，保存链路会抛出 `SavePipelineError`
+- 该异常会保留 partial save result、失败条目与失败 Markdown 路径，供 workflow 层继续汇总
+
+### 6.3 creator 流程
 
 ```text
 creator URL / token
@@ -304,17 +345,23 @@ creator URL / token
 -> cli/workflow_contracts.py / cli/save_contracts.py 返回聚合结果
 ```
 
-### 6.3 interactive 流程
+### 6.4 interactive 流程
 
 ```text
 zhihu interactive
 -> cli/interactive.py 启动 Textual TUI
 -> 应用内构建 draft
--> 调用 cli/workflow_service.py 或 save pipeline 执行保存链路
+-> cli/archive_execution.py 执行共享抓取入口
+-> cli/workflow_service.py / cli/save_pipeline.py
 -> 展示最近结果与重试草案
 ```
 
-### 6.4 monitor 流程
+说明：
+
+- `zhihu` 无参数时先进入首页 launcher，再由用户决定是否进入 TUI
+- `zhihu interactive --legacy` 不属于推荐主路径
+
+### 6.5 monitor 流程
 
 ```text
 收藏夹 ID
@@ -322,7 +369,8 @@ zhihu interactive
 -> core/monitor.py 计算增量范围
 -> core/scraper.py 抓新内容
 -> cli/save_pipeline.py 保存
--> 只有当本轮无失败时才推进 pointer
+-> unsupported-only 新动态可安全推进 pointer
+-> 若存在可归档条目且本轮有失败，则不推进 pointer
 ```
 
 ## 7. 关键数据结构 / contracts
@@ -354,8 +402,13 @@ zhihu interactive
   表示一条已保存内容及其落盘位置。
 - `SaveRunResult`
   表示一次保存任务的结果集合。
+- `SavePipelineError`
+  表示保存链路中途失败时的类型化异常，附带部分已保存结果与失败条目上下文。
 - `CreatorSaveResult`
   表示作者抓取+保存的聚合结果。
+
+数据库读取层当前以 `content_key = type:id` 作为稳定身份；
+`answer_id` 仅作为历史兼容字段保留，新的 query / search 展示也应优先使用 `content_key`。
 
 ### 7.3 设计意图
 
@@ -379,6 +432,12 @@ zhihu interactive
   表示作者抓取流程的聚合结果。
 - `MonitorWorkflowResult`
   表示收藏夹增量同步的聚合结果和 pointer 推进状态。
+
+当前 monitor contract 还会显式暴露：
+
+- `unsupported_count`
+- `next_pointer`
+- `has_new_activity`
 
 这层的作用是：
 
@@ -408,6 +467,12 @@ zhihu batch urls.txt
 zhihu monitor 78170682
 zhihu query "Transformer"
 ```
+
+说明：
+
+- `zhihu query` 当前展示 `Content Key`
+- 稳定身份是 `content_key = type:id`
+- `answer_id` 仅作为历史兼容字段保留在数据库中
 
 ### 8.3 交互入口
 
