@@ -1,19 +1,23 @@
 import unittest
+import sys
 
-from textual.widgets import Static
-
-from cli.tui.app import ZhihuInteractiveShell
-from cli.tui.state import (
-    ExecutionRecord,
-    ExecutionReport,
-    apply_question_limit,
-    build_detail_snapshot,
-    build_history_snapshot,
-    build_retry_draft,
-    build_running_summary,
-    parse_input_to_draft,
-)
-from cli.tui.widgets import ArchiveInput, DetailCard, HistoryCard, QueueCard, StatusPill, SummaryCard
+try:
+    from textual.widgets import Static
+    from cli.tui.app import ZhihuInteractiveShell
+    from cli.tui.state import (
+        ExecutionRecord,
+        ExecutionReport,
+        apply_question_limit,
+        build_detail_snapshot,
+        build_history_snapshot,
+        build_retry_draft,
+        build_running_summary,
+        parse_input_to_draft,
+    )
+    from cli.tui.widgets import ArchiveInput, DetailCard, HistoryCard, QueueCard, StatusPill, SummaryCard
+    HAS_TEXTUAL = True
+except ImportError:
+    HAS_TEXTUAL = False
 
 
 def _mixed_executor(draft, progress_callback=None):
@@ -46,6 +50,7 @@ def _mixed_executor(draft, progress_callback=None):
     )
 
 
+@unittest.skipIf(not HAS_TEXTUAL, "textual dependency not installed")
 class TuiStateTests(unittest.TestCase):
     def test_question_draft_requires_limit_then_becomes_runnable(self):
         draft = parse_input_to_draft("https://www.zhihu.com/question/123", True)
@@ -129,6 +134,7 @@ class TuiStateTests(unittest.TestCase):
         self.assertEqual(type(pill.render()).__name__, "Group")
 
 
+@unittest.skipIf(not HAS_TEXTUAL, "textual dependency not installed")
 class TuiWorkflowTests(unittest.IsolatedAsyncioTestCase):
     async def test_recent_results_and_retry_flow(self):
         app = ZhihuInteractiveShell(draft_executor=_mixed_executor)
