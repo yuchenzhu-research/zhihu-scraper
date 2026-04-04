@@ -105,6 +105,13 @@ cp cookies.example.json .local/cookies.json
 - `cookies.json`
 - `cookie_pool/`
 
+运行后可用以下命令确认当前是否仍在命中旧路径兼容：
+
+- `zhihu config --show`
+- `zhihu check`
+
+它们会显示 configured path、active path，以及是否仍在使用仓库根目录旧 Cookie 路径。
+
 ### 3.3 最小运行
 
 ```bash
@@ -167,6 +174,11 @@ zhihu config --show
 zhihu check
 zhihu manual
 ```
+
+补充说明：
+
+- `zhihu query` 当前会显示稳定身份 `content_key = type:id`
+- `answer_id` 仍保留为历史兼容字段，但不再作为唯一公开标识
 
 ## 5. 输出结构
 

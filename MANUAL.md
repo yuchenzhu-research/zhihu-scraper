@@ -278,6 +278,12 @@
 - `cookies.json`
 - `cookie_pool/`
 
+当前 `zhihu config --show` 与 `zhihu check` 会同时展示：
+
+- configured path
+- active path
+- 是否仍命中仓库根目录旧路径兼容
+
 ### 5.4 配置兼容原则
 
 - 优先兼容旧字段和旧路径
@@ -323,6 +329,11 @@ zhihu fetch / creator / batch / monitor / query / config / check / manual
 -> cli/save_contracts.py 返回保存结果 contract
 ```
 
+说明：
+
+- 若 SQLite 写入在 Markdown 已落盘后失败，保存链路会抛出 `SavePipelineError`
+- 该异常会保留 partial save result、失败条目与失败 Markdown 路径，供 workflow 层继续汇总
+
 ### 6.3 creator 流程
 
 ```text
@@ -358,7 +369,8 @@ zhihu interactive
 -> core/monitor.py 计算增量范围
 -> core/scraper.py 抓新内容
 -> cli/save_pipeline.py 保存
--> 只有当本轮无失败时才推进 pointer
+-> unsupported-only 新动态可安全推进 pointer
+-> 若存在可归档条目且本轮有失败，则不推进 pointer
 ```
 
 ## 7. 关键数据结构 / contracts
@@ -421,6 +433,12 @@ zhihu interactive
 - `MonitorWorkflowResult`
   表示收藏夹增量同步的聚合结果和 pointer 推进状态。
 
+当前 monitor contract 还会显式暴露：
+
+- `unsupported_count`
+- `next_pointer`
+- `has_new_activity`
+
 这层的作用是：
 
 - 让 `cli/app.py` 只做命令入口，不再自己拼业务流程
@@ -449,6 +467,12 @@ zhihu batch urls.txt
 zhihu monitor 78170682
 zhihu query "Transformer"
 ```
+
+说明：
+
+- `zhihu query` 当前展示 `Content Key`
+- 稳定身份是 `content_key = type:id`
+- `answer_id` 仅作为历史兼容字段保留在数据库中
 
 ### 8.3 交互入口
 

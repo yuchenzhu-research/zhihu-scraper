@@ -159,6 +159,10 @@ COMMAND REFERENCE
   - query local `zhihu.db`
   - 在本地数据库中检索标题与正文
 
+  Behavior:
+  - current results show `Content Key (type:id)` as the stable identity
+  - 当前结果会显示 `Content Key (type:id)` 作为稳定身份
+
   Options:
   - `-l, --limit INT` max rows (default 10)
   - `-d, --data-dir PATH` where `zhihu.db` is located
@@ -187,7 +191,8 @@ COMMAND REFERENCE
 
 7) config
   Purpose:
-  - show loaded configuration
+  - show loaded configuration and runtime path resolution
+  - 显示当前配置以及运行时路径解析结果
 
   Options:
   - `--show` print current config summary
@@ -197,13 +202,19 @@ COMMAND REFERENCE
   - `zhihu config --show`
   - `zhihu config --path`
 
+  Notes:
+  - `--show` includes configured vs active cookie/pool paths
+  - legacy repo-root fallback is surfaced explicitly when still in use
+
 8) check
   Purpose:
   - environment sanity checks
 
   Checks:
   - `config.yaml` existence
-  - configured cookie file validity
+  - primary cookie readiness
+  - cookie pool availability
+  - configured path / active path compatibility
   - Playwright availability under current browser config
 
   Example:
@@ -261,8 +272,10 @@ PLATFORM SUPPORT
   - `core/monitor.py` incremental collection pointer management
 
   Config & Runtime
-  - `core/config.py` config loading + logging + humanized delay
-  - `core/cookie_manager.py` cookie file + cookie pool handling
+  - `core/config.py` facade for config, logging, and humanization helpers
+  - `core/config_runtime.py` singleton runtime loader + fallback finalization
+  - `core/config_schema.py` typed config schema + defaults
+  - `core/cookie_manager.py` cookie file + cookie pool handling + active path resolution
 
 CURRENT LIMITS
   - interactive mode does not accept creator profile URLs (`people/...`)

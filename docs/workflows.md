@@ -135,9 +135,33 @@ cli/app.py
 约束：
 
 - 当本轮存在失败项时，不推进 pointer
+- 当只有 unsupported 新条目时，pointer 仍可安全推进
 - 避免增量任务静默跳过失败内容
 
-## 7. interactive 工作流
+## 7. query 工作流
+
+入口命令：
+
+```bash
+zhihu query "Transformer" -l 20
+```
+
+流程：
+
+```text
+cli/app.py
+-> core/db.py
+-> local data/zhihu.db
+-> Rich table output
+```
+
+约束：
+
+- query 当前展示 `Content Key`
+- 稳定身份为 `content_key = type:id`
+- `answer_id` 仅保留为历史兼容字段
+
+## 8. interactive 工作流
 
 入口命令：
 
@@ -182,12 +206,14 @@ TUI 内部主流程：
 -> 展示最近执行结果 / 失败重试
 ```
 
-## 8. config / check / manual 工作流
+## 9. config / check / manual 工作流
 
 ### `zhihu config --show`
 
 - 负责输出配置摘要
 - 展示层在 `cli/config_view.py`
+- 展示 configured path / active path
+- 显式提示是否仍命中旧 Cookie 路径兼容
 
 ### `zhihu check`
 
@@ -203,7 +229,7 @@ TUI 内部主流程：
 - 打开内置 terminal manual
 - 内容来源于 `cli/manual_content.py`
 
-## 9. 文档维护工作流
+## 10. 文档维护工作流
 
 当以下内容发生变化时，默认需要同步：
 
@@ -221,7 +247,7 @@ TUI 内部主流程：
 4. `cli/manual_content.py`
 5. `docs/` 下相关专题文档
 
-## 10. 测试与回归工作流
+## 11. 测试与回归工作流
 
 最小回归集合：
 
@@ -233,9 +259,10 @@ TUI 内部主流程：
 
 - `docs/STAGE5_VALIDATION_MATRIX.md`
 
-## 11. 当前维护建议
+## 12. 当前维护建议
 
 - 命令入口优先走 `cli/workflow_service.py`，不要再把 fetch/batch/monitor 编排堆回 `cli/app.py`
 - 新工作优先在稳定 contract 边界上推进
+- query / db 相关新工作优先沿 `content_key` 边界推进，不要重新把裸 `answer_id` 当成唯一身份
 - 避免再把业务逻辑堆回 `cli/app.py`
 - 避免在 README 中重复 MANUAL 和 docs 的内部细节

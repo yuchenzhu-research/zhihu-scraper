@@ -105,6 +105,15 @@ Historical paths are still compatible:
 - `cookies.json`
 - `cookie_pool/`
 
+After setup, use the following commands to confirm whether runtime resolution
+is still hitting legacy repo-root compatibility paths:
+
+- `zhihu config --show`
+- `zhihu check`
+
+They show the configured path, active path, and whether legacy cookie-path
+fallback is still active.
+
 ### 3.3 Minimal Run
 
 ```bash
@@ -167,6 +176,11 @@ zhihu config --show
 zhihu check
 zhihu manual
 ```
+
+Notes:
+
+- `zhihu query` now shows the stable identity `content_key = type:id`
+- `answer_id` remains as a compatibility field, but is no longer the primary public identifier
 
 ## 5. Output Layout
 
