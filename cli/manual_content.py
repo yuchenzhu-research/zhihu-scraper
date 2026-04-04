@@ -138,6 +138,7 @@ COMMAND REFERENCE
   Behavior:
   - checks new items since last pointer
   - pointer advances only when current round has no failures
+  - unsupported-only new collection items still advance the pointer so the same non-archiveable head items are not re-scanned forever
   - avoids skipping failed items in next run
 
   Example:

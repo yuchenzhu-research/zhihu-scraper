@@ -480,18 +480,34 @@ def monitor(
     m = CollectionMonitor(data_dir=str(output_dir))
 
     try:
-        new_items, new_last_id = m.get_new_items(collection_id)
+        delta = m.get_new_items(collection_id)
     except Exception as e:
         handle_error(e, log)
         raise SystemExit(1)
 
-    if not new_items:
+    if not delta.has_new_activity:
         rprint("[green]✨ No new content in collection, monitoring ends / 收藏夹没有新增内容，监控结束。[/green]")
         return
 
-    rprint(f"\n[bold]🛒 Preparing to download {len(new_items)} new items... / 准备下载 {len(new_items)} 个新内容...[/bold]")
+    if not delta.has_supported_items:
+        rprint(
+            "[cyan]⏭️ Detected new collection activity, but no answer/article items were ready for archiving "
+            f"/ 检测到收藏夹有新增动态，但没有可归档的回答或文章（跳过 {delta.unsupported_count} 个不支持条目）。[/cyan]"
+        )
+        if delta.next_pointer:
+            m.mark_updated(collection_id, delta.next_pointer)
+            rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {delta.next_pointer}[/cyan]")
+        return
 
-    urls = [item["url"] for item in new_items]
+    if delta.unsupported_count:
+        rprint(
+            f"[cyan]ℹ️ Skipping {delta.unsupported_count} unsupported new collection items "
+            f"/ 跳过 {delta.unsupported_count} 个不支持归档的新条目[/cyan]"
+        )
+
+    rprint(f"\n[bold]🛒 Preparing to download {len(delta.items)} new items... / 准备下载 {len(delta.items)} 个新内容...[/bold]")
+
+    urls = [item["url"] for item in delta.items]
     max_concurrency = min(concurrency, len(urls), 8)
 
     results = asyncio.run(_batch_concurrent(
@@ -508,9 +524,9 @@ def monitor(
 
     rprint(f"\n[bold]📊 Monitor download completed / 监控下载完成: {success} success / 成功, {failed} failed / 失败[/bold]")
 
-    if failed == 0 and success > 0:
-        m.mark_updated(collection_id, new_last_id)
-        rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {new_last_id}[/cyan]")
+    if failed == 0 and success > 0 and delta.next_pointer:
+        m.mark_updated(collection_id, delta.next_pointer)
+        rprint(f"[cyan]✅ Saved latest progress pointer / 已保存最新进度指针: {delta.next_pointer}[/cyan]")
     elif failed > 0:
         rprint("[yellow]⚠️ Partial failures detected, monitoring pointer was not advanced / 存在失败项，本次不会推进监控游标，避免漏抓。[/yellow]")
 
