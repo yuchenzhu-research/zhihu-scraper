@@ -183,7 +183,7 @@ class MonitorContractTests(unittest.TestCase):
                 }
 
                 monitor = CollectionMonitor(data_dir=tmpdir)
-                monitor.state["78170682"] = "known-id"
+                monitor.store.set_state("78170682", "known-id")
                 delta = monitor.get_new_items("78170682")
 
         self.assertFalse(delta.has_new_activity)

@@ -19,6 +19,7 @@ from typing import List, Optional
 
 from .config import get_logger
 from .api_client import ZhihuAPIClient
+from .state_store import StateStore, JsonFileStateStore
 
 
 @dataclass(frozen=True)
@@ -47,38 +48,16 @@ class CollectionMonitor:
     English: Monitor Zhihu collections and implement incremental fetching
     """
 
-    def __init__(self, data_dir: str = "./data"):
+    def __init__(self, data_dir: str = "./data", store: Optional[StateStore] = None):
         self.log = get_logger()
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.state_file = self.data_dir / ".monitor_state.json"
+        if store is None:
+            data_path = Path(data_dir)
+            data_path.mkdir(parents=True, exist_ok=True)
+            self.store = JsonFileStateStore(data_path / ".monitor_state.json")
+        else:
+            self.store = store
 
-        self.state = self._load_state()
         self.api_client = ZhihuAPIClient()
-
-    def _load_state(self) -> dict:
-        """
-        Load monitoring state from file
-        从文件加载监控状态
-        """
-        if self.state_file.exists():
-            try:
-                with open(self.state_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception as e:
-                self.log.warning("load_monitor_state_failed", error=str(e))
-        return {}
-
-    def _save_state(self):
-        """
-        Save monitoring state to file
-        保存监控状态到文件
-        """
-        try:
-            with open(self.state_file, "w", encoding="utf-8") as f:
-                json.dump(self.state, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            self.log.error("save_monitor_state_failed", error=str(e))
 
     def get_new_items(self, collection_id: str) -> CollectionDelta:
         """
@@ -88,7 +67,7 @@ class CollectionMonitor:
         获取收藏夹中的新增内容。
         返回的数据结构包含抓取所需的基本信息，如 url, type, title 等。
         """
-        known_last_id = self.state.get(str(collection_id))
+        known_last_id = self.store.get_state(str(collection_id))
         self.log.info("check_collection", collection_id=collection_id, known_last_id=known_last_id)
 
         offset = 0
@@ -182,6 +161,5 @@ class CollectionMonitor:
         在抓取成功完成后，更新状态文件
         """
         if new_last_id:
-            self.state[str(collection_id)] = str(new_last_id)
-            self._save_state()
+            self.store.set_state(str(collection_id), str(new_last_id))
             self.log.info("state_updated", collection_id=collection_id, new_last_id=new_last_id)

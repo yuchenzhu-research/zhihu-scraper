@@ -51,6 +51,45 @@ async def _launch_browser_with_fallback(
     return await playwright.chromium.launch(**launch_kwargs)
 
 
+async def _launch_persistent_with_fallback(
+    playwright: Any,
+    browser_cfg: Any,
+    *,
+    headless: bool,
+    report_launch_failures: bool = True,
+):
+    """
+    Launch a persistent context using the configured user_data_dir.
+    """
+    log = get_logger()
+    launch_args = browser_cfg.args or [
+        "--disable-blink-features=AutomationControlled",
+        "--no-sandbox",
+    ]
+    launch_kwargs = {
+        "headless": headless,
+        "args": launch_args,
+        "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "viewport": browser_cfg.viewport,
+    }
+
+    channel = (browser_cfg.channel or "").strip()
+    if channel:
+        try:
+            return await playwright.chromium.launch_persistent_context(
+                user_data_dir=browser_cfg.user_data_dir,
+                **{**launch_kwargs, "channel": channel}
+            )
+        except Exception as e:
+            if report_launch_failures:
+                log.warning("browser_channel_persistent_launch_failed", channel=channel, error=str(e))
+
+    return await playwright.chromium.launch_persistent_context(
+        user_data_dir=browser_cfg.user_data_dir,
+        **launch_kwargs
+    )
+
+
 async def extract_zhuanlan_html(
     article_id: str,
     session_cookies: Optional[Dict[str, str]] = None,
@@ -83,12 +122,15 @@ async def extract_zhuanlan_html(
     log.info("trigger_browser_fallback", url=url)
 
     async with async_playwright() as p:
-        browser = await _launch_browser_with_fallback(p, browser_cfg, headless=headless)
-
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-            viewport=browser_cfg.viewport,
-        )
+        if getattr(browser_cfg, "user_data_dir", None):
+            context = await _launch_persistent_with_fallback(p, browser_cfg, headless=headless)
+            browser = None
+        else:
+            browser = await _launch_browser_with_fallback(p, browser_cfg, headless=headless)
+            context = await browser.new_context(
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                viewport=browser_cfg.viewport,
+            )
 
         # Inject cookie tickets to avoid redirection to homepage login wall
         # 注入 Cookie 票据 (避免被弹到首页重定向登录)
@@ -186,4 +228,7 @@ async def extract_zhuanlan_html(
             print("⚠️ 页面调试内容已脱敏，仅记录摘要。")
             return None
         finally:
-            await browser.close()
+            if browser:
+                await browser.close()
+            elif context:
+                await context.close()
