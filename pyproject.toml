@@ -38,6 +38,10 @@ full = [
 # 仅 CLI 命令（预留给未来进一步细分的轻量安装模型）
 cli = [
 ]
+# LLM-powered translation
+translate = [
+    "openai>=1.0",
+]
 # 开发测试
 dev = [
     "pytest>=7.4",

@@ -8,7 +8,33 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Static
 
 
-class QuestionLimitScreen(ModalScreen[int | None]):
+from core.i18n import SUPPORTED_LANGUAGES, t
+
+
+class LanguageSelectionScreen(ModalScreen[str | None]):
+    """Apple-style language selector for the first run or manual switch."""
+
+    def compose(self) -> ComposeResult:
+        # Sort languages to ensure consistent order (zh, en are primary)
+        langs = [("zh", "简体中文"), ("en", "English"), ("zh_hant", "繁體中文")]
+        yield Vertical(
+            Static(t("lang_selector.title"), id="dialog-title"),
+            Static(t("lang_selector.hint"), id="dialog-body"),
+            *[
+                Button(label, id=f"lang-{code}", classes="lang-button")
+                for code, label in langs
+            ],
+            id="lang-selector-dialog",
+        )
+
+    def on_mount(self) -> None:
+        self.query_one("#lang-zh", Button).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id or ""
+        if button_id.startswith("lang-"):
+            lang_code = button_id.replace("lang-", "")
+            self.dismiss(lang_code)
     """Prompt for a Top-N limit when the input is a single question page."""
 
     BINDINGS = [
@@ -17,9 +43,9 @@ class QuestionLimitScreen(ModalScreen[int | None]):
 
     def compose(self) -> ComposeResult:
         yield Vertical(
-            Static("问题页抓取数量", id="dialog-title"),
+            Static(t("draft.question.title"), id="dialog-title"),
             Static(
-                "问题页不是单条回答。先确定这一轮草案要预览多少条回答，再进入下一阶段的真实抓取。",
+                t("draft.question.hint"),
                 id="dialog-body",
             ),
             Horizontal(
@@ -33,8 +59,8 @@ class QuestionLimitScreen(ModalScreen[int | None]):
                 id="custom-limit",
             ),
             Horizontal(
-                Button("确认自定义", id="limit-custom", variant="primary"),
-                Button("取消", id="limit-cancel"),
+                Button(t("detail.draft.ready"), id="limit-custom", variant="primary"),
+                Button(t("app.cancel_question.title"), id="limit-cancel"),
                 id="dialog-actions",
             ),
             Static("", id="dialog-error"),

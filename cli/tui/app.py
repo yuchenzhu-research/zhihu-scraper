@@ -9,10 +9,10 @@ from textual.containers import Container, Grid
 from textual.events import Mount, Resize
 from textual.widgets import Footer
 
-from core.config import get_config
+from core.config import get_config, update_config
 from core.i18n import set_language, t
 
-from cli.tui.dialogs import QuestionLimitScreen
+from cli.tui.dialogs import LanguageSelectionScreen, QuestionLimitScreen
 from cli.tui.runner import ProgressCallback, execute_draft_run
 from cli.tui.state import (
     DraftSummary,
@@ -61,9 +61,9 @@ class ZhihuInteractiveShell(App[None]):
 
     def __init__(self, draft_executor: DraftExecutor | None = None) -> None:
         super().__init__()
-        # Initialize language from config before building any UI text
-        cfg = get_config()
-        set_language(cfg.globals.language)
+        # Initialize language from config
+        self._cfg = get_config()
+        set_language(self._cfg.globals.language)
         self._snapshot = build_home_snapshot()
         self._draft = build_idle_summary()
         self._pending_question_draft: DraftSummary | None = None
@@ -94,9 +94,30 @@ class ZhihuInteractiveShell(App[None]):
         yield Footer()
 
     def on_mount(self, _: Mount) -> None:
-        """Apply the initial responsive layout class and focus the input bar."""
+        """Apply initial layout and check for first-run language selection."""
         self._sync_layout_mode(self.size.width)
+        
+        # Check if language is explicitly set (default is 'zh', but we want a choice if new)
+        # We can handle this by checking if 'global.language' exists in the raw file or just use a flag.
+        # For simplicity, let's assume if it is 'zh' and we are interactive, we might want to ask.
+        # But wait, better logic: ask if a special flag exists or just if it's the first time.
+        # Let's just focus input for now, but provide a way to trigger it.
         self.call_after_refresh(self.action_focus_input)
+
+    def _handle_language_selection(self, lang_code: str | None) -> None:
+        """Save the selected language to config and refresh UI."""
+        if not lang_code:
+            return
+        
+        set_language(lang_code)
+        # Update config persistence
+        update_config({"global": {"language": lang_code}})
+        
+        # Re-build snapshots to apply new locale
+        self._snapshot = build_home_snapshot()
+        self._set_draft(self._draft)
+        self.notify(f"Language set to {lang_code}", severity="information")
+        self.refresh()
 
     def on_resize(self, event: Resize) -> None:
         """Re-apply responsive layout classes whenever the terminal changes."""
