@@ -78,3 +78,17 @@ logging:
   format: "console"          # console (美观) / json (结构化)
   file: ".local/logs/scraper.log"   # 日志文件路径（可选）
   log_exceptions: true       # 是否记录异常堆栈
+
+# 全局设置
+global:
+  language: "zh"             # UI 界面语言: zh / en / zh_hant
+
+# 翻译配置 (可选，需安装 pip install -e ".[translate]")
+translation:
+  enabled: false             # 是否在抓取后自动翻译
+  target_language: "en"      # 目标语言
+  engine: "openai"           # 引擎标识 (openai / deepseek / ollama)
+  base_url: "https://api.openai.com/v1"
+  api_key: ""                # 建议通过环境变量 ZHIHU_TRANSLATE_API_KEY 设置
+  model: "gpt-4o-mini"       # 推荐低成本模型
+  comment_top_n: 5           # 评论翻译数量 (默认 Top 5，支持 1~100)

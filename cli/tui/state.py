@@ -7,6 +7,7 @@ from pathlib import Path
 
 from core.config import get_config
 from core.cookie_manager import has_available_cookie_sources
+from core.i18n import t
 from core.utils import detect_url_type, extract_id_from_url, extract_urls
 
 
@@ -100,15 +101,14 @@ def build_home_snapshot() -> HomeSnapshot:
         cfg.zhihu.cookies_pool_dir,
     )
 
-    browser_mode = "无头" if cfg.zhihu.browser.headless else "显示窗口"
     return HomeSnapshot(
-        eyebrow="ZHIHU ARCHIVE",
-        title="知乎归档台",
-        subtitle="一个围绕抓取、归档与后续检索而设计的全屏终端工作台",
+        eyebrow=t("home.eyebrow"),
+        title=t("home.title"),
+        subtitle=t("home.subtitle"),
         notes=(
-            "回车会先生成归档草案，按 Ctrl+R 执行当前草案。",
-            "按 Ctrl+Y 可载入最近一轮失败项，生成重试草案。",
-            "旧版 Rich / questionary 流程仍然可用：zhihu interactive --legacy",
+            t("home.hint.enter"),
+            t("home.hint.retry"),
+            t("home.hint.legacy"),
         ),
         cookie_ready=cookie_ready,
     )
@@ -117,10 +117,10 @@ def build_home_snapshot() -> HomeSnapshot:
 def build_idle_summary() -> DraftSummary:
     """Initial summary card before any input is submitted."""
     return DraftSummary(
-        title="等待输入链接",
+        title=t("draft.idle.title"),
         lines=(
-            "支持回答、问题页、专栏链接，也支持从一段混合文本中自动提取。",
-            "回车先生成草案；确认后按 Ctrl+R 执行当前归档。",
+            t("draft.idle.line1"),
+            t("draft.idle.line2"),
         ),
         tone="muted",
     )
@@ -135,10 +135,10 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
     urls = tuple(extract_urls(stripped))
     if not urls:
         return DraftSummary(
-            title="未识别到知乎链接",
+            title=t("draft.no_url.title"),
             lines=(
-                "请粘贴回答、问题页或专栏链接。",
-                "如果是一段长文本，应用会自动抽取其中的知乎 URL。",
+                t("draft.no_url.line1"),
+                t("draft.no_url.line2"),
             ),
             tone="warn",
         )
@@ -150,11 +150,11 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
         question_target = question_targets[0]
         if cookie_ready:
             return DraftSummary(
-                title="检测到问题页链接",
+                title=t("draft.question.title"),
                 lines=(
                     f"{describe_target(question_target)}",
-                    "这不是单条回答。请先选择本轮要预览的回答数量。",
-                    "可选 Top 3、Top 20 或自定义正整数。",
+                    t("draft.question.hint"),
+                    t("draft.question.options"),
                 ),
                 tone="accent",
                 targets=targets,
@@ -162,14 +162,14 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
             )
         return apply_question_limit(
             DraftSummary(
-                title="检测到问题页链接",
+                title=t("draft.question.title"),
                 lines=(),
                 tone="warn",
                 targets=targets,
                 pending_question_url=question_target.url,
             ),
             3,
-            source="游客模式默认值",
+            source=t("summary.guest_default"),
         )
 
     if question_targets:
@@ -179,15 +179,15 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
         )
         preview_lines = tuple(describe_target(target) for target in targets[:3])
         more_count = len(targets) - len(preview_lines)
-        extra_lines = (f"其余 {more_count} 个链接也已加入当前草案队列。",) if more_count > 0 else ()
+        extra_lines = (t("summary.extra", count=more_count),) if more_count > 0 else ()
         summary_lines = (
             _summarize_type_counts(targets),
-            "检测到问题页时，当前阶段先按每个问题 Top 3 执行。",
+            t("draft.question.top_hint"),
         ) + preview_lines + extra_lines + (
-            "确认后按 Ctrl+R 执行当前草案。",
+            t("draft.confirm_exec"),
         )
         return DraftSummary(
-            title="已暂存多链接草案",
+            title=t("draft.multi.title"),
             lines=summary_lines,
             tone="accent",
             targets=targets,
@@ -195,13 +195,13 @@ def parse_input_to_draft(text: str, cookie_ready: bool) -> DraftSummary:
 
     preview_lines = tuple(describe_target(target) for target in targets[:3])
     more_count = len(targets) - len(preview_lines)
-    extra_lines = (f"其余 {more_count} 个链接已识别，本轮会按当前顺序顺次执行。",) if more_count > 0 else ()
+    extra_lines = (t("summary.extra_seq", count=more_count),) if more_count > 0 else ()
     return DraftSummary(
-        title="已识别归档草案",
+        title=t("draft.ready.title"),
         lines=(
             _summarize_type_counts(targets),
         ) + preview_lines + extra_lines + (
-            "确认后按 Ctrl+R 开始归档。",
+            t("draft.confirm"),
         ),
         tone="success",
         targets=targets,
@@ -216,13 +216,13 @@ def apply_question_limit(draft: DraftSummary, limit: int, source: str) -> DraftS
     )
     question_target = next((target for target in updated_targets if target.url_type == "question"), None)
     lines = (
-        describe_target(question_target) if question_target else f"问题页 · Top {limit}",
-        f"抓取数量已设置为 Top {limit}。",
-        f"来源：{source}。",
-        "确认后按 Ctrl+R 开始归档。",
+        describe_target(question_target) if question_target else f"{t('type.question')} · Top {limit}",
+        t("draft.question_updated.limit", limit=limit),
+        t("draft.question_updated.source", source=source),
+        t("draft.confirm"),
     )
     return DraftSummary(
-        title="问题页草案已更新",
+        title=t("draft.question_updated.title"),
         lines=lines,
         tone="success",
         targets=updated_targets,
@@ -238,26 +238,26 @@ def _summarize_type_counts(targets: tuple[DraftTarget, ...]) -> str:
 
     parts = []
     if answer_count:
-        parts.append(f"{answer_count} 个回答")
+        parts.append(t("summary.answers", count=answer_count))
     if question_count:
-        parts.append(f"{question_count} 个问题页")
+        parts.append(t("summary.questions", count=question_count))
     if article_count:
-        parts.append(f"{article_count} 篇专栏")
+        parts.append(t("summary.articles", count=article_count))
 
-    summary = "，".join(parts) if parts else f"{len(targets)} 个知乎链接"
-    return f"识别到 {len(targets)} 个链接：{summary}。"
+    summary = "、".join(parts) if parts else t("summary.links", count=len(targets))
+    return t("summary.count", total=len(targets), detail=summary)
 
 
 def describe_target(target: DraftTarget | None) -> str:
     """Create a compact one-line description for a parsed target."""
     if target is None:
-        return "未知目标"
+        return t("type.unknown")
     target_id = extract_id_from_url(target.url)
     type_name = {
-        "answer": "回答",
-        "question": "问题页",
-        "article": "专栏",
-    }.get(target.url_type, "链接")
+        "answer": t("type.answer"),
+        "question": t("type.question"),
+        "article": t("type.article"),
+    }.get(target.url_type, t("type.link"))
     base = f"{type_name} #{target_id}" if target_id else f"{type_name} · {target.url}"
     if target.url_type == "question" and target.limit:
         return f"{base} · Top {target.limit}"
@@ -275,12 +275,12 @@ def build_running_summary(
     """Build the transient running-state summary shown during execution."""
     current_target = draft.targets[current_index - 1] if 0 < current_index <= total else None
     return DraftSummary(
-        title=f"正在归档 {current_index}/{total}",
+        title=t("draft.running.title", current=current_index, total=total),
         lines=(
-            f"当前目标：{describe_target(current_target)}",
-            f"阶段：{phase}",
-            f"输出目录：{output_dir}",
-            "执行期间输入栏会暂时锁定，完成后自动恢复。",
+            t("draft.running.target", target=describe_target(current_target)),
+            t("draft.running.phase", phase=phase),
+            t("draft.running.output", output_dir=output_dir),
+            t("draft.running.locked"),
         ),
         tone="accent",
         targets=draft.targets,
@@ -292,29 +292,29 @@ def build_execution_summary(report: ExecutionReport) -> DraftSummary:
     success = report.success_count
     failure = report.failure_count
     if success and not failure:
-        title = "归档完成"
+        title = t("draft.done.title")
         tone = "success"
     elif success:
-        title = "归档部分完成"
+        title = t("draft.partial.title")
         tone = "warn"
     else:
-        title = "归档失败"
+        title = t("draft.failed.title")
         tone = "danger"
 
     lines = [
-        f"本轮执行完成：成功 {success} 个，失败 {failure} 个。",
-        f"输出目录：{report.output_dir}",
+        t("draft.done.summary", success=success, failure=failure),
+        t("draft.done.output", output_dir=report.output_dir),
     ]
 
     for record in report.records[:3]:
         if record.succeeded:
-            lines.append(f"{describe_target(record.target)} · 已保存 {record.saved_count} 条内容")
+            lines.append(t("draft.done.saved", target=describe_target(record.target), count=record.saved_count))
         else:
-            lines.append(f"{describe_target(record.target)} · 失败：{record.error}")
+            lines.append(t("draft.done.error", target=describe_target(record.target), error=record.error))
 
     remaining = len(report.records) - min(len(report.records), 3)
     if remaining > 0:
-        lines.append(f"其余 {remaining} 个目标已完成，后续阶段会补更完整的结果面板。")
+        lines.append(t("draft.done.remaining", count=remaining))
 
     return DraftSummary(
         title=title,
@@ -328,23 +328,23 @@ def build_queue_snapshot(draft: DraftSummary, *, is_running: bool) -> PanelSnaps
     """Build the queue panel from the current draft."""
     if not draft.targets:
         return PanelSnapshot(
-            title="当前队列为空",
+            title=t("queue.empty.title"),
             lines=(
-                "输入链接并回车后，这里会显示本轮待执行目标。",
-                "多链接会按当前顺序顺次执行。",
+                t("queue.empty.line1"),
+                t("queue.empty.line2"),
             ),
             tone="muted",
         )
 
-    status = "执行中" if is_running else "待补问题页配置" if draft.requires_question_limit else "等待执行"
+    status = t("queue.status_running") if is_running else t("queue.status_pending") if draft.requires_question_limit else t("queue.status_waiting")
     tone = "accent" if is_running else "warn" if draft.requires_question_limit else "success"
     preview = tuple(describe_target(target) for target in draft.targets[:4])
     remaining = len(draft.targets) - len(preview)
-    extra = (f"其余 {remaining} 个目标仍在当前草案中。",) if remaining > 0 else ()
+    extra = (t("queue.remaining", count=remaining),) if remaining > 0 else ()
     return PanelSnapshot(
-        title="当前草案队列",
+        title=t("queue.title"),
         lines=(
-            f"状态：{status} · 共 {len(draft.targets)} 个目标。",
+            t("queue.status", status=status, count=len(draft.targets)),
             *_with_queue_prefix(preview),
             *extra,
         ),
@@ -356,10 +356,10 @@ def build_history_snapshot(reports: tuple[ExecutionReport, ...]) -> PanelSnapsho
     """Build the recent-results panel from execution history."""
     if not reports:
         return PanelSnapshot(
-            title="最近结果为空",
+            title=t("history.empty.title"),
             lines=(
-                "执行一次归档后，这里会显示输出路径和失败摘要。",
-                "如果最近一轮存在失败项，可按 Ctrl+Y 载入重试草案。",
+                t("history.empty.line1"),
+                t("history.empty.line2"),
             ),
             tone="muted",
         )
@@ -367,27 +367,27 @@ def build_history_snapshot(reports: tuple[ExecutionReport, ...]) -> PanelSnapsho
     latest = reports[0]
     tone = "warn" if latest.failure_count else "success"
     lines = [
-        f"最近一轮：成功 {latest.success_count} 个，失败 {latest.failure_count} 个。",
-        f"输出目录：{latest.output_dir}",
+        t("history.summary", success=latest.success_count, failure=latest.failure_count),
+        t("history.output", output_dir=latest.output_dir),
     ]
     for record in latest.records[:3]:
         if record.succeeded:
             target_path = _short_output_path(record.markdown_paths[0]) if record.markdown_paths else latest.output_dir
             lines.append(f"{describe_target(record.target)} -> {target_path}")
         else:
-            detail = record.error or "未知错误"
+            detail = record.error or t("history.unknown_error")
             if record.log_tail:
                 detail = f"{detail} | {record.log_tail[-1]}"
-            lines.append(f"{describe_target(record.target)} -> 失败：{detail}")
+            lines.append(f"{describe_target(record.target)} -> {t('history.fail_detail', detail=detail)}")
 
     if len(reports) > 1:
-        lines.append(f"已保留最近 {len(reports)} 轮执行摘要。")
+        lines.append(t("history.rounds", count=len(reports)))
 
     if latest.failure_count:
-        lines.append("按 Ctrl+Y 可从最近一轮失败项生成重试草案。")
+        lines.append(t("history.retry_hint"))
 
     return PanelSnapshot(
-        title="最近执行结果",
+        title=t("history.title"),
         lines=tuple(lines),
         tone=tone,
     )
@@ -401,14 +401,14 @@ def build_retry_draft(report: ExecutionReport) -> DraftSummary | None:
 
     preview = tuple(describe_target(target) for target in failed_targets[:3])
     remaining = len(failed_targets) - len(preview)
-    extra = (f"其余 {remaining} 个失败目标也已加入当前重试草案。",) if remaining > 0 else ()
+    extra = (t("retry.extra", count=remaining),) if remaining > 0 else ()
     return DraftSummary(
-        title="失败项重试草案",
+        title=t("retry.title"),
         lines=(
-            f"已从最近一轮失败项生成 {len(failed_targets)} 个目标。",
+            t("retry.summary", count=len(failed_targets)),
             *preview,
             *extra,
-            "确认后按 Ctrl+R 重新执行。",
+            t("retry.confirm"),
         ),
         tone="warn",
         targets=failed_targets,
@@ -423,20 +423,20 @@ def build_detail_snapshot(draft: DraftSummary, reports: tuple[ExecutionReport, .
         for record in latest.records[:4]:
             if record.succeeded:
                 saved_path = _short_output_path(record.markdown_paths[0]) if record.markdown_paths else latest.output_dir
-                lines.append(f"{describe_target(record.target)} 已写入 {saved_path}")
+                lines.append(t("detail.exec.saved", target=describe_target(record.target), path=saved_path))
             else:
-                lines.append(f"{describe_target(record.target)} 失败：{record.error}")
+                lines.append(t("detail.exec.failed", target=describe_target(record.target), error=record.error))
                 if record.log_tail:
-                    lines.append(f"日志尾部：{record.log_tail[-1]}")
+                    lines.append(t("detail.exec.log_tail", line=record.log_tail[-1]))
 
         if not lines:
-            lines.append("最近一轮执行还没有明细。")
+            lines.append(t("detail.exec.empty"))
 
         if latest.failure_count:
-            lines.append("失败项可通过 Ctrl+Y 重新装载为当前草案。")
+            lines.append(t("detail.exec.retry_hint"))
 
         return PanelSnapshot(
-            title="执行详情",
+            title=t("detail.exec.title"),
             lines=tuple(lines),
             tone="warn" if latest.failure_count else "success",
         )
@@ -444,19 +444,19 @@ def build_detail_snapshot(draft: DraftSummary, reports: tuple[ExecutionReport, .
     if draft.targets:
         preview = tuple(describe_target(target) for target in draft.targets[:4])
         remaining = len(draft.targets) - len(preview)
-        extra = (f"其余 {remaining} 个目标已在队列中等待。",) if remaining > 0 else ()
-        status = "等待问题页数量确认。" if draft.requires_question_limit else "草案已准备就绪，按 Ctrl+R 可直接执行。"
+        extra = (t("detail.draft.remaining", count=remaining),) if remaining > 0 else ()
+        status = t("detail.draft.pending") if draft.requires_question_limit else t("detail.draft.ready")
         return PanelSnapshot(
-            title="当前草案详情",
+            title=t("detail.draft.title"),
             lines=preview + extra + (status,),
             tone="warn" if draft.requires_question_limit else "accent",
         )
 
     return PanelSnapshot(
-        title="工作台详情",
+        title=t("detail.idle.title"),
         lines=(
-            "这里会显示当前草案的目标细节，或最近一轮执行的详细结果。",
-            "当失败项存在时，这里也会展示最近的错误摘要和日志尾部。",
+            t("detail.idle.line1"),
+            t("detail.idle.line2"),
         ),
         tone="muted",
     )
@@ -472,4 +472,4 @@ def _short_output_path(path: str) -> str:
 
 def _with_queue_prefix(lines: tuple[str, ...]) -> tuple[str, ...]:
     """Prefix queue lines to distinguish them from status copy."""
-    return tuple(f"队列：{line}" for line in lines)
+    return tuple(t("queue.prefix", line=line) for line in lines)

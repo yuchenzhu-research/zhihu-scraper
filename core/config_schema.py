@@ -111,11 +111,29 @@ class LoggingConfig:
 
 
 @dataclass
+class GlobalConfig:
+    language: str = "zh"
+
+
+@dataclass
+class TranslationConfig:
+    enabled: bool = False
+    target_language: str = "en"
+    engine: str = "openai"
+    base_url: str = "https://api.openai.com/v1"
+    api_key: str = ""
+    model: str = "gpt-4o-mini"
+    comment_top_n: int = 5
+
+
+@dataclass
 class Config:
     zhihu: ZhihuConfig
     crawler: CrawlerConfig
     output: OutputConfig
     logging: LoggingConfig
+    globals: GlobalConfig = field(default_factory=GlobalConfig)
+    translation: TranslationConfig = field(default_factory=TranslationConfig)
 
     @classmethod
     def from_dict(cls, raw: Dict[str, Any]) -> "Config":
@@ -146,11 +164,32 @@ def build_config_from_dict(raw: Dict[str, Any]) -> Config:
     output = OutputConfig(**raw.get("output", {}))
     logging_cfg = LoggingConfig(**raw.get("logging", {}))
 
+    global_raw = raw.get("global", {})
+    globals_cfg = GlobalConfig(
+        language=global_raw.get("language", "zh"),
+    )
+
+    translation_raw = raw.get("translation", {})
+    # Support env var override for API key
+    import os
+    api_key = os.environ.get("ZHIHU_TRANSLATE_API_KEY", translation_raw.get("api_key", ""))
+    translation_cfg = TranslationConfig(
+        enabled=translation_raw.get("enabled", False),
+        target_language=translation_raw.get("target_language", "en"),
+        engine=translation_raw.get("engine", "openai"),
+        base_url=translation_raw.get("base_url", "https://api.openai.com/v1"),
+        api_key=api_key,
+        model=translation_raw.get("model", "gpt-4o-mini"),
+        comment_top_n=translation_raw.get("comment_top_n", 5),
+    )
+
     return Config(
         zhihu=zhihu,
         crawler=crawler,
         output=output,
         logging=logging_cfg,
+        globals=globals_cfg,
+        translation=translation_cfg,
     )
 
 
@@ -160,4 +199,6 @@ def build_default_config() -> Config:
         crawler=CrawlerConfig(),
         output=OutputConfig(),
         logging=LoggingConfig(),
+        globals=GlobalConfig(),
+        translation=TranslationConfig(),
     )

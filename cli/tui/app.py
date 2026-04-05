@@ -9,6 +9,9 @@ from textual.containers import Container, Grid
 from textual.events import Mount, Resize
 from textual.widgets import Footer
 
+from core.config import get_config
+from core.i18n import set_language, t
+
 from cli.tui.dialogs import QuestionLimitScreen
 from cli.tui.runner import ProgressCallback, execute_draft_run
 from cli.tui.state import (
@@ -58,6 +61,9 @@ class ZhihuInteractiveShell(App[None]):
 
     def __init__(self, draft_executor: DraftExecutor | None = None) -> None:
         super().__init__()
+        # Initialize language from config before building any UI text
+        cfg = get_config()
+        set_language(cfg.globals.language)
         self._snapshot = build_home_snapshot()
         self._draft = build_idle_summary()
         self._pending_question_draft: DraftSummary | None = None
@@ -112,7 +118,7 @@ class ZhihuInteractiveShell(App[None]):
         self._set_draft(draft)
         event.input.focus()
         if draft.ready_to_run:
-            self.notify("草案已生成，按 Ctrl+R 即可执行！", title="解析完成", severity="information")
+            self.notify(t("toast.draft_created"), title=t("toast.draft_created.title"), severity="information")
 
     def action_focus_input(self) -> None:
         """Move keyboard focus back to the primary input field."""
@@ -123,10 +129,10 @@ class ZhihuInteractiveShell(App[None]):
         if self._is_running:
             self._set_draft(
                 DraftSummary(
-                    title="任务仍在执行中",
+                    title=t("app.busy.title"),
                     lines=(
-                        "当前归档尚未完成，请等待本轮执行结束。",
-                        "阶段 5 仍保持单轮执行，不允许并发启动多个任务。",
+                        t("app.busy.line1"),
+                        t("app.busy.line2"),
                     ),
                     tone="warn",
                     targets=self._draft.targets,
@@ -137,10 +143,10 @@ class ZhihuInteractiveShell(App[None]):
         if self._draft.requires_question_limit:
             self._set_draft(
                 DraftSummary(
-                    title="请先完成问题页配置",
+                    title=t("app.need_config.title"),
                     lines=(
-                        "当前草案还缺少问题页的抓取数量。",
-                        "先完成 Top 3、Top 20 或自定义选择，再执行归档。",
+                        t("app.need_config.line1"),
+                        t("app.need_config.line2"),
                     ),
                     tone="warn",
                     targets=self._draft.targets,
@@ -152,10 +158,10 @@ class ZhihuInteractiveShell(App[None]):
         if not self._draft.ready_to_run:
             self._set_draft(
                 DraftSummary(
-                    title="还没有可执行的草案",
+                    title=t("app.no_draft.title"),
                     lines=(
-                        "请先粘贴知乎链接并回车生成当前草案。",
-                        "阶段 5 已接入真实执行、最近结果和失败重试，但仍以当前草案为单次运行边界。",
+                        t("app.no_draft.line1"),
+                        t("app.no_draft.line2"),
                     ),
                     tone="warn",
                 )
@@ -165,14 +171,14 @@ class ZhihuInteractiveShell(App[None]):
         draft = self._draft
         self._is_running = True
         self.query_one("#url-input", ArchiveInput).disabled = True
-        self.notify("后端任务已激活，请耐心等待...", title="任务启动", severity="information")
+        self.notify(t("toast.task_started"), title=t("toast.task_started.title"), severity="information")
         self._set_draft(
             build_running_summary(
                 draft,
                 current_index=1,
                 total=max(1, len(draft.targets)),
-                output_dir="准备启动...",
-                phase="正在初始化后台任务",
+                output_dir=t("init.preparing"),
+                phase=t("init.phase"),
             )
         )
         self.run_worker(
@@ -189,10 +195,10 @@ class ZhihuInteractiveShell(App[None]):
         if self._is_running:
             self._set_draft(
                 DraftSummary(
-                    title="任务仍在执行中",
+                    title=t("app.busy.title"),
                     lines=(
-                        "当前归档尚未完成，暂时不能切换到失败重试草案。",
-                        "等待本轮执行结束后再加载失败项。",
+                        t("app.busy.retry_line1"),
+                        t("app.busy.retry_line2"),
                     ),
                     tone="warn",
                     targets=self._draft.targets,
@@ -204,10 +210,10 @@ class ZhihuInteractiveShell(App[None]):
         if latest_report is None:
             self._set_draft(
                 DraftSummary(
-                    title="还没有可重试的结果",
+                    title=t("app.no_retry.title"),
                     lines=(
-                        "先执行至少一轮归档，最近结果面板才会出现失败项。",
-                        "阶段 5 的失败重试入口依赖最近一轮执行报告。",
+                        t("app.no_retry.line1"),
+                        t("app.no_retry.line2"),
                     ),
                     tone="warn",
                 )
@@ -218,10 +224,10 @@ class ZhihuInteractiveShell(App[None]):
         if retry_draft is None:
             self._set_draft(
                 DraftSummary(
-                    title="最近一轮没有失败项",
+                    title=t("app.no_failures.title"),
                     lines=(
-                        "最近一次执行全部成功，不需要生成重试草案。",
-                        "你可以继续输入新链接，或直接执行新的当前草案。",
+                        t("app.no_failures.line1"),
+                        t("app.no_failures.line2"),
                     ),
                     tone="success",
                     targets=self._draft.targets,
@@ -237,10 +243,10 @@ class ZhihuInteractiveShell(App[None]):
         if self._is_running:
             self._set_draft(
                 DraftSummary(
-                    title="归档进行中",
+                    title=t("app.quit_blocked.title"),
                     lines=(
-                        "当前后台任务仍在执行，暂不退出工作台。",
-                        "等待本轮归档完成后再退出，避免留下半完成状态。",
+                        t("app.busy.quit_line1"),
+                        t("app.busy.quit_line2"),
                     ),
                     tone="warn",
                     targets=self._draft.targets,
@@ -271,10 +277,10 @@ class ZhihuInteractiveShell(App[None]):
         if selected_limit is None:
             self._set_draft(
                 DraftSummary(
-                    title="已取消问题页配置",
+                    title=t("app.cancel_question.title"),
                     lines=(
-                        "问题页草案尚未写入抓取数量。",
-                        "重新提交该链接后，可以再次选择 Top 3、Top 20 或自定义。",
+                        t("app.cancel_question.line1"),
+                        t("app.cancel_question.line2"),
                     ),
                     tone="warn",
                     targets=pending.targets,
@@ -283,7 +289,7 @@ class ZhihuInteractiveShell(App[None]):
             self.action_focus_input()
             return
 
-        source = "Top 3 预设" if selected_limit == 3 else "Top 20 预设" if selected_limit == 20 else "自定义输入"
+        source = t("app.source.top3") if selected_limit == 3 else t("app.source.top20") if selected_limit == 20 else t("app.source.custom")
         self._set_draft(apply_question_limit(pending, selected_limit, source))
         self.action_focus_input()
 
@@ -312,11 +318,11 @@ class ZhihuInteractiveShell(App[None]):
         input_widget.focus()
 
         if report.success_count and not report.failure_count:
-            self.notify(f"已成功归档 {report.success_count} 个目标！", title="执行成功", severity="success")
+            self.notify(t("toast.task_success", count=report.success_count), title=t("toast.task_success.title"), severity="success")
         elif report.success_count:
-            self.notify(f"任务部分完成，成功 {report.success_count} 个，失败 {report.failure_count} 个。", title="包含失败项", severity="warning")
+            self.notify(t("toast.task_partial", success=report.success_count, failure=report.failure_count), title=t("toast.task_partial.title"), severity="warning")
         else:
-            self.notify(f"所有 {report.failure_count} 个目标全部执行失败。", title="任务失败", severity="error")
+            self.notify(t("toast.task_failed", count=report.failure_count), title=t("toast.task_failed.title"), severity="error")
 
     def _finish_run_with_error(self, error: str) -> None:
         """Restore the UI after an unexpected worker failure."""
@@ -325,10 +331,10 @@ class ZhihuInteractiveShell(App[None]):
         input_widget.disabled = False
         self._set_draft(
             DraftSummary(
-                title="归档任务异常终止",
+                title=t("app.crash.title"),
                 lines=(
-                    f"错误：{error}",
-                    "这不是目标级失败，而是执行桥本身中断了。",
+                    t("app.crash.line1", error=error),
+                    t("app.crash.line2"),
                 ),
                 tone="danger",
                 targets=self._draft.targets,
