@@ -94,30 +94,28 @@ class ZhihuInteractiveShell(App[None]):
         yield Footer()
 
     def on_mount(self, _: Mount) -> None:
-        """Apply initial layout and check for first-run language selection."""
+        """Apply initial layout and show language selector on first run."""
         self._sync_layout_mode(self.size.width)
-        
-        # Check if language is explicitly set (default is 'zh', but we want a choice if new)
-        # We can handle this by checking if 'global.language' exists in the raw file or just use a flag.
-        # For simplicity, let's assume if it is 'zh' and we are interactive, we might want to ask.
-        # But wait, better logic: ask if a special flag exists or just if it's the first time.
-        # Let's just focus input for now, but provide a way to trigger it.
-        self.call_after_refresh(self.action_focus_input)
+
+        if not self._cfg.globals.language_configured:
+            # First run — show language selector before anything else
+            self.push_screen(LanguageSelectionScreen(), self._handle_language_selection)
+        else:
+            self.call_after_refresh(self.action_focus_input)
 
     def _handle_language_selection(self, lang_code: str | None) -> None:
-        """Save the selected language to config and refresh UI."""
+        """Save the selected language to config and rebuild UI."""
         if not lang_code:
-            return
-        
+            lang_code = "zh"
+
         set_language(lang_code)
-        # Update config persistence
-        update_config({"global": {"language": lang_code}})
-        
-        # Re-build snapshots to apply new locale
+        update_config({"global": {"language": lang_code, "language_configured": True}})
+
+        # Rebuild all snapshots with the new locale, then recompose
         self._snapshot = build_home_snapshot()
-        self._set_draft(self._draft)
-        self.notify(f"Language set to {lang_code}", severity="information")
-        self.refresh()
+        self._draft = build_idle_summary()
+        self.recompose()
+        self.call_after_refresh(self.action_focus_input)
 
     def on_resize(self, event: Resize) -> None:
         """Re-apply responsive layout classes whenever the terminal changes."""
