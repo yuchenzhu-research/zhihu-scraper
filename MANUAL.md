@@ -584,6 +584,9 @@ data/
 
 - `core/config.py` 向 facade 化收敛
 - scraper / save result contract 类型化
+- **(New!)** TUI 工作台作为裸 `zhihu` 命令默认入口
+- **(New!)** TUI 在首次运行提供 `zh` / `en` / `zh_hant` 的多语言配置向导
+- **(New!)** 中英文 `README.md` 与参考文档入口极简重构，剥离技术泥潭进入 `MANUAL.md`
 
 ### 11.2 当前后续重点
 

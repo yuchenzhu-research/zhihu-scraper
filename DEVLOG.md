@@ -2,6 +2,44 @@
 
 ---
 
+## 2026-04-05 / 多语言启动向导、极简主页重构与 SkillsMP 挂载
+
+### 相关 commits
+- `767cc9f` / `5ee4cfb` / `76150fa` / `9a716c8` / `fa599d2` (文档体系优化与极简重构)
+- `0b064cb` / `9c0f866` / `8e3bc8d` / `0b80c74` / `98fe42f` / `846c8fe` / `797d1b4` / `6b74ea9` / `c528271` (TUI First-Run 多语言向导与交互升级)
+
+### 本次修改
+- **首运行多语言向导**：
+  - 新增 `language_configured` 的配置文件持久化开关。
+  - 在 TUI (Textual) 入口加入首运行强弹的 `LanguageSelectionScreen`（Apple-style 设置体验）。
+  - 新增 `zh_hant` 繁体中文语言包，并完全解耦与补齐了原有 `InputCard` 的国际化字典项。
+- **命令行入口收口**：
+  - 更改了裸 `zhihu` 触发的底层逻辑，如今执行 `zhihu` 会直达 Textual TUI 进行首运行检测并打开全屏工作台。
+- **README 重构与 SkillsMP 引入**：
+  - 大幅抽离原双语 `README` 中的大量边角命令行传参、兼容路径与旧系统兼容文案，全量迁入内部说明书 `MANUAL.md`。
+  - 按照 Github 明星开源库的标准，为 `README.md`、`README_EN.md` 打造了极简的信息密度抓眼展示（Elevator pitch）。
+  - 在 `references/skills/` 下正式引入了 `mermaid-diagram`、`mermaid-tools` 和 `readme-generator` 指导方案。
+
+### 解决的问题
+- 解决了新手启动工具后仍需要记命令的痛点：现在 `zhihu` 命令直接打通体验。
+- 解决了长篇 README 造成的维护与阅读疲劳：繁杂技术细节分流至 MANUAL，降低项目首屏劝退率。
+- 确立了代码代理协同准则底线，通过 `skills` 给后续自动化引入立下了标准边界。
+
+### 影响范围
+- `cli/app.py`
+- `cli/tui/app.py`, `widgets.py`, `dialogs.py`
+- `core/config_schema.py`
+- `core/locales/`
+- 所有根目录及内层参考目录的 README 文档体系与 `MANUAL.md`
+
+### 风险 / 未完成事项
+- TUI 直接作为 `zhihu` 的默认入口对于终端不兼容真彩或特定 Curses 的极其老旧环境来说有一定失败风险。
+
+### 下一步
+- 为重构后的主页补上高帧率的 TUI 展示视频/图片。
+
+---
+
 ## 2026-04-05 / 核心抓取链路加固与 TUI 故障修复
 
 ### 相关 commits
