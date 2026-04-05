@@ -71,7 +71,7 @@ app = typer.Typer(
     name="zhihu",
     help=(
         "🕷️ Local-first Zhihu archiver / 本地优先的知乎归档工具. "
-        "Run without arguments to open the home launcher / 无参数时打开首页 launcher."
+        "Run without arguments to launch the interactive workspace / 无参数时直接启动交互式归档工作台。"
     ),
     add_completion=False,
     no_args_is_help=False,
@@ -526,13 +526,13 @@ def interactive(
     - Full-screen archive workbench with in-app URL input
     - Responsive centered layout, question-page limit modal, queue, recent results, and retry flow
     - Deprecated legacy fallback for regression checks only
-    - `zhihu` without arguments opens the launcher first
+    - `zhihu` without arguments launches this TUI directly
 
     功能：
     - 内置链接输入栏的全屏归档工作台
     - 响应式居中布局、问题页数量弹层、队列、最近结果与失败重试
     - 仅用于回归检查的旧版回退入口
-    - `zhihu` 无参数时会先进入首页 launcher
+    - `zhihu` 无参数时直接启动此 TUI 工作台
 
     Example:
         zhihu interactive
