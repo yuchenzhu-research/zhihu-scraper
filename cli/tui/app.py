@@ -34,7 +34,6 @@ from cli.tui.widgets import (
     HomeStage,
     InputCard,
     QueueCard,
-    StatusPill,
     SummaryCard,
 )
 
@@ -73,10 +72,6 @@ class ZhihuInteractiveShell(App[None]):
         yield Container(
             HomeStage(
                 HeroCard(self._snapshot.eyebrow, self._snapshot.title, self._snapshot.subtitle),
-                Grid(
-                    *(StatusPill(item.label, item.value, item.tone) for item in self._snapshot.statuses),
-                    id="status-grid",
-                ),
                 InputCard(),
                 SummaryCard(self._draft.title, self._draft.lines, self._draft.tone),
                 Grid(
@@ -116,6 +111,8 @@ class ZhihuInteractiveShell(App[None]):
 
         self._set_draft(draft)
         event.input.focus()
+        if draft.ready_to_run:
+            self.notify("草案已生成，按 Ctrl+R 即可执行！", title="解析完成", severity="information")
 
     def action_focus_input(self) -> None:
         """Move keyboard focus back to the primary input field."""
@@ -168,6 +165,7 @@ class ZhihuInteractiveShell(App[None]):
         draft = self._draft
         self._is_running = True
         self.query_one("#url-input", ArchiveInput).disabled = True
+        self.notify("后端任务已激活，请耐心等待...", title="任务启动", severity="information")
         self._set_draft(
             build_running_summary(
                 draft,
@@ -312,6 +310,13 @@ class ZhihuInteractiveShell(App[None]):
         input_widget.disabled = False
         self._set_draft(build_execution_summary(report))
         input_widget.focus()
+
+        if report.success_count and not report.failure_count:
+            self.notify(f"已成功归档 {report.success_count} 个目标！", title="执行成功", severity="success")
+        elif report.success_count:
+            self.notify(f"任务部分完成，成功 {report.success_count} 个，失败 {report.failure_count} 个。", title="包含失败项", severity="warning")
+        else:
+            self.notify(f"所有 {report.failure_count} 个目标全部执行失败。", title="任务失败", severity="error")
 
     def _finish_run_with_error(self, error: str) -> None:
         """Restore the UI after an unexpected worker failure."""
