@@ -445,42 +445,76 @@ zhihu interactive
 - 让 TUI、后续自动化任务、未来 API 层可以共用同一套 orchestration
 - 为失败分类、审计日志、重试策略继续扩展预留稳定接口
 
-## 8. 常用命令
+## 8. 详细操作指引 (从 README 迁移)
 
-### 8.1 安装与诊断
+### 8.1 安装与环境诊断
 
 ```bash
+git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
+cd zhihu-scraper
 ./install.sh
+
+# 如需重建环境
 ./install.sh --recreate
+
 zhihu check
 zhihu config --show
 zhihu config --path
-zhihu manual
 ```
 
-### 8.2 抓取
+### 8.2 Cookie 准备
+
+应用运行时默认使用 `.local/` 目录：
+```bash
+mkdir -p .local
+cp cookies.example.json .local/cookies.json
+```
+需要在文件内填入你的 `z_c0` 与 `d_c0`。
+若仍使用旧的根目录路径（如 `cookies.json` 或 `cookie_pool/`），系统仍会兼容。使用 `zhihu check` 可以查看当前生效路径。
+
+### 8.3 交互入口拓扑
+
+- `zhihu`
+  无参数时进入全屏 Textual TUI 交互式工作台（带有首次语言选择）。
+- `zhihu interactive --legacy`
+  旧版 Rich / questionary 回退路径，仅作兼容与排障。
+- `zhihu onboard`
+  首次环境体检和引导向导。
+
+### 8.4 详细抓取命令
 
 ```bash
+# 抓取单条：
 zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
+
+# 抓取作者主页：
 zhihu creator "https://www.zhihu.com/people/iterator"
-zhihu batch urls.txt
+
+# 批量抓取链接列表文件 (urls.txt 每行一个链接)：
+zhihu batch urls.txt -c 8
+
+# 增量监控收藏夹：
 zhihu monitor 78170682
-zhihu query "Transformer"
+
+# 本地 SQLite 数据检索：
+zhihu query "Transformer" -l 20
 ```
 
-说明：
+### 8.5 默认输出结构
 
-- `zhihu query` 当前展示 `Content Key`
-- 稳定身份是 `content_key = type:id`
-- `answer_id` 仅作为历史兼容字段保留在数据库中
+抓取得到的文件默认存放于 `data/` 目录中：
 
-### 8.3 交互入口
-
-```bash
-zhihu
-zhihu interactive
-zhihu interactive --legacy
-zhihu onboard
+```text
+data/
+├─ entries/
+│  └─ 2026-04-03_title--answer-123456/
+│     ├─ index.md  (包含正文，如有启翻译则伴随有 [EN] 版文件)
+│     └─ images/   (原图备份)
+├─ creators/
+│  └─ <url_token>/
+│     ├─ creator.json
+│     └─ README.md
+└─ zhihu.db        (SQLite 索引库)
 ```
 
 ## 9. 已知问题与限制
