@@ -48,12 +48,13 @@ class InputCard(Widget):
         super().__init__(id="input-card")
 
     def compose(self) -> ComposeResult:
-        yield Static("输入知乎链接", classes="section-label")
+        from core.i18n import t
+        yield Static(t("input.label"), classes="section-label")
         yield ArchiveInput(
-            placeholder="粘贴回答、问题页或专栏链接；支持从混合文本中自动提取",
+            placeholder=t("input.placeholder"),
             id="url-input",
         )
-        yield Static("支持多行粘贴；按 Enter 生成草案，Ctrl+R 执行，Ctrl+Y 载入失败重试；按 q 或 Esc 退出。", classes="section-caption")
+        yield Static(t("input.caption"), classes="section-caption")
 
 
 class ArchiveInput(TextArea):
