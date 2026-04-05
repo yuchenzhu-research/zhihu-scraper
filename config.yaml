@@ -1,94 +1,63 @@
-# ============================================================
-# 🐸 知乎爬虫配置文件
-# ============================================================
-
-# 知乎相关配置
 zhihu:
-  # Cookie 配置
   cookies:
-    file: ".local/cookies.json"
-    pool_dir: ".local/cookie_pool"
-    required: true  # 设为 false 可在无登录下运行（游客模式）
-
-  # 浏览器配置
+    file: .local/cookies.json
+    pool_dir: .local/cookie_pool
+    required: true
   browser:
-    headless: true           # 是否无头模式运行
-    timeout: 30000           # 页面加载超时 (ms)
+    headless: true
+    timeout: 30000
     viewport:
       width: 1920
       height: 1080
-    channel: "chrome"        # 使用系统 Chrome
+    channel: chrome
     args:
-      - "--disable-blink-features=AutomationControlled"
-      - "--no-sandbox"
-      - "--disable-infobars"
-      # - "--disable-gpu"  # 如不稳定可启用
-
-  # 反爬虫配置
+    - --disable-blink-features=AutomationControlled
+    - --no-sandbox
+    - --disable-infobars
   anti_detection:
-    stealth: true            # 注入 stealth.min.js
-    webgl: true              # WebGL 参数伪装
-    navigator: true          # navigator.webdriver 伪装
-
-  # 签名算法配置
+    stealth: true
+    webgl: true
+    navigator: true
   signature:
-    enabled: false           # 目前页面访问不需要，API 请求需要
-
-# 爬虫通用配置
+    enabled: false
 crawler:
-  # 重试策略
   retry:
-    max_attempts: 3          # 最大重试次数
-    base_delay: 1.0          # 基础延迟 (秒)
-    max_delay: 30.0          # 最大延迟 (秒)
-    exponential_base: 2.0    # 指数退避底数
-    jitter: true             # 是否添加随机抖动
-
-  # 滚动加载配置
+    max_attempts: 3
+    base_delay: 1.0
+    max_delay: 30.0
+    exponential_base: 2.0
+    jitter: true
   scroll:
-    timeout: 60000           # 滚动总超时 (ms)
-    pause: 1000              # 每次滚动后等待 (ms)
-    viewport_height: 800     # 视口高度（用于渐进加载）
-
-  # 智能延迟 (模拟真人行为)
-  # 重要: 不要设置太快，避免触发反爬
+    timeout: 60000
+    pause: 1000
+    viewport_height: 800
   humanize:
     enabled: true
-    min_delay: 1.0           # 最小请求间隔 (秒)，建议 ≥1s
-    max_delay: 3.0           # 最大请求间隔 (秒)，建议 ≤5s
-    scroll_delay: 0.5        # 滚动后等待 (秒)
-    page_load_delay: 2.0     # 页面加载后等待 (秒)
-
-  # 图片下载配置
+    min_delay: 1.0
+    max_delay: 3.0
+    scroll_delay: 0.5
+    page_load_delay: 2.0
   images:
-    concurrency: 4           # 并发下载数
-    timeout: 30.0            # 下载超时 (秒)
-    referer: "https://www.zhihu.com/"
-
-# 导出配置
+    concurrency: 4
+    timeout: 30.0
+    referer: https://www.zhihu.com/
 output:
-  directory: "data"
-  format: "markdown"
-  images_subdir: "images"
-  folder_format: "[{date}] {title}"  # 支持 {date}, {title}, {author}
-
-# 日志配置
+  directory: data
+  format: markdown
+  images_subdir: images
+  folder_format: '[{date}] {title}'
 logging:
-  level: "INFO"              # DEBUG / INFO / WARNING / ERROR
-  format: "console"          # console (美观) / json (结构化)
-  file: ".local/logs/scraper.log"   # 日志文件路径（可选）
-  log_exceptions: true       # 是否记录异常堆栈
-
-# 全局设置
+  level: INFO
+  format: console
+  file: .local/logs/scraper.log
+  log_exceptions: true
 global:
-  language: "zh"             # UI 界面语言: zh / en / zh_hant
-
-# 翻译配置 (可选，需安装 pip install -e ".[translate]")
+  language: zh
 translation:
-  enabled: false             # 是否在抓取后自动翻译
-  target_language: "en"      # 目标语言
-  engine: "openai"           # 引擎标识 (openai / deepseek / ollama)
-  base_url: "https://api.openai.com/v1"
-  api_key: ""                # 建议通过环境变量 ZHIHU_TRANSLATE_API_KEY 设置
-  model: "gpt-4o-mini"       # 推荐低成本模型
-  comment_top_n: 5           # 评论翻译数量 (默认 Top 5，支持 1~100)
+  enabled: false
+  target_language: en
+  engine: openai
+  base_url: https://api.openai.com/v1
+  api_key: ''
+  model: gpt-4o-mini
+  comment_top_n: 5

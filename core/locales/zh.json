@@ -151,6 +151,12 @@
   "init.preparing": "准备启动...",
   "init.phase": "正在初始化后台任务",
 
+  "runner.phase.scraping": "抓取与写入本地归档",
+  "runner.phase.translating": "正在翻译为{lang}版本",
+  "runner.error.empty": "未获取到可保存的内容",
+
+  "toast.translate_done": "翻译完成：{path}",
+
   "lang_selector.title": "🌍 世界各地",
   "lang_selector.hint": "选择后将作为默认语言保存"
 }

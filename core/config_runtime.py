@@ -86,3 +86,38 @@ class ConfigLoader:
 def get_config(config_path: Optional[Union[str, Path]] = None) -> Config:
     """Convenience singleton getter / 便捷配置入口"""
     return ConfigLoader().load(config_path)
+
+
+def update_config(patch: dict) -> None:
+    """Merge *patch* into config.yaml and persist to disk.
+
+    Only the keys present in *patch* are updated; the rest of the file
+    is left untouched.  The in-memory singleton is then reloaded so that
+    subsequent ``get_config()`` calls reflect the change.
+
+    Example::
+
+        update_config({"global": {"language": "en"}})
+    """
+    config_path = get_project_root() / "config.yaml"
+    raw: dict = {}
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as fh:
+            raw = yaml.safe_load(fh) or {}
+
+    _deep_merge(raw, patch)
+
+    with open(config_path, "w", encoding="utf-8") as fh:
+        yaml.dump(raw, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    # Reload singleton so in-memory state stays consistent
+    ConfigLoader().reload()
+
+
+def _deep_merge(base: dict, override: dict) -> None:
+    """Recursively merge *override* into *base* in-place."""
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value

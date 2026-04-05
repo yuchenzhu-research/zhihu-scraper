@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+from pathlib import Path
 from typing import Callable
 
 from cli.archive_execution import fetch_and_save_result
@@ -19,6 +20,7 @@ from cli.tui.state import (
 )
 from cli.workflow_service import DEFAULT_QUESTION_LIMIT, build_scrape_config_for_url
 from core.config import get_config, resolve_project_path
+from core.i18n import t
 
 
 ProgressCallback = Callable[[DraftSummary], None]
@@ -34,6 +36,17 @@ def execute_draft_run(
     records: list[ExecutionRecord] = []
     total = max(1, len(draft.targets))
 
+    # Lazily initialize translator only when translation is enabled
+    translator = None
+    if cfg.translation.enabled:
+        try:
+            from core.translator import ContentTranslator
+            translator = ContentTranslator(cfg.translation)
+        except ImportError:
+            pass  # openai not installed — silently skip translation
+        except Exception:
+            pass  # bad config — silently skip
+
     for index, target in enumerate(draft.targets, start=1):
         if progress_callback is not None:
             progress_callback(
@@ -42,7 +55,7 @@ def execute_draft_run(
                     current_index=index,
                     total=total,
                     output_dir=str(output_dir),
-                    phase="抓取与写入本地归档",
+                    phase=t("runner.phase.scraping"),
                 )
             )
 
@@ -64,6 +77,27 @@ def execute_draft_run(
                 )
 
             if not save_result.is_empty:
+                # --- Translation post-processing ---
+                translated_paths: list[str] = []
+                if translator and save_result.markdown_paths:
+                    if progress_callback is not None:
+                        progress_callback(
+                            build_running_summary(
+                                draft,
+                                current_index=index,
+                                total=total,
+                                output_dir=str(output_dir),
+                                phase=t("runner.phase.translating"),
+                            )
+                        )
+                    for md_path in save_result.markdown_paths:
+                        try:
+                            translated_path = _translate_file(translator, md_path, cfg.translation.target_language)
+                            if translated_path:
+                                translated_paths.append(translated_path)
+                        except Exception:
+                            pass  # Translation failure should not block archiving
+
                 records.append(
                     ExecutionRecord(
                         target=target,
@@ -77,7 +111,7 @@ def execute_draft_run(
                         target=target,
                         saved_count=0,
                         markdown_paths=(),
-                        error="未获取到可保存的内容",
+                        error=t("runner.error.empty"),
                         log_tail=_tail_lines(buffer),
                     )
                 )
@@ -93,6 +127,25 @@ def execute_draft_run(
             )
 
     return ExecutionReport(output_dir=str(output_dir), records=tuple(records))
+
+
+def _translate_file(translator, md_path: str, target_lang: str) -> str | None:
+    """Read a Markdown file, translate it, and write to ``[LANG] original_name.md``."""
+    src = Path(md_path)
+    if not src.exists():
+        return None
+
+    content = src.read_text(encoding="utf-8")
+    translated = translator.translate_markdown(content)
+    if not translated or translated == content:
+        return None
+
+    lang_tag = target_lang.upper()
+    dest = src.parent / f"[{lang_tag}] {src.name}"
+    dest.write_text(translated, encoding="utf-8")
+    return str(dest)
+
+
 def _tail_lines(buffer: StringIO, limit: int = 3) -> tuple[str, ...]:
     """Return the last few non-empty log lines captured from stdout/stderr."""
     lines = [line.strip() for line in buffer.getvalue().splitlines() if line.strip()]

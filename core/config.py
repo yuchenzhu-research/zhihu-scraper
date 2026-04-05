@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from random import uniform
 from typing import Optional
 
-from .config_runtime import ConfigLoader, get_config
+from .config_runtime import ConfigLoader, get_config, update_config
 from .config_schema import Config, HumanizeConfig, LoggingConfig
 from .logging_setup import sanitize_event_dict, setup_logging, summarize_text_for_logs
 from .project_paths import get_project_root, resolve_project_path
@@ -35,4 +35,5 @@ __all__ = [
     "sanitize_event_dict",
     "setup_logging",
     "summarize_text_for_logs",
+    "update_config",
 ]

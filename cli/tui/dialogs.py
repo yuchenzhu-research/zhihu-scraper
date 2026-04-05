@@ -35,6 +35,9 @@ class LanguageSelectionScreen(ModalScreen[str | None]):
         if button_id.startswith("lang-"):
             lang_code = button_id.replace("lang-", "")
             self.dismiss(lang_code)
+
+
+class QuestionLimitScreen(ModalScreen[int | None]):
     """Prompt for a Top-N limit when the input is a single question page."""
 
     BINDINGS = [

@@ -151,6 +151,12 @@
   "init.preparing": "Preparing...",
   "init.phase": "Initializing backend task",
 
+  "runner.phase.scraping": "Scraping and writing local archive",
+  "runner.phase.translating": "Translating to {lang}",
+  "runner.error.empty": "No savable content retrieved",
+
+  "toast.translate_done": "Translation complete: {path}",
+
   "lang_selector.title": "🌍 Worldwide",
   "lang_selector.hint": "Your selection will be saved as the default language"
 }
