@@ -45,17 +45,11 @@ data/**
 !data/
 !data/README.md
 
-# 浏览器 profile / 日志 / 本地数据库
+# 浏览器 profile / 日志 / 本地数据库 / Cookie 环境
 .local/
-browser_data/
-logs/
 *.db
 *.db-shm
 *.db-wal
-
-# Cookie 与账号池属于敏感信息
-cookie_pool/
-cookies.json
 
 # 监控状态与本地产物
 data/.monitor_state.json
