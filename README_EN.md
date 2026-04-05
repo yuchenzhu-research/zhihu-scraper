@@ -1,9 +1,7 @@
 <div align="center">
 
 # Zhihu-Scraper
-### Local-first Zhihu Archiving Tool
-
-<p><strong>A local-first Zhihu extraction and archiving project: protocol-first, with browser fallback when needed, writing directly to Markdown, image folders, and SQLite.</strong></p>
+**Local-first Zhihu Archiving, More Elegant Than Ever**
 
 <p>
   <img src="https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg" alt="CI Badge" />
@@ -17,240 +15,59 @@
 
 </div>
 
-> [!WARNING]
-> This project is for learning, research, personal archiving, and technical exploration only.
+Zhihu-Scraper is a **local-first** crawling and archiving tool. Paste a link, and it automatically extracts the main content, metadata, downloads images, and natively converts everything into high-quality Markdown and an SQLite index database for long-term storage.
 
-## 1. What This Project Is
+It's the ultimate companion for command-line workflows—reject cloud lock-ins and keep complete ownership of your data locally.
 
-This repository is a **local-first** Zhihu archiving tool.
+> [!WARNING]  
+> This project is strictly for learning, research, and personal archiving. Please comply with Terms of Service, crawler guidelines, and local laws.
 
-Its main goals are:
+<br>
 
-- accept Zhihu links
-- fetch body content and key metadata
-- convert content to Markdown
-- download images
-- persist archives locally with SQLite
+## 🚀 Quick Start
 
-It is suitable for:
-
-- personal archiving
-- research collection
-- command-line workflows
-- local file + local database usage
-
-It is not intended to be:
-
-- an online scraping platform
-- a hosted service
-- a GUI-first product
-- a full-site data pipeline
-
-## 2. Current Scope
-
-Currently supported:
-
-- single answers
-- column articles
-- latest N answers from a question page
-- recent answers and articles from a creator profile
-- incremental collection monitoring
-- Markdown + images + SQLite outputs
-- default interactive workbench: **Textual TUI**
-- compatibility fallback: `interactive --legacy`
-
-Not treated as current delivered features:
-
-- topic-page scraping
-- GUI application
-- hosted service model
-- MySQL / remote storage as default targets
-
-## 3. Quick Start
-
-### 3.1 Install
+Just clone the repository, run the automatic environment script, and type `zhihu`. That’s it.
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
+
+# Creates venv and installs dependencies automatically
 ./install.sh
 ```
 
-To rebuild the environment:
-
-```bash
-./install.sh --recreate
-```
-
-Current maintained baseline:
-
-- Python 3.14+
-
-### 3.2 Prepare Cookies
-
-The runtime directory is centered on `.local/`:
-
-```bash
-mkdir -p .local
-cp cookies.example.json .local/cookies.json
-```
-
-Fill in:
-
-- `z_c0`
-- `d_c0`
-
-Historical paths are still compatible:
-
-- `cookies.json`
-- `cookie_pool/`
-
-After setup, use the following commands to confirm whether runtime resolution
-is still hitting legacy repo-root compatibility paths:
-
-- `zhihu config --show`
-- `zhihu check`
-
-They show the configured path, active path, and whether legacy cookie-path
-fallback is still active.
-
-### 3.3 Minimal Run
+Now, try archiving your first answer:
 
 ```bash
 zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
 ```
 
-Open the home entry or TUI:
+Or open the immersive full-screen workbench and enjoy an interactive archiving experience:
 
 ```bash
 zhihu
-zhihu interactive
-zhihu interactive --legacy
 ```
 
-Entry topology:
+## ✨ Core Features
 
-- `zhihu`
-  opens the home launcher for first-run guidance, command navigation, and checks
-- `zhihu interactive`
-  opens the default Textual TUI archive workbench directly
-- `zhihu interactive --legacy`
-  opens the old Rich / questionary fallback for compatibility and troubleshooting
+- **Link Universal**: Supports individual answers, question pages (auto Top-N extraction), column articles, and creator profiles.
+- **Local Supremacy**: Outputs directly to `Markdown` files, offline image directories (Images), and `SQLite` metadata.
+- **Anti-Detection**: Ultra-fast protocol-first extraction with a native headless browser fallback for complex pages.
+- **Real-Time Monitoring**: Beyond one-time scrapes, it supports continuous incremental monitoring of your favorite collections via the `monitor` command.
+- **Modern TUI**: Forget cluttered logs natively using the `Textual TUI` to manage task queues, review failures, and retry at the press of a button.
 
-## 4. Command Overview
+## 📚 Documentation & Configuration
 
-Current core commands:
+Want to know how to inject your `z_c0` Cookie? Write complex queries? Understand advanced CLI usage?
 
-- `zhihu onboard`
-- `zhihu fetch`
-- `zhihu creator`
-- `zhihu batch`
-- `zhihu monitor`
-- `zhihu query`
-- `zhihu interactive`
-- `zhihu config --show`
-- `zhihu check`
-- `zhihu manual`
+We provide comprehensive documentations:
 
-Entry topology:
+- ⚙️ **[Core Manual (MANUAL)](MANUAL.md)**: Details on all CLI advanced parameters, Cookie path configs, and TUI shortcuts.
+- 🛠 **[Platform Compatibility](docs/PLATFORM_SUPPORT.md)**: Specific deployment guidelines for Windows and Linux.
+- 🤖 **[Agent Boundaries](AGENTS.md)**: Architectural ground rules designed for AI coding assistants and code contributors.
 
-- `zhihu`
-  enters the home launcher when invoked without arguments
-- `zhihu interactive`
-  goes straight to the recommended Textual TUI
-- `zhihu interactive --legacy`
-  goes straight to the compatibility fallback
+<br>
 
-Common examples:
-
-```bash
-zhihu onboard
-zhihu fetch "https://www.zhihu.com/question/28696373/answer/2835848212"
-zhihu creator "https://www.zhihu.com/people/iterator"
-zhihu batch urls.txt
-zhihu monitor 78170682
-zhihu query "Transformer"
-zhihu interactive
-zhihu interactive --legacy
-zhihu config --show
-zhihu check
-zhihu manual
-```
-
-Notes:
-
-- `zhihu query` now shows the stable identity `content_key = type:id`
-- `answer_id` remains as a compatibility field, but is no longer the primary public identifier
-
-## 5. Output Layout
-
-Default output root:
-
-```text
-data/
-```
-
-Typical structure:
-
-```text
-data/
-├─ entries/
-│  └─ 2026-04-03_title--answer-123456/
-│     ├─ index.md
-│     └─ images/
-├─ creators/
-│  └─ <url_token>/
-│     ├─ creator.json
-│     └─ README.md
-└─ zhihu.db
-```
-
-## 6. Basic Directory Guide
-
-```text
-cli/    command entrypoints, interaction, save orchestration
-core/   scraping, config, conversion, database, runtime logic
-docs/   platform, config, workflow and maintenance docs
-tests/  unittest regression suite
-data/   default archive output
-.local/ cookies, logs and runtime files
-```
-
-## 7. Platform Support
-
-The explicit support boundary lives in [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md).
-
-In short:
-
-- macOS: primary maintained platform
-- Linux: actively hardened
-- Windows: documented, but not yet a first-class install path
-
-Windows-specific notes:
-
-- [docs/WINDOWS_RUNBOOK.md](docs/WINDOWS_RUNBOOK.md)
-
-## 8. More Documentation
-
-Use this README as the external entrypoint.  
-For maintenance and collaboration details, continue with:
-
-- [MANUAL.md](MANUAL.md)
-- [AGENTS.md](AGENTS.md)
-- [docs/dependency-map.md](docs/dependency-map.md)
-- [docs/config.md](docs/config.md)
-- [docs/workflows.md](docs/workflows.md)
-
-## 9. Interactive Entry Notes
-
-`zhihu` without arguments opens the home launcher.  
-`zhihu interactive` is the direct command for the **Textual TUI**.
-
-The old Rich / questionary path is still available via:
-
-```bash
-zhihu interactive --legacy
-```
-
-It is kept for compatibility and troubleshooting, not as the preferred path.  
-The scraping pipeline remains protocol-first, with browser fallback only when needed.
+<div align="center">
+  <sub>Built with ❤️ by Yuchen Zhu Research.</sub>
+</div>
