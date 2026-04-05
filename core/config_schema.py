@@ -113,6 +113,7 @@ class LoggingConfig:
 @dataclass
 class GlobalConfig:
     language: str = "zh"
+    language_configured: bool = False
 
 
 @dataclass
@@ -167,6 +168,7 @@ def build_config_from_dict(raw: Dict[str, Any]) -> Config:
     global_raw = raw.get("global", {})
     globals_cfg = GlobalConfig(
         language=global_raw.get("language", "zh"),
+        language_configured=global_raw.get("language_configured", False),
     )
 
     translation_raw = raw.get("translation", {})
