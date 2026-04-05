@@ -605,7 +605,9 @@ def check() -> None:
 def main() -> None:
     """CLI entry point / CLI 入口"""
     if len(sys.argv) == 1:
-        _run_launcher()
+        # Bare `zhihu` → launch TUI directly (first run shows language selector)
+        from cli.interactive import run_interactive
+        run_interactive()
         return
     app()
 
