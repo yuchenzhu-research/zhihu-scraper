@@ -53,7 +53,7 @@ logging:
   log_exceptions: true
 global:
   language: zh
-  language_configured: false
+  language_configured: true
 translation:
   enabled: false
   target_language: en
