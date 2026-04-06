@@ -15,6 +15,9 @@
   - 新增 `zh_hant` 繁体中文语言包，并完全解耦与补齐了原有 `InputCard` 的国际化字典项。
 - **命令行入口收口**：
   - 更改了裸 `zhihu` 触发的底层逻辑，如今执行 `zhihu` 会直达 Textual TUI 进行首运行检测并打开全屏工作台。
+- **配置系统升级**：
+  - 重构了 `zhihu config` 命令，支持 `show`、`path` 和 `set` 子命令。
+  - 允许通过 `zhihu config set language <lang>` 随时手动切换 UI 语言，并自动同步至配置文件。
 - **README 重构与 SkillsMP 引入**：
   - 大幅抽离原双语 `README` 中的大量边角命令行传参、兼容路径与旧系统兼容文案，全量迁入内部说明书 `MANUAL.md`。
   - 按照 Github 明星开源库的标准，为 `README.md`、`README_EN.md` 打造了极简的信息密度抓眼展示（Elevator pitch）。
