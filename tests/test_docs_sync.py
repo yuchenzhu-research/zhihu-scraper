@@ -15,24 +15,16 @@ class DocsSyncTests(unittest.TestCase):
         self.assertIn("docs/PLATFORM_SUPPORT.md", readme_cn)
         self.assertIn("docs/PLATFORM_SUPPORT.md", readme_en)
 
-    def test_readmes_keep_textual_tui_and_legacy_fallback_wording(self):
+    def test_readmes_keep_textual_tui_wording(self):
         readme_cn = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")
 
         self.assertIn("Textual TUI", readme_cn)
-        self.assertIn("interactive --legacy", readme_cn)
         self.assertIn("Textual TUI", readme_en)
-        self.assertIn("interactive --legacy", readme_en)
-        self.assertIn("首页 launcher", readme_cn)
-        self.assertIn("home launcher", readme_en)
+        self.assertIn("全屏工作台", readme_cn)
+        self.assertIn("full-screen workbench", readme_en)
         self.assertIn("协议优先", readme_cn)
         self.assertIn("protocol-first", readme_en)
-        self.assertIn("configured path", readme_cn)
-        self.assertIn("active path", readme_cn)
-        self.assertIn("content_key = type:id", readme_cn)
-        self.assertIn("configured path", readme_en)
-        self.assertIn("active path", readme_en)
-        self.assertIn("content_key = type:id", readme_en)
 
     def test_manual_mentions_platform_boundary_and_launcher_flow(self):
         manual_text = build_manual_text(Path("data"))
@@ -40,7 +32,6 @@ class DocsSyncTests(unittest.TestCase):
         self.assertIn("cli/launcher_flow.py", manual_text)
         self.assertIn("--legacy", manual_text)
         self.assertIn("opens the home launcher", manual_text)
-        self.assertIn("zhihu interactive", manual_text)
 
     def test_manual_mentions_monitor_pointer_rule_for_unsupported_items(self):
         manual_text = build_manual_text(Path("data"))

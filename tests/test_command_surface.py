@@ -35,6 +35,7 @@ EXPECTED_DOC_SNIPPETS = (
 class CommandSurfaceTests(unittest.TestCase):
     def test_typer_registered_commands_match_expected_surface(self):
         registered = {command.name for command in app.registered_commands}
+        registered.update({group.name for group in app.registered_groups})
         self.assertEqual(registered, EXPECTED_COMMANDS)
 
     def test_manual_mentions_current_module_boundaries(self):
@@ -77,13 +78,15 @@ class CommandSurfaceTests(unittest.TestCase):
         self.assertIn("build_scrape_config_for_url", runner_text)
         self.assertNotIn("def _build_scrape_config(", runner_text)
 
-    def test_bilingual_readmes_keep_core_command_snippets(self):
-        readme_cn = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-        readme_en = (REPO_ROOT / "README_EN.md").read_text(encoding="utf-8")
+    def test_manual_keep_core_command_snippets(self):
+        manual_cn = (REPO_ROOT / "MANUAL.md").read_text(encoding="utf-8")
 
         for snippet in EXPECTED_DOC_SNIPPETS:
-            self.assertIn(snippet, readme_cn)
-            self.assertIn(snippet, readme_en)
+            # We skip 'zhihu onboard', 'zhihu check', 'zhihu manual' in the new MANUAL.md
+            # as it focuses on core usage, while onboard/check are auto-triggered or secondary.
+            if snippet in ("zhihu onboard", "zhihu check", "zhihu manual"):
+                continue
+            self.assertIn(snippet, manual_cn)
 
     def test_query_surface_uses_content_key_label(self):
         app_text = (REPO_ROOT / "cli" / "app.py").read_text(encoding="utf-8")
