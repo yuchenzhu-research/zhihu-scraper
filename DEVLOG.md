@@ -2,6 +2,42 @@
 
 ---
 
+## 2026-04-06 / 交互体验与国际化细节收口
+
+### 相关 commits
+- `5e653fb` / `7c104b6` (fix: TUI 模式下彻底禁用控制台日志，解决布局撑破/UI 腐化)
+- `404d75c` (feat: LocalizedFooter — 现在底部快捷键栏已完全国际化)
+- `9c9d2d0` (feat: 重构 config 命令并新增 `set` 选项，允许随时通过 CLI 切语言)
+- `a9cd66b` (chore: config.yaml 状态落盘持久化)
+
+### 本次修改
+- **底栏国际化 (Footer i18n)**：通过自定义 `LocalizedFooter` 小部件覆盖了 Textual 的 BINDINGS 渲染逻辑。
+  - 现在 BINDINGS 的描述字段允许使用 i18n key（如 `binding.run`）。
+  - 在运行时配合 `recompose()` 可以同步更新底部的“输入、执行、重试、退出”等多语言文案。
+- **日志隔离方案 (Silent Console)**：彻底解决了后台 API 请求报错（如 403 频控）导致 ASCII 码在终端界面乱跳挤压 TUI 的难题。
+  - 在 `core/logging_setup.py` 中引入 `set_silent_console()` 原子开关。
+  - 在 TUI 启动时强行切断标准输出链路，保证所有详尽报错信息只静默流向日志文件。
+- **配置命令行 (CLI Config set)**：
+  - 增强了 `zhihu config` 工具。
+  - 现在可以通过命令行直接切换 UI 语言，而不再仅依赖于首次启动的向导或手动改 YAML。
+
+### 解决的问题
+- 解决了知乎新版超长 ID `answer_id` 触发反爬 403 导致 TUI 被大量日志输出撑破、界面无法阅读的重大视觉交互 Bug。
+- 解决了底部操作栏 BINDINGS 无法根据已切换语言动态刷新显示的问题。
+- 提供了更便捷的语言控制入口：`zhihu config set language <lang>`。
+
+### 影响范围
+- `cli/tui/app.py`
+- `cli/tui/widgets.py`
+- `cli/app.py`
+- `core/logging_setup.py`
+- `core/locales/*.json`
+
+### 下一步
+- 准备将成熟的 `i18n-crawler` 分支功能合并并推广。
+
+---
+
 ## 2026-04-05 / 多语言启动向导、极简主页重构与 SkillsMP 挂载
 
 ### 相关 commits
