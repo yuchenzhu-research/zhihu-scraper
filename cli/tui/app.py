@@ -11,6 +11,7 @@ from textual.widgets import Footer
 
 from core.config import get_config, update_config
 from core.i18n import set_language, t
+from core.logging_setup import set_silent_console
 
 from cli.tui.dialogs import LanguageSelectionScreen, QuestionLimitScreen
 from cli.tui.runner import ProgressCallback, execute_draft_run
@@ -375,12 +376,6 @@ class ZhihuInteractiveShell(App[None]):
 def launch_tui() -> None:
     """Run the stage-5 Textual shell."""
     # Ensure background tasks (like API fetching) don't print to stdout/stderr and corrupt the TUI.
-    import logging
-
-    root_logger = logging.getLogger()
-    for handler in list(root_logger.handlers):
-        # Remove standard stream handlers (console) but keep FileHandlers
-        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
-            root_logger.removeHandler(handler)
+    set_silent_console(True)
 
     ZhihuInteractiveShell().run()

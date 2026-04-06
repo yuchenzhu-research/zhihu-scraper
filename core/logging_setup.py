@@ -39,6 +39,14 @@ _AUTHORIZATION_RE = re.compile(
 )
 _BEARER_RE = re.compile(r"(?i)\bbearer\s+([A-Za-z0-9._~+/=-]+)")
 
+_SILENT_CONSOLE = False
+
+
+def set_silent_console(enabled: bool) -> None:
+    """Toggle console logging. Useful for TUI modes. / 切换控制台日志开关，适用于 TUI 模式。"""
+    global _SILENT_CONSOLE
+    _SILENT_CONSOLE = enabled
+
 
 def summarize_text_for_logs(value: str, *, kind: str = "text") -> str:
     normalized = value or ""
@@ -125,7 +133,10 @@ def setup_logging(config: Union[Config, LoggingConfig]) -> None:
         foreign_pre_chain=shared_processors,
     )
 
-    handlers = [logging.StreamHandler()]
+    handlers = []
+    if not _SILENT_CONSOLE:
+        handlers.append(logging.StreamHandler())
+
     if log_path:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         handlers.append(logging.FileHandler(log_path, encoding="utf-8"))
