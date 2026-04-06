@@ -10,7 +10,10 @@ from textual.containers import Vertical
 from textual.events import Key
 from textual.message import Message
 from textual.widget import Widget
-from textual.widgets import Static, TextArea
+from textual.widgets import Footer, Static, TextArea
+from textual.widgets._footer import FooterKey
+
+from core.i18n import t
 
 
 class HeroCard(Widget):
@@ -161,3 +164,51 @@ class DetailCard(MutableCard):
 
 class HomeStage(Vertical):
     """Main stage wrapper for the centered landing view."""
+
+
+class LocalizedFooter(Footer):
+    """Footer that translates binding descriptions using the active i18n locale.
+
+    All binding descriptions are treated as i18n keys.
+    To add a new language, simply add the key to the corresponding locale JSON.
+    To add a new binding, define it in ZhihuInteractiveShell.BINDINGS with the
+    i18n key as the description — no changes needed here.
+    """
+
+    def compose(self) -> ComposeResult:
+        if not self._bindings_ready:
+            return
+
+        from collections import defaultdict
+        from itertools import groupby
+
+        active_bindings = self.screen.active_bindings
+        bindings = [
+            (binding, enabled, tooltip)
+            for (_, binding, enabled, tooltip) in active_bindings.values()
+            if binding.show
+        ]
+
+        action_to_bindings: defaultdict = defaultdict(list)
+        for binding, enabled, tooltip in bindings:
+            action_to_bindings[binding.action].append((binding, enabled, tooltip))
+
+        self.styles.grid_size_columns = len(action_to_bindings)
+
+        for _group, multi_bindings_iterable in groupby(
+            action_to_bindings.values(),
+            lambda multi_bindings_: multi_bindings_[0][0].group,
+        ):
+            multi_bindings = list(multi_bindings_iterable)
+            for multi_binding_entry in multi_bindings:
+                binding, enabled, tooltip = multi_binding_entry[0]
+                # Translate description via i18n; fallback to original if key not found
+                description = t(binding.description) if binding.description else ""
+                yield FooterKey(
+                    binding.key,
+                    self.app.get_key_display(binding),
+                    description,
+                    binding.action,
+                    disabled=not enabled,
+                    tooltip=tooltip or description,
+                ).data_bind(compact=Footer.compact)

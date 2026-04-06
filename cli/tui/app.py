@@ -36,6 +36,7 @@ from cli.tui.widgets import (
     HintCard,
     HomeStage,
     InputCard,
+    LocalizedFooter,
     QueueCard,
     SummaryCard,
 )
@@ -52,11 +53,11 @@ class ZhihuInteractiveShell(App[None]):
     SUB_TITLE = "Zhihu Archive"
 
     BINDINGS = [
-        ("ctrl+l", "focus_input", "输入"),
-        ("ctrl+r", "run_current_draft", "执行"),
-        ("ctrl+y", "load_retry_draft", "重试"),
-        ("q", "quit", "退出"),
-        ("escape", "quit", "退出"),
+        ("ctrl+l", "focus_input", "binding.focus_input"),
+        ("ctrl+r", "run_current_draft", "binding.run"),
+        ("ctrl+y", "load_retry_draft", "binding.retry"),
+        ("q", "quit", "binding.quit"),
+        ("escape", "quit", "binding.quit"),
     ]
 
     def __init__(self, draft_executor: DraftExecutor | None = None) -> None:
@@ -91,7 +92,7 @@ class ZhihuInteractiveShell(App[None]):
             ),
             id="viewport",
         )
-        yield Footer()
+        yield LocalizedFooter()
 
     def on_mount(self, _: Mount) -> None:
         """Apply initial layout and show language selector on first run."""

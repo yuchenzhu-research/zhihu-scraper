@@ -161,6 +161,11 @@
   "input.placeholder": "Paste answer, question, or column links; auto-extracts from mixed text",
   "input.caption": "Supports multiline pasting; Enter to generate draft, Ctrl+R to execute, Ctrl+Y to retry failures; q or Esc to quit.",
 
+  "binding.focus_input": "Input",
+  "binding.run": "Run",
+  "binding.retry": "Retry",
+  "binding.quit": "Quit",
+
   "lang_selector.title": "🌍 Worldwide",
   "lang_selector.hint": "Your selection will be saved as the default language"
 }

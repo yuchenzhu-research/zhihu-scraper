@@ -161,6 +161,11 @@
   "input.placeholder": "粘貼回答、問題頁或專欄鏈接；支持從混合文本中自動提取",
   "input.caption": "支持多行粘貼；按 Enter 生成草案，Ctrl+R 執行，Ctrl+Y 載入失敗重試；按 q 或 Esc 退出。",
 
+  "binding.focus_input": "輸入",
+  "binding.run": "執行",
+  "binding.retry": "重試",
+  "binding.quit": "退出",
+
   "lang_selector.title": "🌍 世界各地",
   "lang_selector.hint": "選擇後將作為預設語言保存"
 }
