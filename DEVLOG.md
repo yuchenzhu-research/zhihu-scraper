@@ -2,6 +2,45 @@
 
 ---
 
+## 2026-04-13 / 治理归一化前五步收口
+
+### 相关 commits
+- `e68b81b` Normalize governance docs and validation baseline
+
+### 本次修改
+- 新增 `CONSTITUTION.md`，把项目身份、不变量、架构守卫、质量门禁和高风险漂移上移到最高治理层。
+- 新增 `docs/VALIDATION_BASELINE.md`，用当前最小回归集合、CI 现实和补充验证建议替代旧的阶段性验证矩阵引用。
+- 收口 `AGENTS.md` 与 `MANUAL.md` 的读取顺序、文档分工和同步纪律，明确 `CONSTITUTION.md -> AGENTS.md -> MANUAL.md -> docs/ -> code/tests` 的默认进入路径。
+- 统一 `zhihu` / `zhihu interactive` / `zhihu onboard` 的入口语义，使文档、内置 manual、launcher 提示与实际代码行为一致。
+- 清理 `docs/workflows.md`、`docs/WINDOWS_RUNBOOK.md` 等文档中的失效引用，并补强 `tests.test_docs_sync` 与 `tests.test_command_surface` 作为 guardrail。
+
+### 解决的问题
+- 解决了仓库缺少最高治理文件，导致 `AGENTS.md` 同时承担执行手册和半宪法角色的问题。
+- 解决了默认入口语义在代码、专题文档、内置 manual 之间不一致的漂移。
+- 解决了文档继续引用已不存在的 `STAGE5_VALIDATION_MATRIX` 的失效引用问题。
+- 解决了文档同步纪律散落在多个文件中、缺少单一主表述与测试守卫的问题。
+
+### 影响范围
+- `CONSTITUTION.md`
+- `AGENTS.md`
+- `MANUAL.md`
+- `cli/launcher_flow.py`
+- `cli/manual_content.py`
+- `docs/VALIDATION_BASELINE.md`
+- `docs/workflows.md`
+- `docs/WINDOWS_RUNBOOK.md`
+- `tests/test_docs_sync.py`
+- `tests/test_command_surface.py`
+
+### 风险 / 未完成事项
+- 这轮主要收口治理文档、入口语义与验证基线，没有运行全量抓取链路和完整 CI 矩阵。
+- 旧的 questionary launcher 仍然保留为 `zhihu onboard` 路径，后续如果产品语义再次调整，仍需同步更新文档与测试。
+
+### 下一步
+- 如后续继续推进治理演进，可补更细的 release / testing 专题文档，并继续把关键同步规则固化进测试。
+
+---
+
 ## 2026-04-06 / 交互体验与国际化细节收口
 
 ### 相关 commits
