@@ -88,4 +88,4 @@ Until Windows becomes a first-class path, new changes should avoid:
 ## Cross References / 关联文档
 
 - [docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md)
-- [docs/STAGE5_VALIDATION_MATRIX.md](docs/STAGE5_VALIDATION_MATRIX.md)
+- [docs/VALIDATION_BASELINE.md](docs/VALIDATION_BASELINE.md)

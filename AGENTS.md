@@ -1,29 +1,30 @@
 # AGENTS.md
 
-本文件是本仓库的项目级执行规则。  
-后续任何代码代理或自动化协作者进入仓库后，都应优先阅读本文件，再执行具体任务。
+本文件是本仓库的共享 cross-agent 运行手册。
+`CONSTITUTION.md` 是最高治理文件；后续任何代码代理或自动化协作者进入仓库后，应先读 `CONSTITUTION.md`，再读本文件，然后再执行具体任务。
 
 ## 1. 默认执行流程
 
-所有代理在开始本仓库任务前，必须先阅读并遵守 `AGENTS.md`。除非任务明确说明，否则不得跳过。
+所有代理在开始本仓库任务前，必须先阅读并遵守 `CONSTITUTION.md` 与 `AGENTS.md`。除非任务明确说明，否则不得跳过。
 
 默认执行顺序如下：
 
-1. 先阅读 `AGENTS.md`
-2. 再检查与本次任务相关的：
+1. 先阅读 `CONSTITUTION.md`
+2. 再阅读 `AGENTS.md`
+3. 再检查与本次任务相关的：
    - `README.md`
    - `MANUAL.md`
    - `docs/`
    - `pyproject.toml`
    - 相关代码与测试
-3. 再实施修改
-4. 如果本次任务形成了新的相关 Git commits，则在汇报中明确说明 commit 情况
-5. 是否更新 `DEVLOG.md`，由维护者手动决定；代理不得默认每次都自动更新
-6. 如果本次任务对应对外发布版本、里程碑发布或明确的对外可见更新，则再判断是否需要同步更新 `CHANGELOG.md`
+4. 再实施修改
+5. 如果本次任务形成了新的相关 Git commits，则在汇报中明确说明 commit 情况
+6. 是否更新 `DEVLOG.md`，由维护者手动决定；代理不得默认每次都自动更新
+7. 如果本次任务对应对外发布版本、里程碑发布或明确的对外可见更新，则再判断是否需要同步更新 `CHANGELOG.md`
 
 说明：
 
-- 后续在本仓库执行任务时，默认先读本文件，不再依赖用户重复提醒
+- 后续在本仓库执行任务时，默认先读 `CONSTITUTION.md` 与本文件，不再依赖用户重复提醒
 - 如果任务范围只涉及文档、测试或配置，也不跳过这个流程
 
 ## 2. 项目目标
@@ -68,6 +69,8 @@
 
 文档职责固定如下：
 
+- `CONSTITUTION.md`
+  最高治理文件。定义项目身份、不变量、架构守卫、质量门禁与高风险漂移。
 - `README.md`
   对外介绍、快速安装、最小运行方式、功能概览、基本目录说明
 - `MANUAL.md`
@@ -79,17 +82,24 @@
 
 修改代码时，优先检查以下内容是否需要同步：
 
+- `CONSTITUTION.md`
 - `README.md`
 - `README_EN.md`
 - `MANUAL.md`
 - `cli/manual_content.py`
 - `docs/` 下相关专题文档
 
+当前直接守卫文档同步与入口语义漂移的测试包括：
+
+- `tests.test_docs_sync`
+- `tests.test_command_surface`
+- `tests.test_install_contract`
+
 ### 5.1 DEVLOG 维护规则
 
 `DEVLOG.md` 用于记录按“日期 / 任务”归档的人工维护日志，不要求一条记录严格对应一个 commit。
 
-是否更新 `DEVLOG.md`，由维护者手动决定。  
+是否更新 `DEVLOG.md`，由维护者手动决定。
 代理默认**不因“本次任务产生了 commit”就自动更新 `DEVLOG.md`**。
 
 原则：
@@ -141,6 +151,7 @@ Git commit 负责记录细粒度代码变更；`DEVLOG.md` 负责记录“这次
 默认最小校验集：
 
 - `./.venv/bin/python -m unittest -q ...` 运行当前验证矩阵
+- `docs/VALIDATION_BASELINE.md` 记录当前最小回归集合、CI 现实与补充验证建议
 - 命令面 smoke：
   - `python cli/app.py --help`
   - `python cli/app.py fetch --help`
@@ -206,12 +217,14 @@ Git commit 负责记录细粒度代码变更；`DEVLOG.md` 负责记录“这次
 
 ## 10. 长期维护约定
 
-- 后续任务开始时，先读本文件
+- 后续任务开始时，先读 `CONSTITUTION.md`
+- 再读本文件
 - 再读 `MANUAL.md`
 - 再看本次任务相关模块与专题文档
 
 如果仓库结构发生重大变化，应同步更新：
 
+- `CONSTITUTION.md`
 - `AGENTS.md`
 - `MANUAL.md`
 - `README.md`

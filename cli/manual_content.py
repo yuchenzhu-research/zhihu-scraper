@@ -40,8 +40,10 @@ HOME MENU
   - `python3 cli/app.py`
 
   Behavior / 行为:
-  - opens the home launcher, not the Textual workbench itself
-  - 打开首页 launcher，而不是直接进入 Textual 工作台
+  - opens the default Textual workbench directly
+  - 默认直达 Textual 工作台
+  - use `zhihu onboard` to run the guided setup and optional launcher flow
+  - 如需首次引导与可选 launcher 流程，请使用 `zhihu onboard`
 
   Controls / 操作方式:
   - arrow keys: move / 方向键移动
@@ -176,8 +178,9 @@ COMMAND REFERENCE
   - 全屏归档工作台，包含草案、队列、最近结果与失败重试
 
   Entrypoints:
-  - `zhihu` opens the launcher first
+  - `zhihu` opens the Textual workbench directly
   - `zhihu interactive` opens the Textual workbench directly
+  - `zhihu onboard` runs guided setup and can continue into the questionary launcher
   - `zhihu interactive --legacy` opens the deprecated fallback
 
   Current support:
@@ -249,7 +252,7 @@ PLATFORM SUPPORT
   - `cli/app.py` command routing + terminal entrypoint
   - `cli/archive_execution.py` shared execution bridge for CLI / TUI / legacy
   - `cli/config_view.py` config summary rendering
-  - `cli/launcher_flow.py` home menu + onboarding flow
+  - `cli/launcher_flow.py` questionary launcher + onboarding flow
   - `cli/manual_content.py` built-in manual source
   - `cli/save_pipeline.py` archive save orchestration
   - `cli/interactive.py` Textual-based interactive workbench
@@ -286,7 +289,8 @@ CURRENT LIMITS
 QUICK START
   - `./install.sh`
   - `./install.sh --recreate`  # when the local environment is broken
-  - `zhihu`                    # open the home menu / 打开首页菜单
+  - `zhihu`                    # open the Textual TUI directly / 直达 Textual 工作台
+  - `zhihu onboard`            # guided setup + optional questionary launcher / 首次引导 + 可选 launcher
   - `zhihu interactive`        # open the Textual TUI directly / 直达 Textual 工作台
   - `zhihu check`
   - `zhihu manual`

@@ -1,5 +1,5 @@
 """
-launcher_flow.py - Home menu and onboarding flow
+launcher_flow.py - Questionary launcher and onboarding flow
 
 Moves the interactive home menu and first-run onboarding out of cli/app.py so
 the top-level command file stays focused on command definitions and orchestration.
@@ -103,7 +103,7 @@ def _collect_fetch_options(runtime: LauncherRuntime, url: str) -> dict[str, Any]
 
 
 def _render_launcher_header(runtime: LauncherRuntime) -> None:
-    """Print compact launcher banner / 打印精简首页横幅"""
+    """Print compact launcher banner / 打印精简 launcher 横幅"""
     cfg = runtime.get_cfg()
     default_output_dir = runtime.get_default_output_dir()
     from core.cookie_manager import has_available_cookie_sources
@@ -119,8 +119,8 @@ def _render_launcher_header(runtime: LauncherRuntime) -> None:
         (cookie_status, "white"),
         ("  |  浏览器补救: ", "bold magenta"),
         (browser_status, "white"),
-        ("\n主路径: ", "bold magenta"),
-        ("首页 launcher -> Textual TUI（推荐）", "white"),
+        ("\n当前路径: ", "bold magenta"),
+        ("onboard / questionary launcher -> Textual TUI（推荐）", "white"),
     )
     runtime.console.print(Panel(content, border_style="cyan", expand=False))
 
@@ -139,8 +139,8 @@ def run_onboard_flow(runtime: LauncherRuntime, *, from_command: bool = False) ->
             "1. 先运行 ./install.sh 安装环境\n"
             f"2. 在 {configured_cookie_path} 中填入自己的 Cookie\n"
             "3. 执行一次环境检查\n"
-            "4. `zhihu` 会打开首页 launcher\n"
-            "5. `zhihu interactive` 会直达推荐的 Textual TUI\n"
+            "4. `zhihu` 与 `zhihu interactive` 会直达推荐的 Textual TUI\n"
+            "5. `zhihu onboard` 可继续进入 questionary launcher\n"
             "6. `zhihu interactive --legacy` 仅用于兼容回退",
             justify="left",
         ),
@@ -175,7 +175,7 @@ def run_onboard_flow(runtime: LauncherRuntime, *, from_command: bool = False) ->
 
 
 def run_launcher(runtime: LauncherRuntime) -> None:
-    """Default home launcher / 默认首页 launcher"""
+    """Questionary launcher / questionary launcher"""
     questionary = runtime.get_questionary()
     default_output_dir = runtime.get_default_output_dir()
     default_headless = runtime.get_default_browser_headless()

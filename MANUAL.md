@@ -1,6 +1,6 @@
 # MANUAL.md
 
-本文件是本仓库的内部说明书，面向维护者、未来协作者和后续重构任务。  
+本文件是本仓库的内部说明书，面向维护者、未来协作者和后续重构任务。
 它不替代 `README.md`，而是负责记录架构、边界、约定、限制和维护方式。
 
 ## 1. 项目定位
@@ -36,6 +36,8 @@
 
 ## 2. README 与 MANUAL 的分工
 
+- `CONSTITUTION.md`
+  最高治理文件。定义项目身份、不变量、架构守卫、质量门禁与高风险漂移。
 - `README.md`
   对外入口。负责项目介绍、快速安装、最小运行方式、功能概览、基本目录说明。
 - `README_EN.md`
@@ -43,7 +45,7 @@
 - `MANUAL.md`
   内部说明书。记录架构、边界、配置、合同、维护约定、已知限制与迁移信息。
 - `AGENTS.md`
-  代码代理执行规范。任何代理任务开始前优先阅读。
+  共享 cross-agent 运行手册。任何代理任务开始前应在 `CONSTITUTION.md` 之后优先阅读。
 - `cli/manual_content.py`
   内置终端说明书，服务 `zhihu manual` 命令，属于操作层文档，不替代 `MANUAL.md`。
 
@@ -53,6 +55,7 @@
 
 ```text
 .
+├─ CONSTITUTION.md
 ├─ AGENTS.md
 ├─ CHANGELOG.md
 ├─ DEVLOG.md
@@ -85,7 +88,7 @@
 - `cli/workflow_contracts.py`
   CLI/TUI 工作流层的 typed result contracts。
 - `cli/launcher_flow.py`
-  首页菜单与 onboarding 流程。
+  questionary launcher 与 onboarding 流程。
 - `cli/manual_content.py`
   内置 manual 文本生成。
 - `cli/config_view.py`
@@ -97,7 +100,7 @@
 - `cli/interactive.py`
   Textual TUI 启动入口。
 - `cli/interactive_legacy.py`
-  旧 Rich / questionary 路径，仅作兼容与排障。
+  旧 Rich / questionary 回退路径，仅作兼容与排障。
 - `cli/healthcheck.py`
   `zhihu check` 的环境检查逻辑。
 - `cli/optional_deps.py`
@@ -144,10 +147,11 @@
 
 - 平台边界：`docs/PLATFORM_SUPPORT.md`
 - Windows 运行：`docs/WINDOWS_RUNBOOK.md`
+- 验证基线：`docs/VALIDATION_BASELINE.md`
 - 依赖映射：`docs/dependency-map.md`
 - 配置说明：`docs/config.md`
 - 工作流说明：`docs/workflows.md`
-- 历史阶段审计和 merge 文档
+- 其他历史阶段审计和 merge 文档（如存在）
 
 ### 3.5 `references/`
 
@@ -297,7 +301,13 @@
 ```text
 zhihu
 -> cli/app.py main()
--> 无参数时进入 cli/launcher_flow.py 首页 launcher
+-> 无参数时进入 cli/interactive.py
+-> 默认 Textual TUI 工作台
+
+zhihu onboard
+-> cli/app.py Typer 命令入口
+-> cli/launcher_flow.py
+-> 首次使用向导 / 可选进入 questionary launcher
 
 zhihu interactive
 -> cli/interactive.py
@@ -313,8 +323,8 @@ zhihu fetch / creator / batch / monitor / query / config / check / manual
 
 说明：
 
-- `zhihu` 是首页 launcher，不是 Textual TUI 的别名
-- `zhihu interactive` 是当前默认交互工作台的直达入口
+- 裸 `zhihu` 与 `zhihu interactive` 都直达当前默认交互工作台
+- `zhihu onboard` 是当前引导式设置与 questionary launcher 的正式入口
 - `zhihu interactive --legacy` 仅用于兼容与排障
 
 ### 6.2 单条抓取
@@ -348,17 +358,30 @@ creator URL / token
 ### 6.4 interactive 流程
 
 ```text
+zhihu
+-> cli/interactive.py 启动 Textual TUI
+-> 应用内构建 draft
+-> cli/archive_execution.py 执行共享抓取入口
+-> cli/workflow_service.py / cli/save_pipeline.py
+-> 展示最近结果与重试草案
+
 zhihu interactive
 -> cli/interactive.py 启动 Textual TUI
 -> 应用内构建 draft
 -> cli/archive_execution.py 执行共享抓取入口
 -> cli/workflow_service.py / cli/save_pipeline.py
 -> 展示最近结果与重试草案
+
+zhihu onboard
+-> cli/launcher_flow.py
+-> 可选选择 interactive
+-> cli/interactive.py 启动 Textual TUI
 ```
 
 说明：
 
-- `zhihu` 无参数时先进入首页 launcher，再由用户决定是否进入 TUI
+- 裸 `zhihu` 默认直达推荐的 Textual TUI
+- 如需首次引导或 questionary launcher，可使用 `zhihu onboard`
 - `zhihu interactive --legacy` 不属于推荐主路径
 
 ### 6.5 monitor 流程
@@ -476,10 +499,12 @@ cp cookies.example.json .local/cookies.json
 
 - `zhihu`
   无参数时进入全屏 Textual TUI 交互式工作台（带有首次语言选择）。
+- `zhihu interactive`
+  当前默认交互工作台的显式直达命令。
 - `zhihu interactive --legacy`
   旧版 Rich / questionary 回退路径，仅作兼容与排障。
 - `zhihu onboard`
-  首次环境体检和引导向导。
+  首次环境体检和引导向导，并可继续进入 questionary launcher。
 
 ### 8.4 详细抓取命令
 
@@ -531,10 +556,16 @@ data/
 
 默认顺序：
 
-1. 读 `AGENTS.md`
-2. 读 `MANUAL.md`
-3. 看相关 `docs/`
-4. 再进入具体模块
+1. 读 `CONSTITUTION.md`
+2. 读 `AGENTS.md`
+3. 再读 `MANUAL.md`
+4. 再看相关 `docs/`
+5. 再进入具体模块
+
+说明：
+
+- 默认读取顺序的权威版本以 `AGENTS.md` 为准
+- 本节只补维护者进入仓库时需要关注的附加上下文
 
 ### 10.2 文档同步
 
@@ -546,13 +577,17 @@ data/
 - 平台支持边界
 - TUI 行为
 
-需要同步的入口通常包括：
+文档同步总表与优先级以 `AGENTS.md` 第 5 节为准。
 
+维护者通常还需要额外检查：
+
+- `CONSTITUTION.md`
 - `README.md`
 - `README_EN.md`
 - `MANUAL.md`
 - `cli/manual_content.py`
 - `docs/PLATFORM_SUPPORT.md`
+- `docs/VALIDATION_BASELINE.md`
 - `docs/config.md`
 - `docs/workflows.md`
 
@@ -561,6 +596,7 @@ data/
 默认最小校验集：
 
 - `python -m unittest -q ...`
+- 具体最小回归集合与当前 CI 现实见 `docs/VALIDATION_BASELINE.md`
 - `zhihu --help`
 - `zhihu fetch --help`
 - `zhihu interactive --help`
@@ -599,8 +635,10 @@ data/
 
 ## 12. 相关文档入口
 
+- [CONSTITUTION.md](CONSTITUTION.md)
 - [README.md](README.md)
 - [AGENTS.md](AGENTS.md)
+- [docs/VALIDATION_BASELINE.md](docs/VALIDATION_BASELINE.md)
 - [docs/dependency-map.md](docs/dependency-map.md)
 - [docs/config.md](docs/config.md)
 - [docs/workflows.md](docs/workflows.md)

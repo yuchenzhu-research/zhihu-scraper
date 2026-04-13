@@ -45,7 +45,8 @@ class CommandSurfaceTests(unittest.TestCase):
         self.assertIn("cli/save_pipeline.py", manual_text)
         self.assertIn("core/scraper_payloads.py", manual_text)
         self.assertIn("Textual TUI", manual_text)
-        self.assertIn("home launcher", manual_text)
+        self.assertIn("zhihu onboard", manual_text)
+        self.assertIn("Textual workbench directly", manual_text)
 
     def test_tui_and_legacy_use_execution_bridge_instead_of_cli_app_privates(self):
         runner_text = (REPO_ROOT / "cli" / "tui" / "runner.py").read_text(encoding="utf-8")
@@ -56,12 +57,20 @@ class CommandSurfaceTests(unittest.TestCase):
         self.assertIn("from cli.archive_execution import fetch_and_save", legacy_text)
         self.assertNotIn("from cli.app import _fetch_and_save", legacy_text)
 
-    def test_launcher_marks_textual_tui_as_recommended_path(self):
+    def test_launcher_marks_onboard_as_optional_path_and_textual_as_default(self):
         launcher_text = (REPO_ROOT / "cli" / "launcher_flow.py").read_text(encoding="utf-8")
 
         self.assertIn("Textual TUI 归档工作台（推荐）", launcher_text)
-        self.assertIn("`zhihu interactive` 会直达推荐的 Textual TUI", launcher_text)
+        self.assertIn("`zhihu` 与 `zhihu interactive` 会直达推荐的 Textual TUI", launcher_text)
+        self.assertIn("`zhihu onboard` 可继续进入 questionary launcher", launcher_text)
         self.assertIn("`zhihu interactive --legacy` 仅用于兼容回退", launcher_text)
+
+    def test_cli_main_keeps_bare_entrypoint_on_textual_tui(self):
+        app_text = (REPO_ROOT / "cli" / "app.py").read_text(encoding="utf-8")
+
+        self.assertIn("if len(sys.argv) == 1:", app_text)
+        self.assertIn("Bare `zhihu` → launch TUI directly", app_text)
+        self.assertIn("from cli.interactive import run_interactive", app_text)
 
     def test_cli_app_no_longer_keeps_dead_save_or_batch_helpers(self):
         app_text = (REPO_ROOT / "cli" / "app.py").read_text(encoding="utf-8")
