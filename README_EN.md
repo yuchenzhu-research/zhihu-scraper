@@ -22,6 +22,9 @@ It's the ultimate companion for command-line workflows—reject cloud lock-ins a
 > [!WARNING]  
 > This project is strictly for learning, research, and personal archiving. Please comply with Terms of Service, crawler guidelines, and local laws.
 
+> [!NOTE]
+> This project is now closed at `v3.0.1-final`. Future compatibility with Zhihu API, page structure, or anti-bot changes is not guaranteed; exported Markdown, images, and SQLite data are the long-term deliverables.
+
 <br>
 
 ## 🚀 Quick Start
@@ -50,11 +53,11 @@ zhihu
 
 ## ✨ Core Features
 
-- **Link Universal**: Supports individual answers, question pages (auto Top-N extraction), column articles, and creator profiles.
+- **Local Archiving Paths**: Supports individual answers, question pages (Top-N extraction), column articles, and creator profiles on the currently validated paths.
 - **Local Supremacy**: Outputs directly to `Markdown` files, offline image directories (Images), and `SQLite` metadata.
-- **Anti-Detection**: Ultra-fast protocol-first extraction with a native headless browser fallback for complex pages.
-- **Real-Time Monitoring**: Beyond one-time scrapes, it supports continuous incremental monitoring of your favorite collections via the `monitor` command.
-- **Modern TUI**: Forget cluttered logs natively using the `Textual TUI` to manage task queues, review failures, and retry at the press of a button.
+- **Protocol First**: Uses protocol-first API / HTML paths, with browser fallback available for complex column pages.
+- **Incremental Monitoring**: The `monitor` command can check collection updates with local state.
+- **Textual TUI**: A full-screen workbench for queues, recent results, retry flow, and language switching.
 
 ## 📚 Documentation & Configuration
 

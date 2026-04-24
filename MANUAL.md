@@ -544,11 +544,23 @@ data/
 
 ## 9. 已知问题与限制
 
+- 当前项目收束为 `v3.0.1-final`，后续维护重点是保留本地归档能力和文档可读性，不再默认继续追逐知乎接口、页面结构或风控策略变化。
 - 当前默认平台仍然是 macOS 与 Linux CLI 路径，Windows 仍在补 runbook 与验证。
 - `interactive` 暂不接受 creator profile URL，作者抓取请使用 `zhihu creator`。
 - Playwright 回退仍然是补充路径，不是所有内容都完全依赖浏览器。
 - `core/scraper.py` 仍是高复杂度文件，虽然已经拆出 payloads 和 contracts，但还未彻底收口。
 - `core/config.py` 虽然已经转成 facade，但配置系统仍有继续模块化空间。
+
+### 9.1 冻结维护边界
+
+如果项目后续不再主动推进，默认维护策略如下：
+
+- 保留 `v3.0.1-final` 作为最终功能收束点；Python 包版本保持 PEP 440 兼容的 `3.0.1`，Git tag 使用 `v3.0.1-final`。
+- `fetch / creator / batch / monitor / query / interactive / check / manual` 作为最终命令面保留，不再新增主命令。
+- 已导出的 Markdown、图片、creator 元信息与 SQLite 数据是长期交付；在线抓取能力受知乎外部变化影响，按 best-effort 处理。
+- `.venv/`、`.local/`、`data/entries/`、`data/creators/`、`data/zhihu.db` 继续视为本地运行状态，不进入版本库。
+- `references/skills/` 保留为筛选后的正式参考资料；`references/external/*` 与 `references/skillsmp/` 视为本地挂载或临时来源，不进入主项目边界。
+- 后续只建议做安全、文档、安装和小型兼容修复；不建议继续扩平台、扩抓取面或重写 TUI。
 
 ## 10. 维护约定
 
@@ -626,12 +638,12 @@ data/
 
 ### 11.2 当前后续重点
 
-- 继续压薄 `cli/app.py`，让命令层只保留参数解析和输出
-- 继续拆 `core/scraper.py`
-- 继续收紧配置系统边界
-- 继续稳定 workflow / save / scraper 的 typed contract
-- 补更真实的三平台验证
-- 继续压缩 legacy 交互路径的权重
+在 `v3.0.1-final` 之后，默认不再主动推进大重构。若必须维护，优先级调整为：
+
+- 优先保证安装、文档、最小测试和本地导出数据可读。
+- 只处理明确影响现有命令面的 bug。
+- 不再默认拆大模块、扩平台承诺或新增抓取面。
+- legacy 路径保持降权兼容，不再主动扩展。
 
 ## 12. 相关文档入口
 

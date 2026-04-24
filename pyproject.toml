@@ -1,6 +1,6 @@
 [project]
 name = "zhihu-scraper"
-version = "3.0.0"
+version = "3.0.1"
 description = "🕷️ 高质量知乎内容爬取工具"
 readme = "README.md"
 license = { text = "MIT" }

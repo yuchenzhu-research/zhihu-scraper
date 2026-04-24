@@ -69,3 +69,4 @@ MediaCrawler/
 mediacrawler/
 references/external/*
 !references/external/README.md
+references/skillsmp/

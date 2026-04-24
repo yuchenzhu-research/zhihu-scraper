@@ -1,6 +1,7 @@
 # Validation Baseline / 验证基线
 
 本文件记录当前仓库的默认验证基线，用来替代已废弃的阶段性验证矩阵引用。
+`v3.0.1-final` 之后，本文件也是冻结维护时判断“还能不能最小复现”的主要入口。
 
 ## 1. 当前最小回归集合
 
@@ -49,6 +50,7 @@ python cli/app.py check --help
 - CI 的 `pip install -e .` 只覆盖基础包，不等于 Playwright / browser fallback 已被完整验证
 - 本地完整功能路径仍然是 `./install.sh` 或 `pip install -e ".[full]"`
 - Windows 仍然只有 runbook，不是当前的一等安装路径
+- 如果 `.venv/` 因本地 Python 路径变化失效，应重跑 `./install.sh --recreate`；不要把 `.venv/` 提交到版本库
 
 ## 4. 按改动类型补充的验证
 

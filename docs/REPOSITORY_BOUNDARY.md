@@ -25,7 +25,7 @@ This document defines two things:
 - `docs/`
   仓库结构、命名规范、工程约定等正式文档。
 - `references/`
-  参考资料区；其中 `skills/` 是正式参考入口，`external/README.md` 是外部仓库落点说明。
+  参考资料区；其中 `skills/` 是正式参考入口，`external/README.md` 是外部仓库落点说明；`skillsmp/` 视为本地临时来源，不纳入正式结构。
 - `data/README.md`
   只保留目录说明；真正的数据产物不进入版本库。
 - `.github/`
@@ -57,6 +57,7 @@ This document defines two things:
 - `data/zhihu.db`
 - `data/.monitor_state.json`
 - `references/external/*`
+- `references/skillsmp/`
 
 历史兼容路径仍可存在，但不再推荐作为默认布局：
 
@@ -112,5 +113,6 @@ This document defines two things:
 - `references/skills/engineering/` 保存质量检测与工程推进相关 skill
 - `references/external/README.md` 是外部参考仓库的正式入口说明
 - `references/external/*` 下挂载的 `MediaCrawler/`、`openclaw/` 等内容视为本地参考材料，不纳入主项目正式边界
+- `references/skillsmp/` 视为本地原始来源或临时挂载点，不纳入主项目正式边界；如需保留内容，应筛选后迁入 `references/skills/`
 
 后续如果要重构 Cookie 存储、运行时目录或配置层，应以这份边界文档为准，而不是继续把本地实验目录混进正式仓库。
