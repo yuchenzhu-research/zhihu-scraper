@@ -57,6 +57,7 @@ class ZhihuInteractiveShell(App[None]):
         ("ctrl+l", "focus_input", "binding.focus_input"),
         ("ctrl+r", "run_current_draft", "binding.run"),
         ("ctrl+y", "load_retry_draft", "binding.retry"),
+        ("ctrl+g", "change_language", "binding.language"),
         ("q", "quit", "binding.quit"),
         ("escape", "quit", "binding.quit"),
     ]
@@ -75,8 +76,8 @@ class ZhihuInteractiveShell(App[None]):
 
     def compose(self) -> ComposeResult:
         queue = build_queue_snapshot(self._draft, is_running=False)
-        history = build_history_snapshot(())
-        detail = build_detail_snapshot(self._draft, ())
+        history = build_history_snapshot(tuple(self._history))
+        detail = build_detail_snapshot(self._draft, tuple(self._history))
         yield Container(
             HomeStage(
                 HeroCard(self._snapshot.eyebrow, self._snapshot.title, self._snapshot.subtitle),
@@ -112,11 +113,22 @@ class ZhihuInteractiveShell(App[None]):
 
         set_language(lang_code)
         update_config({"global": {"language": lang_code, "language_configured": True}})
+        self._cfg = get_config()
 
-        # Rebuild all snapshots with the new locale, then recompose
+        # Rebuild all snapshots with the new locale, then recompose.
+        input_text = ""
+        try:
+            input_text = self.query_one("#url-input", ArchiveInput).text.strip()
+        except Exception:
+            input_text = ""
         self._snapshot = build_home_snapshot()
-        self._draft = build_idle_summary()
+        self._draft = (
+            parse_input_to_draft(input_text, cookie_ready=self._snapshot.cookie_ready)
+            if input_text
+            else build_idle_summary()
+        )
         self.recompose()
+        self.notify(t("toast.language_changed", language=lang_code), title=t("toast.language_changed.title"), severity="information")
         self.call_after_refresh(self.action_focus_input)
 
     def on_resize(self, event: Resize) -> None:
@@ -258,6 +270,24 @@ class ZhihuInteractiveShell(App[None]):
 
         self._set_draft(retry_draft)
         self.action_focus_input()
+
+    def action_change_language(self) -> None:
+        """Open the language selector without leaving the TUI."""
+        if self._is_running:
+            self._set_draft(
+                DraftSummary(
+                    title=t("app.busy.title"),
+                    lines=(
+                        t("app.busy.language_line1"),
+                        t("app.busy.language_line2"),
+                    ),
+                    tone="warn",
+                    targets=self._draft.targets,
+                )
+            )
+            return
+
+        self.push_screen(LanguageSelectionScreen(), self._handle_language_selection)
 
     def action_quit(self) -> None:
         """Prevent quitting while an execution run is still active."""

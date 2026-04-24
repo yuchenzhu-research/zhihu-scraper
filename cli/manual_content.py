@@ -49,6 +49,7 @@ HOME MENU
   - arrow keys: move / 方向键移动
   - `Enter`: confirm / 回车确认
   - `Space`: toggle checkbox options / 空格勾选复选项
+  - `Ctrl+G`: switch UI language / 切换界面语言
   - `Ctrl+C`: exit current screen / 退出当前界面
 
 INTERACTIVE MODES
@@ -188,6 +189,7 @@ COMMAND REFERENCE
   - `Enter`: build current draft
   - `Ctrl+R`: execute current draft
   - `Ctrl+Y`: load retry draft from the latest failed records
+  - `Ctrl+G`: open the language selector and persist the default language
   - does NOT parse `people/...` creator links in interactive mode
   - use `creator` command for profile URLs
   - `--legacy`: deprecated fallback to the old Rich/questionary flow
@@ -204,6 +206,8 @@ COMMAND REFERENCE
   Examples:
   - `zhihu config --show`
   - `zhihu config --path`
+  - `zhihu config set language en`
+  - `zhihu config set language zh_hant`
 
   Notes:
   - `--show` includes configured vs active cookie/pool paths
@@ -285,6 +289,7 @@ CURRENT LIMITS
   - article path is protocol-first, but some columns still need Playwright fallback under active WAF
   - browser fallback is strongest on article path; answer/question stay API-first
   - query uses SQLite keyword matching, not advanced ranking search
+  - translation is optional; when enabled in TUI, translation failures are reported but do not block archiving
 
 QUICK START
   - `./install.sh`
@@ -292,6 +297,7 @@ QUICK START
   - `zhihu`                    # open the Textual TUI directly / 直达 Textual 工作台
   - `zhihu onboard`            # guided setup + optional questionary launcher / 首次引导 + 可选 launcher
   - `zhihu interactive`        # open the Textual TUI directly / 直达 Textual 工作台
+  - `zhihu config set language en`
   - `zhihu check`
   - `zhihu manual`
 """.strip()

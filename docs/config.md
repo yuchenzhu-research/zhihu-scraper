@@ -111,6 +111,39 @@ config.yaml
 - `file`
 - `log_exceptions`
 
+### 3.5 `global`
+
+负责界面语言状态。
+
+子项包括：
+
+- `language`
+- `language_configured`
+
+当前可通过两条路径修改：
+
+- TUI 内按 `Ctrl+G`
+- `zhihu config set language <zh|en|zh_hant>`
+
+### 3.6 `translation`
+
+负责可选翻译能力。该能力默认关闭；开启后 TUI 会在归档成功后尝试生成目标语言 Markdown。
+
+子项包括：
+
+- `enabled`
+- `target_language`
+- `engine`
+- `base_url`
+- `api_key`
+- `model`
+- `comment_top_n`
+
+说明：
+
+- `openai` 依赖属于 `.[translate]` 可选依赖，不在基础安装层
+- 翻译失败不会阻断归档，但会显示在 TUI 的最近结果与执行详情中
+
 ## 4. 运行时路径约定
 
 当前默认运行时目录是：

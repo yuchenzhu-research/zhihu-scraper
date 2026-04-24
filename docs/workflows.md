@@ -177,6 +177,7 @@ zhihu interactive --legacy
 - `zhihu` 默认直达推荐的 Textual TUI
 - `interactive` 当前默认是 Textual TUI
 - `interactive --legacy` 为兼容与排障路径
+- TUI 内按 `Ctrl+G` 可打开语言选择器，并把选择写回 `config.yaml`
 
 主流程：
 
@@ -220,6 +221,12 @@ TUI 内部主流程：
 - 展示层在 `cli/config_view.py`
 - 展示 configured path / active path
 - 显式提示是否仍命中旧 Cookie 路径兼容
+
+### `zhihu config set language <lang>`
+
+- 支持 `zh`、`en`、`zh_hant`
+- 与 TUI 内 `Ctrl+G` 使用同一套配置落盘字段
+- 会写入 `global.language` 与 `global.language_configured`
 
 ### `zhihu check`
 

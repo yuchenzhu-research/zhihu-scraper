@@ -15,8 +15,8 @@ class LanguageSelectionScreen(ModalScreen[str | None]):
     """Apple-style language selector for the first run or manual switch."""
 
     def compose(self) -> ComposeResult:
-        # Sort languages to ensure consistent order (zh, en are primary)
-        langs = [("zh", "简体中文"), ("en", "English"), ("zh_hant", "繁體中文")]
+        # Preserve SUPPORTED_LANGUAGES insertion order: zh, en, zh_hant.
+        langs = tuple(SUPPORTED_LANGUAGES.items())
         yield Vertical(
             Static(t("lang_selector.title"), id="dialog-title"),
             Static(t("lang_selector.hint"), id="dialog-body"),
@@ -57,13 +57,13 @@ class QuestionLimitScreen(ModalScreen[int | None]):
                 id="dialog-presets",
             ),
             Input(
-                placeholder="自定义正整数，例如 50",
+                placeholder=t("question_limit.placeholder"),
                 restrict=r"[0-9]*",
                 id="custom-limit",
             ),
             Horizontal(
-                Button(t("detail.draft.ready"), id="limit-custom", variant="primary"),
-                Button(t("app.cancel_question.title"), id="limit-cancel"),
+                Button(t("question_limit.apply"), id="limit-custom", variant="primary"),
+                Button(t("question_limit.cancel"), id="limit-cancel"),
                 id="dialog-actions",
             ),
             Static("", id="dialog-error"),
@@ -104,4 +104,4 @@ class QuestionLimitScreen(ModalScreen[int | None]):
         if raw_value.isdigit() and int(raw_value) > 0:
             self.dismiss(int(raw_value))
             return
-        self.query_one("#dialog-error", Static).update("请输入大于 0 的正整数。")
+        self.query_one("#dialog-error", Static).update(t("question_limit.error"))

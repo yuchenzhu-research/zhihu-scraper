@@ -68,6 +68,8 @@ class ExecutionRecord:
     target: DraftTarget
     saved_count: int
     markdown_paths: tuple[str, ...]
+    translated_paths: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
     error: str | None = None
     log_tail: tuple[str, ...] = ()
 
@@ -309,6 +311,10 @@ def build_execution_summary(report: ExecutionReport) -> DraftSummary:
     for record in report.records[:3]:
         if record.succeeded:
             lines.append(t("draft.done.saved", target=describe_target(record.target), count=record.saved_count))
+            if record.translated_paths:
+                lines.append(t("draft.done.translated", count=len(record.translated_paths)))
+            for note in record.notes[:1]:
+                lines.append(note)
         else:
             lines.append(t("draft.done.error", target=describe_target(record.target), error=record.error))
 
@@ -374,6 +380,10 @@ def build_history_snapshot(reports: tuple[ExecutionReport, ...]) -> PanelSnapsho
         if record.succeeded:
             target_path = _short_output_path(record.markdown_paths[0]) if record.markdown_paths else latest.output_dir
             lines.append(f"{describe_target(record.target)} -> {target_path}")
+            if record.translated_paths:
+                lines.append(t("history.translated", count=len(record.translated_paths)))
+            for note in record.notes[:1]:
+                lines.append(t("history.note", note=note))
         else:
             detail = record.error or t("history.unknown_error")
             if record.log_tail:
@@ -424,6 +434,10 @@ def build_detail_snapshot(draft: DraftSummary, reports: tuple[ExecutionReport, .
             if record.succeeded:
                 saved_path = _short_output_path(record.markdown_paths[0]) if record.markdown_paths else latest.output_dir
                 lines.append(t("detail.exec.saved", target=describe_target(record.target), path=saved_path))
+                for translated_path in record.translated_paths[:2]:
+                    lines.append(t("detail.exec.translated", path=_short_output_path(translated_path)))
+                for note in record.notes[:2]:
+                    lines.append(t("detail.exec.note", note=note))
             else:
                 lines.append(t("detail.exec.failed", target=describe_target(record.target), error=record.error))
                 if record.log_tail:

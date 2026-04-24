@@ -15,6 +15,7 @@ try:
         parse_input_to_draft,
     )
     from cli.tui.widgets import ArchiveInput, DetailCard, HistoryCard, QueueCard, StatusPill, SummaryCard
+    from core.i18n import set_language
     HAS_TEXTUAL = True
 except ImportError:
     HAS_TEXTUAL = False
@@ -52,6 +53,9 @@ def _mixed_executor(draft, progress_callback=None):
 
 @unittest.skipIf(not HAS_TEXTUAL, "textual dependency not installed")
 class TuiStateTests(unittest.TestCase):
+    def setUp(self):
+        set_language("zh")
+
     def test_question_draft_requires_limit_then_becomes_runnable(self):
         draft = parse_input_to_draft("https://www.zhihu.com/question/123", True)
         self.assertTrue(draft.requires_question_limit)
@@ -132,6 +136,31 @@ class TuiStateTests(unittest.TestCase):
     def test_status_pill_renders_a_group(self):
         pill = StatusPill("Cookie", "已就绪", "success")
         self.assertEqual(type(pill.render()).__name__, "Group")
+
+    def test_execution_snapshots_include_translation_feedback(self):
+        draft = parse_input_to_draft("https://zhuanlan.zhihu.com/p/789", True)
+        report = ExecutionReport(
+            output_dir="data",
+            records=(
+                ExecutionRecord(
+                    target=draft.targets[0],
+                    saved_count=1,
+                    markdown_paths=("data/entries/article/index.md",),
+                    translated_paths=("data/entries/article/[EN] index.md",),
+                    notes=("翻译配置初始化失败：missing key",),
+                ),
+            ),
+        )
+
+        summary = build_detail_snapshot(draft, (report,))
+        history = build_history_snapshot((report,))
+        self.assertTrue(any("[EN] index.md" in line for line in summary.lines))
+        self.assertTrue(any("missing key" in line for line in summary.lines))
+        self.assertTrue(any("翻译文件：1 个" in line for line in history.lines))
+
+    def test_language_switch_binding_is_registered(self):
+        bindings = {binding[0]: binding[1] for binding in ZhihuInteractiveShell.BINDINGS}
+        self.assertEqual(bindings["ctrl+g"], "change_language")
 
 
 @unittest.skipIf(not HAS_TEXTUAL, "textual dependency not installed")

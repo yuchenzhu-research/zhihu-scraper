@@ -75,6 +75,8 @@
   - 完整功能路径，包含 Playwright
 - `cli`
   - 预留给未来进一步细分的轻量 CLI 环境
+- `translate`
+  - 可选 LLM 翻译能力，包含 `openai`
 - `dev`
   - 开发测试工具
 - `lint`
@@ -132,4 +134,5 @@ pip install -e .
 
 - `questionary` 仍在 legacy / onboarding 路径中，因此主项目目前不能简单移除它
 - `playwright` 是可选依赖，但 `install.sh` 当前默认仍走完整安装路径
+- `openai` 仅用于可选翻译路径，不属于基础归档能力
 - `cli` optional group 目前基本为空，后续如要细分安装模型，需要同时更新安装脚本、README 和测试契约
