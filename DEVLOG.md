@@ -2,6 +2,50 @@
 
 ---
 
+## 2026-04-24 / `v3.0.1-final` 维护冻结与 TUI 收束
+
+### 相关 commits
+- `6d3de1e` docs: finalize v3.0.1 maintenance freeze
+- `a814b25` feat: improve tui language and translation feedback
+- `3215168` refactor: trim final low-risk code debt
+
+### 本次修改
+- 将项目收束为 `v3.0.1-final`：`pyproject.toml` 包版本更新为 `3.0.1`，文档与 CHANGELOG 明确最终维护冻结边界。
+- 决定 `.venv/`、`.local/`、`data/entries/`、`data/creators/`、`data/zhihu.db` 继续作为本地运行状态，不进入版本库。
+- 保留 `references/skills/` 作为正式参考入口，并将 `references/skillsmp/` 纳入 `.gitignore`，避免临时 SkillsMP 挂载误入版本库。
+- TUI 新增 `Ctrl+G` 语言切换入口，复用首次运行语言选择器并持久化到 `config.yaml`。
+- 本地化问题页 Top-N 弹窗中的 placeholder、按钮和错误提示。
+- TUI 翻译路径不再静默吞掉缺依赖、坏配置或翻译失败；归档仍继续，但最近结果与执行详情会显示翻译提示。
+- 恢复 `tests/test_tui_rebuild.py` 中被缺失 `StatusPill` 导致整体跳过的 TUI 测试，并补充翻译反馈和语言切换 binding 回归。
+- 清理 `core/scraper.py` 中 `return` 后不可达的旧 creator 分页代码，并将 `cli/__init__.py` / `core/__init__.py` 改为轻量 lazy export，减少无关 import 的重依赖副作用。
+
+### 解决的问题
+- 解决了项目文档仍按“继续推进”表述的问题，冻结后维护目标更清晰。
+- 解决了运行中无法直接从 TUI 切换语言的问题。
+- 解决了翻译可选能力失败时用户完全不可见的问题。
+- 解决了 TUI 回归测试被 `StatusPill` 导入错误整体跳过的问题。
+- 解决了 `core/scraper.py` 中不可达代码继续误导后续维护的问题。
+
+### 已验证
+- `./.venv/bin/python --version` -> Python 3.14.3
+- `./.venv/bin/python -m compileall cli core`
+- `./.venv/bin/python -m unittest -q tests.test_docs_sync tests.test_command_surface tests.test_install_contract`
+- `./.venv/bin/python -m unittest -q tests.test_cli_compat tests.test_docs_sync tests.test_command_surface tests.test_tui_rebuild tests.test_save_pipeline tests.test_save_contracts tests.test_config_view tests.test_scraper_payloads tests.test_scraper_contracts tests.test_config_schema tests.test_config_runtime tests.test_install_contract tests.test_workflow_service tests.test_db_contract`
+- CLI help smoke：`manual / onboard / fetch / batch / creator / monitor / query / interactive / config / config set / check`
+- `git diff --check`
+- 三个 locale JSON 文件通过 `python3 -m json.tool` 校验。
+
+### 风险 / 未完成事项
+- 未做真实联网抓取验证；后续知乎接口、页面结构或风控变化仍可能影响在线抓取。
+- Playwright browser fallback 仍未在本轮完整验证。
+- Windows 仍保持实验性支持边界。
+
+### 下一步
+- 推送当前分支，并为最终点创建 `v3.0.1-final` tag。
+- 后续若无明确需求，不再主动推进大重构或新抓取面。
+
+---
+
 ## 2026-04-13 / 治理归一化前五步收口
 
 ### 相关 commits
