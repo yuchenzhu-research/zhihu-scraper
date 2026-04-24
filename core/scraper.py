@@ -363,31 +363,6 @@ class ZhihuCreatorDownloader:
             articles=PaginationStats.from_dict(article_stats),
         )
 
-        if answer_limit > 0:
-            answer_result = await self._paginate_creator_items(
-                label="回答",
-                target_limit=answer_limit,
-                fetch_page=lambda offset, limit: self.api_client.get_creator_answers_page(self.url_token, limit=limit, offset=offset),
-                normalize_item=self._normalize_creator_answer,
-            )
-            items.extend(answer_result["items"])
-
-        if article_limit > 0:
-            article_result = await self._paginate_creator_items(
-                label="专栏",
-                target_limit=article_limit,
-                fetch_page=lambda offset, limit: self.api_client.get_creator_articles_page(self.url_token, limit=limit, offset=offset),
-                normalize_item=self._normalize_creator_article,
-            )
-            items.extend(article_result["items"])
-
-        return CreatorFetchResult(
-            creator=CreatorProfileSummary.from_dict(build_creator_profile_payload(self.url_token, creator_profile)),
-            items=to_scraped_items(items),
-            answers=PaginationStats.from_dict(answer_result["stats"]),
-            articles=PaginationStats.from_dict(article_result["stats"]),
-        )
-
     async def _paginate_creator_pages(
         self,
         *,
