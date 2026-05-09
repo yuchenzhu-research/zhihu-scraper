@@ -2,6 +2,62 @@
 
 ---
 
+## 2026-05-09 / TUI 输入框、manual 入口与 Cookie 单文件收敛
+
+### 相关 commits
+- `776d3cc` fix(tui): stabilize wrapped URL input rendering
+- `3fba670` feat(cli): add man alias for manual
+- `c849e73` refactor(cookie): collapse runtime to single cookie file
+
+### 本次修改
+- 修复 TUI/GUI 中知乎链接输入框的长文本渲染：输入区域启用软换行，限制高度和滚动条表现，避免红色/粉色光标行或高亮状态溢出到面板外。
+- 新增 `zhihu man` 作为内置 manual 的命令别名，并同步 README、README_EN、workflow 文档、验证基线和命令面测试。
+- 将 Cookie 运行时收敛为单一 `.local/cookies.json` 主路径，保留根目录 `cookies.json` 作为 legacy fallback，不再扫描 `.local/cookie_pool/` 或执行多 Cookie 轮换。
+- 移除配置、健康检查、配置展示、抓取重试提示和翻译 prompt 中对 cookie pool、轮换与评论抓取支线的默认表述。
+- 更新相关测试，覆盖 TUI 输入框渲染属性、命令面、配置展示、配置 schema、CLI 兼容与文档同步。
+
+### 解决的问题
+- 解决了 GUI/TUI 粘贴长知乎链接后输入框内部高亮文本可能视觉溢出的问题。
+- 解决了用户想用 `man` 风格命令查看项目内置命令说明时缺少直接入口的问题。
+- 解决了仓库内 cookie 文件与 cookie pool 概念并存导致维护认知混乱的问题。
+- 解决了当前维护目标已经不再需要“多 cookies 种子轮换”和评论抓取支线，但文档与运行时仍保留默认路径的问题。
+
+### 影响范围
+- `cli/tui/widgets.py`
+- `cli/tui/theme.tcss`
+- `cli/app.py`
+- `cli/manual_content.py`
+- `cli/config_view.py`
+- `cli/healthcheck.py`
+- `core/cookie_manager.py`
+- `core/config_schema.py`
+- `core/api_client.py`
+- `core/runtime_paths.py`
+- `core/scraper.py`
+- `README.md`
+- `README_EN.md`
+- `MANUAL.md`
+- `docs/`
+- `tests/`
+
+### 已验证
+- `.venv-codex314/bin/python -m unittest -q tests.test_cli_compat tests.test_docs_sync tests.test_command_surface tests.test_tui_rebuild tests.test_save_pipeline tests.test_save_contracts tests.test_config_view tests.test_scraper_payloads tests.test_scraper_contracts tests.test_config_schema tests.test_config_runtime tests.test_install_contract tests.test_workflow_service tests.test_db_contract`
+- `.venv-codex314/bin/python -m compileall -q cli core`
+- CLI help smoke：`--help`、`fetch --help`、`interactive --help`、`config --help`、`check --help`、`manual --help`、`man --help`
+- `cli/app.py check` smoke；当前环境仍提示 Playwright Python package 未安装，这是环境依赖提示，不是本轮改动引入的失败。
+- 生成并检查过 TUI 输入框 SVG 渲染快照：`/tmp/zhihu_tui_input_after.svg`。
+
+### 风险 / 未完成事项
+- 未做真实联网抓取验证；知乎接口、签名、Cookie 有效期和风控仍可能导致在线抓取失败。
+- `.local/cookie_pool/` 已不再作为默认运行路径扫描；如本地仍有历史 cookie pool，需要手动迁移到 `.local/cookies.json`。
+- Playwright fallback 仍依赖完整安装额外依赖后再做端到端验证。
+
+### 下一步
+- 如继续清理项目结构，可进一步删除或归档已经不再被默认入口引用的历史说明，但应逐项确认仍有无维护价值。
+- 若要验证新 Cookie 是否可用，应使用 `.local/cookies.json` 单文件路径做一次真实抓取 smoke。
+
+---
+
 ## 2026-04-24 / `v3.0.1-final` 维护冻结与 TUI 收束
 
 ### 相关 commits
