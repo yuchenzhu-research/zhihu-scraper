@@ -13,6 +13,7 @@ EXPECTED_COMMANDS = {
     "creator",
     "fetch",
     "interactive",
+    "man",
     "manual",
     "monitor",
     "onboard",
@@ -28,6 +29,7 @@ EXPECTED_DOC_SNIPPETS = (
     "zhihu interactive",
     "zhihu config --show",
     "zhihu check",
+    "zhihu man",
     "zhihu manual",
 )
 

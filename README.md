@@ -65,6 +65,7 @@ zhihu
 
 Zhihu-Scraper 包含非常详尽的文档结构：
 
+- 终端内置说明：`zhihu manual` 或短别名 `zhihu man`
 - ⚙️ **[核心说明书 (MANUAL)](MANUAL.md)**：CLI 所有进阶参数、Cookie 路径配置、TUI 操作快捷键详解。
 - 🛠 **[环境兼容性查询](docs/PLATFORM_SUPPORT.md)**：Windows / Linux 部署的专属指引。
 - 🤖 **[Agent 执行边界](AGENTS.md)**：适合参与共建的代码助手与协作者阅读的架构守则。

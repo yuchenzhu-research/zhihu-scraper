@@ -68,7 +68,7 @@ COMMAND INDEX
   - interactive
   - config --show / --path
   - check
-  - manual
+  - manual / man
 
 COMMAND REFERENCE
 
@@ -89,7 +89,7 @@ COMMAND REFERENCE
   - `-b, --headless` browser headless switch for fallback path
 
   Behavior:
-  - article path: protocol HTML fetch first, then one cookie-rotation retry, then Playwright fallback if still blocked
+  - article path: protocol HTML fetch first, then Playwright fallback if still blocked
   - `-n <= 20`: usually single page
   - `-n > 20`: auto pagination with random waits
   - `-n > 50`: higher anti-bot risk warning
@@ -210,8 +210,9 @@ COMMAND REFERENCE
   - `zhihu config set language zh_hant`
 
   Notes:
-  - `--show` includes configured vs active cookie/pool paths
-  - legacy repo-root fallback is surfaced explicitly when still in use
+  - `--show` includes configured vs active cookie path
+  - runtime uses a single primary Cookie file: `.local/cookies.json`
+  - legacy repo-root `cookies.json` fallback is surfaced explicitly when still in use
 
 8) check
   Purpose:
@@ -220,7 +221,7 @@ COMMAND REFERENCE
   Checks:
   - `config.yaml` existence
   - primary cookie readiness
-  - cookie pool availability
+  - single-cookie mode
   - configured path / active path compatibility
   - Playwright availability under current browser config
 
@@ -230,6 +231,7 @@ COMMAND REFERENCE
 9) manual
   Purpose:
   - open this built-in manual in pager
+  - `zhihu man` is a short alias for the same manual
 
 OUTPUT STRUCTURE
   Base: `{default_output_dir}`
@@ -282,7 +284,7 @@ PLATFORM SUPPORT
   - `core/config.py` facade for config, logging, and humanization helpers
   - `core/config_runtime.py` singleton runtime loader + fallback finalization
   - `core/config_schema.py` typed config schema + defaults
-  - `core/cookie_manager.py` cookie file + cookie pool handling + active path resolution
+  - `core/cookie_manager.py` single cookie file handling + active path resolution
 
 CURRENT LIMITS
   - interactive mode does not accept creator profile URLs (`people/...`)
@@ -300,4 +302,5 @@ QUICK START
   - `zhihu config set language en`
   - `zhihu check`
   - `zhihu manual`
+  - `zhihu man`
 """.strip()

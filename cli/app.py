@@ -181,6 +181,7 @@ def _run_launcher() -> None:
 # Command Definitions (命令定义)
 # ============================================================
 
+@app.command("man")
 @app.command("manual")
 def manual() -> None:
     """
@@ -560,14 +561,13 @@ app.add_typer(config_app, name="config")
 def config_show() -> None:
     """Show current configuration / 显示当前配置"""
     cfg = _get_cfg()
-    from core.cookie_manager import describe_cookie_file_path, describe_cookie_pool_dir
+    from core.cookie_manager import describe_cookie_file_path
 
     snapshot = build_config_snapshot(
         cfg=cfg,
         config_path=Path(__file__).parent.parent / "config.yaml",
         resolve_project_path=resolve_project_path,
         describe_cookie_file_path=describe_cookie_file_path,
-        describe_cookie_pool_dir=describe_cookie_pool_dir,
     )
     rprint(render_config_panel(snapshot))
 

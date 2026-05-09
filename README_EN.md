@@ -65,6 +65,7 @@ Want to know how to inject your `z_c0` Cookie? Write complex queries? Understand
 
 We provide comprehensive documentations:
 
+- Built-in terminal manual: `zhihu manual` or short alias `zhihu man`
 - ⚙️ **[Core Manual (MANUAL)](MANUAL.md)**: Details on all CLI advanced parameters, Cookie path configs, and TUI shortcuts.
 - 🛠 **[Platform Compatibility](docs/PLATFORM_SUPPORT.md)**: Specific deployment guidelines for Windows and Linux.
 - 🤖 **[Agent Boundaries](AGENTS.md)**: Architectural ground rules designed for AI coding assistants and code contributors.

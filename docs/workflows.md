@@ -231,15 +231,16 @@ TUI 内部主流程：
 ### `zhihu check`
 
 - 检查配置文件
-- 检查 Cookie 状态
+- 检查单主 Cookie 文件状态
 - 检查 configured path / active path 是否仍在命中旧路径兼容
 - 检查 Playwright 可用性
 - 目标是诊断，不是打印原始崩溃日志
 - 当前诊断逻辑在 `cli/healthcheck.py`
 
-### `zhihu manual`
+### `zhihu manual` / `zhihu man`
 
 - 打开内置 terminal manual
+- `man` 是 `manual` 的短别名
 - 内容来源于 `cli/manual_content.py`
 
 ## 10. 文档维护工作流

@@ -38,7 +38,8 @@ class DocsSyncTests(unittest.TestCase):
         manual_text = build_manual_text(Path("data"))
         self.assertIn("unsupported-only new collection items still advance the pointer", manual_text)
         self.assertIn("Content Key (type:id)", manual_text)
-        self.assertIn("configured vs active cookie/pool paths", manual_text)
+        self.assertIn("configured vs active cookie path", manual_text)
+        self.assertIn("single primary Cookie file", manual_text)
 
     def test_governance_docs_reference_constitution_and_validation_baseline(self):
         agents_text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
