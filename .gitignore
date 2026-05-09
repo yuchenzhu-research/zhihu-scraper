@@ -12,7 +12,7 @@ build/
 .eggs/
 
 # Virtual Environments
-.venv/
+.venv*/
 venv/
 env/
 .env/
@@ -26,6 +26,7 @@ env/
 .vscode/
 .idea/
 .claude/
+.gemini/
 .cursor/
 .cursorrules
 .agent/
