@@ -137,6 +137,12 @@ class TuiStateTests(unittest.TestCase):
         pill = StatusPill("Cookie", "已就绪", "success")
         self.assertEqual(type(pill.render()).__name__, "Group")
 
+    def test_archive_input_uses_wrapped_compact_rendering(self):
+        input_widget = ArchiveInput()
+        self.assertTrue(input_widget.soft_wrap)
+        self.assertFalse(input_widget.highlight_cursor_line)
+        self.assertFalse(input_widget.show_line_numbers)
+
     def test_execution_snapshots_include_translation_feedback(self):
         draft = parse_input_to_draft("https://zhuanlan.zhihu.com/p/789", True)
         report = ExecutionReport(

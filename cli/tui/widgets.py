@@ -64,9 +64,9 @@ class ArchiveInput(TextArea):
     """Multiline-safe input surface that still submits on Enter."""
 
     def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("soft_wrap", True)
+        kwargs.setdefault("highlight_cursor_line", False)
         super().__init__(**kwargs)
-        if hasattr(self, "soft_wrap"):
-            self.soft_wrap = True
         self.show_line_numbers = False
 
     class Submitted(Message):
