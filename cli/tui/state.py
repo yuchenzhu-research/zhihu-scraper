@@ -98,10 +98,7 @@ class ExecutionReport:
 def build_home_snapshot() -> HomeSnapshot:
     """Build the current home snapshot from runtime configuration."""
     cfg = get_config()
-    cookie_ready = has_available_cookie_sources(
-        cfg.zhihu.cookies_file,
-        cfg.zhihu.cookies_pool_dir,
-    )
+    cookie_ready = has_available_cookie_sources(cfg.zhihu.cookies_file)
 
     return HomeSnapshot(
         eyebrow=t("home.eyebrow"),

@@ -53,7 +53,6 @@ config.yaml
 
 - `cookies`
   - `file`
-  - `pool_dir`
   - `required`
 - `browser`
   - `headless`
@@ -137,7 +136,6 @@ config.yaml
 - `base_url`
 - `api_key`
 - `model`
-- `comment_top_n`
 
 说明：
 
@@ -155,20 +153,20 @@ config.yaml
 重要路径包括：
 
 - `.local/cookies.json`
-- `.local/cookie_pool/`
 - `.local/logs/`
 
 兼容历史路径：
 
 - `cookies.json`
-- `cookie_pool/`
 
 说明：
 
 - 仓库根目录不再推荐直接承载长期凭据
 - `.local/` 用于存放凭据、日志等运行态文件
 - `zhihu config --show` 会同时显示 configured path 和 active path
-- 如果由于兼容策略实际命中了仓库根目录旧路径，`zhihu config --show` 和 `zhihu check` 都会明确显示 legacy fallback 状态
+- 抓取运行时只加载一份主 Cookie 文件：`.local/cookies.json`
+- 旧配置里的 `pool_dir` 字段仍可被解析，但不再参与抓取或轮换
+- 如果由于兼容策略实际命中了仓库根目录旧 `cookies.json`，`zhihu config --show` 和 `zhihu check` 都会明确显示 legacy fallback 状态
 
 ## 5. 单例与 facade
 

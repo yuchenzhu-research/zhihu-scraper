@@ -1,23 +1,18 @@
 """
-cookie_manager.py - Multi-Account Cookie Pool Manager
+cookie_manager.py - Single Cookie Session Manager
 
-Responsible for loading, validating, and rotating multiple sets of Zhihu cookies.
-Prefers .local/cookies.json and .local/cookie_pool/*.json while keeping backward
-compatibility with legacy repository-root paths.
-Supports automatic random switching when encountering API 403 (rate limiting),
-greatly improving survival rate for batch tasks.
+Loads one canonical Zhihu cookie file from `.local/cookies.json`, while keeping
+legacy repository-root `cookies.json` fallback for existing local installs.
 
 ================================================================================
-cookie_manager.py — 多账号 Cookie 轮询池
+cookie_manager.py — 单 Cookie 会话管理
 
-负责加载、验证和轮换多组知乎 Cookies。优先使用 `.local/cookies.json`
-和 `.local/cookie_pool/*.json`，同时兼容历史的仓库根目录路径。
-支持在遇到 API 403 (风控) 时随机切换号源池，大幅提升批量任务的存活率。
+只加载 `.local/cookies.json` 这一份主 Cookie 文件，同时兼容历史仓库根目录
+`cookies.json` 路径。
 ================================================================================
 """
 
 import json
-import random
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Dict, Optional
@@ -25,9 +20,7 @@ from typing import List, Dict, Optional
 from .config import get_config, get_logger, resolve_project_path
 from .runtime_paths import (
     DEFAULT_COOKIE_FILE,
-    DEFAULT_COOKIE_POOL_DIR,
     LEGACY_COOKIE_FILE,
-    LEGACY_COOKIE_POOL_DIR,
 )
 
 
@@ -102,22 +95,15 @@ def count_available_cookie_sources(
     pool_dir: Optional[str] = None,
 ) -> int:
     """
-    Count valid cookie sources across the primary file and pool directory.
-    统计主 Cookie 文件与 Cookie 池目录中的有效号源数量。
+    Count valid cookie sources.
+    统计当前可用 Cookie 来源数量。
+
+    `pool_dir` is accepted for backward-compatible call sites, but the runtime
+    no longer scans a cookie pool.
+    `pool_dir` 仅为兼容旧调用保留；运行时不再扫描 Cookie 池。
     """
-    total = 0
-
     base_path = resolve_cookie_file_path(base_cookies_path)
-    if has_real_cookie_values(base_path):
-        total += 1
-
-    pool_path = resolve_cookie_pool_dir(pool_dir)
-    if pool_path.exists() and pool_path.is_dir():
-        for filepath in pool_path.glob("*.json"):
-            if has_real_cookie_values(filepath):
-                total += 1
-
-    return total
+    return 1 if has_real_cookie_values(base_path) else 0
 
 
 def has_available_cookie_sources(
@@ -126,7 +112,7 @@ def has_available_cookie_sources(
 ) -> bool:
     """
     Check whether at least one valid cookie source is available.
-    检查是否至少存在一个有效 Cookie 号源。
+    检查是否至少存在一个有效 Cookie 来源。
     """
     return count_available_cookie_sources(base_cookies_path, pool_dir) > 0
 
@@ -163,20 +149,6 @@ def describe_cookie_file_path(configured_path: Optional[str] = None) -> RuntimeP
     )
 
 
-def describe_cookie_pool_dir(configured_path: Optional[str] = None) -> RuntimePathResolution:
-    """
-    Resolve the cookie pool directory and report whether legacy fallback is active.
-    解析 Cookie 池目录，并报告是否命中了旧路径兼容。
-    """
-    cfg = get_config()
-    configured = resolve_project_path(configured_path or cfg.zhihu.cookies_pool_dir)
-    return _resolve_runtime_path(
-        configured,
-        default_path=DEFAULT_COOKIE_POOL_DIR,
-        legacy_path=LEGACY_COOKIE_POOL_DIR,
-    )
-
-
 def resolve_cookie_file_path(configured_path: Optional[str] = None) -> Path:
     """
     Resolve the active cookie file path with legacy fallback.
@@ -185,24 +157,15 @@ def resolve_cookie_file_path(configured_path: Optional[str] = None) -> Path:
     return describe_cookie_file_path(configured_path).active_path
 
 
-def resolve_cookie_pool_dir(configured_path: Optional[str] = None) -> Path:
-    """
-    Resolve the active cookie pool directory with legacy fallback.
-    解析当前生效的 Cookie 池目录，并兼容旧路径。
-    """
-    return describe_cookie_pool_dir(configured_path).active_path
-
-
 class CookieManager:
     """
-    Chinese: 知乎多账号防风控 Cookie 管理器
-    English: Zhihu anti-rate-limiting multi-account Cookie manager
+    Chinese: 知乎单 Cookie 会话管理器
+    English: Zhihu single-cookie session manager
     """
 
     def __init__(self, base_cookies_path: Optional[str] = None, pool_dir: Optional[str] = None):
         self.log = get_logger()
         self.base_path = resolve_cookie_file_path(base_cookies_path)
-        self.pool_dir = resolve_cookie_pool_dir(pool_dir)
         self.sessions: List[Dict[str, str]] = []
         self._current_index = -1
 
@@ -210,36 +173,23 @@ class CookieManager:
 
     def reload_sessions(self) -> None:
         """
-        Reload all cookie templates from filesystem
-        从文件系统重新加载所有 Cookie 模板
+        Reload the canonical cookie file from filesystem.
+        从文件系统重新加载主 Cookie 文件。
         """
         self.sessions.clear()
 
-        # 1. Load primary cookie file
-        # 加载主 Cookie 文件
         base_session = self._parse_json_file(self.base_path)
         if base_session and self._is_valid_session(base_session):
             self.sessions.append(base_session)
-
-        # 2. Load cookie pool directory
-        # 加载 Cookie 池目录
-        if self.pool_dir.exists() and self.pool_dir.is_dir():
-            for filepath in self.pool_dir.glob("*.json"):
-                session = self._parse_json_file(filepath)
-                if session and self._is_valid_session(session) and session not in self.sessions:
-                    self.sessions.append(session)
 
         self.log.info(
             "cookie_manager_loaded",
             total_sessions=len(self.sessions),
             cookie_file=str(self.base_path),
-            cookie_pool_dir=str(self.pool_dir),
+            cookie_mode="single_file",
         )
 
-        # Shuffle to avoid always using the same account
-        # 打乱基础顺序，确保不要总是固定死号使用同一个号
         if self.sessions:
-            random.shuffle(self.sessions)
             self._current_index = 0
 
     def _parse_json_file(self, path: Path) -> Dict[str, str]:
@@ -273,32 +223,20 @@ class CookieManager:
 
     def rotate_session(self) -> Optional[Dict[str, str]]:
         """
-        Called when encountering 403/rate limiting, actively switch to next account
-        当遇到 403/风控时调用，主动轮换到下一个账号
+        Backward-compatible no-op for older anti-blocking call sites.
+        为旧的风控处理调用保留的兼容空操作。
         """
         if not self.sessions:
-            self.log.warning("cookie_rotation_failed", reason="池为空")
+            self.log.warning("cookie_rotation_skipped", reason="no_primary_cookie")
             return None
 
-        old_index = self._current_index
-        self._current_index = (self._current_index + 1) % len(self.sessions)
-
-        # Only print warning when multiple accounts exist
-        # 只在有多个账号时打印该警告
-        if len(self.sessions) > 1:
-            self.log.warning(
-                "cookie_session_rotated",
-                old_idx=old_index,
-                new_idx=self._current_index,
-                total=len(self.sessions)
-            )
-
+        self.log.warning("cookie_rotation_skipped", reason="single_cookie_mode")
         return self.sessions[self._current_index]
 
     def has_sessions(self) -> bool:
         """
-        Check if there are available accounts in pool
-        池内是否有可用账号
+        Check whether the primary cookie file is usable.
+        检查主 Cookie 文件是否可用。
         """
         return len(self.sessions) > 0
 

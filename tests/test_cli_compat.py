@@ -102,7 +102,7 @@ class HealthcheckSummaryTests(unittest.TestCase):
         )
         with patch("cli.healthcheck.get_config", return_value=cfg):
             with patch("core.cookie_manager.has_real_cookie_values", return_value=True):
-                with patch("core.cookie_manager.count_available_cookie_sources", return_value=2):
+                with patch("core.cookie_manager.count_available_cookie_sources", return_value=1):
                     with patch(
                         "core.cookie_manager.describe_cookie_file_path",
                         return_value=RuntimePathResolution(
@@ -113,19 +113,10 @@ class HealthcheckSummaryTests(unittest.TestCase):
                         ),
                     ):
                         with patch(
-                            "core.cookie_manager.describe_cookie_pool_dir",
-                            return_value=RuntimePathResolution(
-                                configured_path=Path("/repo/.local/cookie_pool"),
-                                active_path=Path("/repo/.local/cookie_pool"),
-                                legacy_path=Path("/repo/cookie_pool"),
-                                used_legacy_fallback=False,
-                            ),
+                            "cli.healthcheck.asyncio.run",
+                            side_effect=lambda coro: coro.close(),
                         ):
-                            with patch(
-                                "cli.healthcheck.asyncio.run",
-                                side_effect=lambda coro: coro.close(),
-                            ):
-                                items = collect_environment_checks()
+                            items = collect_environment_checks()
 
         compatibility = next(item for item in items if item.label == "Cookie 路径兼容 / Cookie path compatibility")
         self.assertEqual(compatibility.status, "warn")

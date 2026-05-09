@@ -108,7 +108,7 @@ def _render_launcher_header(runtime: LauncherRuntime) -> None:
     default_output_dir = runtime.get_default_output_dir()
     from core.cookie_manager import has_available_cookie_sources
 
-    cookie_status = "已就绪" if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir) else "需要 Cookie"
+    cookie_status = "已就绪" if has_available_cookie_sources(cfg.zhihu.cookies_file) else "需要 Cookie"
     browser_status = "后台运行" if cfg.zhihu.browser.headless else "显示窗口"
     content = Text.assemble(
         ("知乎归档", "bold cyan"),
@@ -149,7 +149,7 @@ def run_onboard_flow(runtime: LauncherRuntime, *, from_command: bool = False) ->
         expand=False,
     ))
 
-    cookie_ready = has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
+    cookie_ready = has_available_cookie_sources(cfg.zhihu.cookies_file)
     rprint(f"📄 配置文件: [cyan]{Path(__file__).parent.parent / 'config.yaml'}[/]")
     rprint(f"🍪 Cookie 文件: [cyan]{configured_cookie_path}[/] {'✅' if cookie_ready else '⚠️'}")
     if active_cookie_path != configured_cookie_path:

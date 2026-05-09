@@ -62,7 +62,6 @@ This document defines two things:
 历史兼容路径仍可存在，但不再推荐作为默认布局：
 
 - `cookies.json`
-- `cookie_pool/`
 - `browser_data/`
 - `logs/`
 
@@ -104,7 +103,8 @@ This document defines two things:
 
 - `data/README.md` 与 `examples/README.md` 保留目录职责说明，不再重复仓库边界长说明
 - Cookie、日志等敏感/本地状态默认迁移到 `.local/`
-- 历史上的 `cookies.json` / `cookie_pool/` 暂时保留兼容，但不再作为文档主路径
+- 历史上的 `cookies.json` 暂时保留兼容，但不再作为文档主路径
+- Cookie 池不再是运行时主路径；抓取只读取 `.local/cookies.json`
 
 ## References / 参考资料
 

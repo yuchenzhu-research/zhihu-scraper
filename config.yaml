@@ -1,7 +1,6 @@
 zhihu:
   cookies:
     file: .local/cookies.json
-    pool_dir: .local/cookie_pool
     required: true
   browser:
     headless: true
@@ -61,4 +60,3 @@ translation:
   base_url: https://api.openai.com/v1
   api_key: ''
   model: gpt-4o-mini
-  comment_top_n: 5

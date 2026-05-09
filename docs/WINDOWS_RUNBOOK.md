@@ -52,7 +52,6 @@ python -m playwright install chromium
 
 ```powershell
 mkdir .local
-mkdir .local\cookie_pool
 copy cookies.example.json .local\cookies.json
 ```
 
@@ -61,6 +60,7 @@ copy cookies.example.json .local\cookies.json
 ```powershell
 python cli\app.py check
 python cli\app.py manual
+python cli\app.py man
 ```
 
 ## What to Expect / 当前预期

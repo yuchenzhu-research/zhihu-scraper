@@ -8,7 +8,7 @@ Please comply with Zhihu's terms of service and robots.txt.
 zhihu-scraper integrates a pure protocol-layer network client that directly fetches from the v4 API.
 Anti-blocking core relies on:
 1. curl_cffi simulates real browser TLS fingerprints (chrome110/edge)
-2. Load multi-account Cookie pools from .local/cookies.json or .local/cookie_pool/
+2. Load one primary Cookie file from .local/cookies.json
 3. Intelligent fallback to Playwright headless browser (only for heavily protected routes like Columns)
 
 Core scraping strategy:
@@ -25,7 +25,7 @@ scraper.py — 知乎页面抓取 & 图片下载模块 (v3.0 纯协议引擎 API
 集成纯协议层网络客户端，直接基于 v4 API 抓取。
 防封核心依赖于：
 1. curl_cffi 模拟真实浏览器 TLS 指纹 (chrome110/edge)
-2. 从 .local/cookies.json 或 .local/cookie_pool/ 加载多账号 Cookie 池
+2. 从 .local/cookies.json 加载一份主 Cookie
 3. 智能降级回退到 Playwright 无头浏览器 (仅专栏等强风控路由)
 
 核心抓取策略：
@@ -141,7 +141,7 @@ class ZhihuDownloader:
 
         流程说明：
         1. 尝试协议层 HTML 直取，并解析 `js-initialData`
-        2. 首轮失败时自动轮换 Cookie 重试一次
+        2. 首轮失败时用同一份主 Cookie 重试一次
         3. 若仍失败，再自动降级到 Playwright 浏览器渲染
         """
         # 从 URL 提取 Article ID
@@ -157,7 +157,7 @@ class ZhihuDownloader:
         except Exception as e:
             self.log.warning("article_protocol_failed", article_id=article_id, error=str(e))
             print(f"⚠️ 协议路径未能提取专栏 ({e})")
-            print("🔁 已尝试 HTML 直取，并在失败后轮换 Cookie 重试一次")
+            print("🔁 已尝试 HTML 直取，并使用主 Cookie 重试一次")
             print("🔄 专栏阶段 3/3: 正在启动 Playwright 无头浏览器智能降级回退机制...")
 
             # Fallback 策略：使用 Playwright 渲染页面

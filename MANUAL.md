@@ -274,19 +274,18 @@
 当前默认运行目录已经收口到 `.local/`：
 
 - `.local/cookies.json`
-- `.local/cookie_pool/`
 - `.local/logs/`
 
-同时仍兼容历史路径：
+同时仍兼容历史主 Cookie 路径：
 
 - `cookies.json`
-- `cookie_pool/`
 
 当前 `zhihu config --show` 与 `zhihu check` 会同时展示：
 
 - configured path
 - active path
 - 是否仍命中仓库根目录旧路径兼容
+- 当前抓取运行时只加载一份主 Cookie 文件，不再扫描 Cookie 池或轮换 Cookie
 
 ### 5.4 配置兼容原则
 
@@ -317,7 +316,7 @@ zhihu interactive --legacy
 -> cli/interactive_legacy.py
 -> 旧 Rich / questionary 回退路径
 
-zhihu fetch / creator / batch / monitor / query / config / check / manual
+zhihu fetch / creator / batch / monitor / query / config / check / manual / man
 -> cli/app.py Typer 命令入口
 ```
 
@@ -483,6 +482,7 @@ cd zhihu-scraper
 zhihu check
 zhihu config --show
 zhihu config --path
+zhihu man
 ```
 
 ### 8.2 Cookie 准备
@@ -493,7 +493,8 @@ mkdir -p .local
 cp cookies.example.json .local/cookies.json
 ```
 需要在文件内填入你的 `z_c0` 与 `d_c0`。
-若仍使用旧的根目录路径（如 `cookies.json` 或 `cookie_pool/`），系统仍会兼容。使用 `zhihu check` 可以查看当前生效路径。
+若仍使用旧的根目录路径（如 `cookies.json`），系统仍会兼容。使用 `zhihu check` 可以查看当前生效路径。
+运行时不再扫描 `.local/cookie_pool/`，也不会在 403 时轮换多个 Cookie。
 
 ### 8.3 交互入口拓扑
 
@@ -556,7 +557,7 @@ data/
 如果项目后续不再主动推进，默认维护策略如下：
 
 - 保留 `v3.0.1-final` 作为最终功能收束点；Python 包版本保持 PEP 440 兼容的 `3.0.1`，Git tag 使用 `v3.0.1-final`。
-- `fetch / creator / batch / monitor / query / interactive / check / manual` 作为最终命令面保留，不再新增主命令。
+- `fetch / creator / batch / monitor / query / interactive / check / manual / man` 作为最终命令面保留，不再新增主命令。
 - 已导出的 Markdown、图片、creator 元信息与 SQLite 数据是长期交付；在线抓取能力受知乎外部变化影响，按 best-effort 处理。
 - `.venv/`、`.local/`、`data/entries/`、`data/creators/`、`data/zhihu.db` 继续视为本地运行状态，不进入版本库。
 - `references/skills/` 保留为筛选后的正式参考资料；`references/external/*` 与 `references/skillsmp/` 视为本地挂载或临时来源，不进入主项目边界。

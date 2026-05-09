@@ -17,9 +17,7 @@ from pathlib import Path
 LOCAL_RUNTIME_DIR = Path(".local")
 
 DEFAULT_COOKIE_FILE = LOCAL_RUNTIME_DIR / "cookies.json"
-DEFAULT_COOKIE_POOL_DIR = LOCAL_RUNTIME_DIR / "cookie_pool"
 DEFAULT_LOG_DIR = LOCAL_RUNTIME_DIR / "logs"
 DEFAULT_LOG_FILE = DEFAULT_LOG_DIR / "scraper.log"
 
 LEGACY_COOKIE_FILE = Path("cookies.json")
-LEGACY_COOKIE_POOL_DIR = Path("cookie_pool")
