@@ -64,9 +64,9 @@ class ArchiveInput(TextArea):
     """Multiline-safe input surface that still submits on Enter."""
 
     def __init__(self, **kwargs) -> None:
+        kwargs.setdefault("soft_wrap", True)
+        kwargs.setdefault("highlight_cursor_line", False)
         super().__init__(**kwargs)
-        if hasattr(self, "soft_wrap"):
-            self.soft_wrap = True
         self.show_line_numbers = False
 
     class Submitted(Message):
@@ -95,6 +95,28 @@ class ArchiveInput(TextArea):
             event.prevent_default()
             event.stop()
             self.app.action_load_retry_draft()
+
+
+class StatusPill(Widget):
+    """Small render-only status label used by tests and compact diagnostics."""
+
+    def __init__(self, label: str, value: str, tone: str) -> None:
+        super().__init__()
+        self._label = label
+        self._value = value
+        self._tone = tone
+
+    def render(self) -> Group:
+        tone_color = {
+            "success": "#30d158",
+            "warn": "#ffd60a",
+            "danger": "#ff453a",
+            "accent": "#0a84ff",
+        }.get(self._tone, "#8e8e93")
+        return Group(
+            Align.center(Text(self._label, style="#8e8e93")),
+            Align.center(Text(self._value, style=f"bold {tone_color}")),
+        )
 
 
 class MutableCard(Widget):

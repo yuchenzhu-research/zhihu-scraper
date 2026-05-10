@@ -40,13 +40,16 @@ HOME MENU
   - `python3 cli/app.py`
 
   Behavior / 行为:
-  - opens the home launcher, not the Textual workbench itself
-  - 打开首页 launcher，而不是直接进入 Textual 工作台
+  - opens the default Textual workbench directly
+  - 默认直达 Textual 工作台
+  - use `zhihu onboard` to run the guided setup and optional launcher flow
+  - 如需首次引导与可选 launcher 流程，请使用 `zhihu onboard`
 
   Controls / 操作方式:
   - arrow keys: move / 方向键移动
   - `Enter`: confirm / 回车确认
   - `Space`: toggle checkbox options / 空格勾选复选项
+  - `Ctrl+G`: switch UI language / 切换界面语言
   - `Ctrl+C`: exit current screen / 退出当前界面
 
 INTERACTIVE MODES
@@ -65,7 +68,7 @@ COMMAND INDEX
   - interactive
   - config --show / --path
   - check
-  - manual
+  - manual / man
 
 COMMAND REFERENCE
 
@@ -86,7 +89,7 @@ COMMAND REFERENCE
   - `-b, --headless` browser headless switch for fallback path
 
   Behavior:
-  - article path: protocol HTML fetch first, then one cookie-rotation retry, then Playwright fallback if still blocked
+  - article path: protocol HTML fetch first, then Playwright fallback if still blocked
   - `-n <= 20`: usually single page
   - `-n > 20`: auto pagination with random waits
   - `-n > 50`: higher anti-bot risk warning
@@ -176,8 +179,9 @@ COMMAND REFERENCE
   - 全屏归档工作台，包含草案、队列、最近结果与失败重试
 
   Entrypoints:
-  - `zhihu` opens the launcher first
+  - `zhihu` opens the Textual workbench directly
   - `zhihu interactive` opens the Textual workbench directly
+  - `zhihu onboard` runs guided setup and can continue into the questionary launcher
   - `zhihu interactive --legacy` opens the deprecated fallback
 
   Current support:
@@ -185,6 +189,7 @@ COMMAND REFERENCE
   - `Enter`: build current draft
   - `Ctrl+R`: execute current draft
   - `Ctrl+Y`: load retry draft from the latest failed records
+  - `Ctrl+G`: open the language selector and persist the default language
   - does NOT parse `people/...` creator links in interactive mode
   - use `creator` command for profile URLs
   - `--legacy`: deprecated fallback to the old Rich/questionary flow
@@ -201,10 +206,13 @@ COMMAND REFERENCE
   Examples:
   - `zhihu config --show`
   - `zhihu config --path`
+  - `zhihu config set language en`
+  - `zhihu config set language zh_hant`
 
   Notes:
-  - `--show` includes configured vs active cookie/pool paths
-  - legacy repo-root fallback is surfaced explicitly when still in use
+  - `--show` includes configured vs active cookie path
+  - runtime uses a single primary Cookie file: `.local/cookies.json`
+  - legacy repo-root `cookies.json` fallback is surfaced explicitly when still in use
 
 8) check
   Purpose:
@@ -213,7 +221,7 @@ COMMAND REFERENCE
   Checks:
   - `config.yaml` existence
   - primary cookie readiness
-  - cookie pool availability
+  - single-cookie mode
   - configured path / active path compatibility
   - Playwright availability under current browser config
 
@@ -223,6 +231,7 @@ COMMAND REFERENCE
 9) manual
   Purpose:
   - open this built-in manual in pager
+  - `zhihu man` is a short alias for the same manual
 
 OUTPUT STRUCTURE
   Base: `{default_output_dir}`
@@ -249,7 +258,7 @@ PLATFORM SUPPORT
   - `cli/app.py` command routing + terminal entrypoint
   - `cli/archive_execution.py` shared execution bridge for CLI / TUI / legacy
   - `cli/config_view.py` config summary rendering
-  - `cli/launcher_flow.py` home menu + onboarding flow
+  - `cli/launcher_flow.py` questionary launcher + onboarding flow
   - `cli/manual_content.py` built-in manual source
   - `cli/save_pipeline.py` archive save orchestration
   - `cli/interactive.py` Textual-based interactive workbench
@@ -275,19 +284,23 @@ PLATFORM SUPPORT
   - `core/config.py` facade for config, logging, and humanization helpers
   - `core/config_runtime.py` singleton runtime loader + fallback finalization
   - `core/config_schema.py` typed config schema + defaults
-  - `core/cookie_manager.py` cookie file + cookie pool handling + active path resolution
+  - `core/cookie_manager.py` single cookie file handling + active path resolution
 
 CURRENT LIMITS
   - interactive mode does not accept creator profile URLs (`people/...`)
   - article path is protocol-first, but some columns still need Playwright fallback under active WAF
   - browser fallback is strongest on article path; answer/question stay API-first
   - query uses SQLite keyword matching, not advanced ranking search
+  - translation is optional; when enabled in TUI, translation failures are reported but do not block archiving
 
 QUICK START
   - `./install.sh`
   - `./install.sh --recreate`  # when the local environment is broken
-  - `zhihu`                    # open the home menu / 打开首页菜单
+  - `zhihu`                    # open the Textual TUI directly / 直达 Textual 工作台
+  - `zhihu onboard`            # guided setup + optional questionary launcher / 首次引导 + 可选 launcher
   - `zhihu interactive`        # open the Textual TUI directly / 直达 Textual 工作台
+  - `zhihu config set language en`
   - `zhihu check`
   - `zhihu manual`
+  - `zhihu man`
 """.strip()

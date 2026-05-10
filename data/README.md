@@ -19,4 +19,4 @@ This directory is reserved for local runtime artifacts and is not part of the ma
 
 - 不要把抓取结果、图片、数据库、监控状态提交到版本库
 - 展示样例放到 `examples/outputs/`，不要回灌到 `data/`
-- 仓库级目录约定见 [docs/REPOSITORY_BOUNDARY.md](../docs/REPOSITORY_BOUNDARY.md)
+- 仓库级目录约定见 [MANUAL.md §3](../MANUAL.md)

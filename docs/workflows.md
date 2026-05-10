@@ -27,27 +27,28 @@
 - CI 当前使用 `pip install -e .` 做基础命令面与单测验证
 - 因此 CI 通过并不代表 Playwright / browser fallback 已被完整验证
 
-## 2. 首页 / launcher 工作流
+## 2. onboard / launcher 工作流
 
 入口命令：
 
 ```bash
-zhihu
+zhihu onboard
 ```
 
 流程：
 
 ```text
-cli/app.py main()
--> 无参数分支
+cli/app.py
+-> onboard command
 -> cli/launcher_flow.py
--> 首页菜单 / onboarding / 常用命令导航
+-> 首次使用向导 / 环境检查
+-> 可选进入 questionary launcher
 ```
 
 说明：
 
-- `zhihu` 默认进入首页 launcher
-- `zhihu interactive` 才是直达 Textual TUI 的命令
+- `zhihu onboard` 是当前 questionary launcher 的正式入口
+- 裸 `zhihu` 与 `zhihu interactive` 默认直达推荐的 Textual TUI
 - `zhihu interactive --legacy` 是兼容回退路径
 
 ## 3. 单条抓取工作流
@@ -173,22 +174,28 @@ zhihu interactive --legacy
 
 说明：
 
-- `zhihu` 打开首页 launcher，而不是直接进入 TUI
+- `zhihu` 默认直达推荐的 Textual TUI
 - `interactive` 当前默认是 Textual TUI
 - `interactive --legacy` 为兼容与排障路径
+- TUI 内按 `Ctrl+G` 可打开语言选择器，并把选择写回 `config.yaml`
 
 主流程：
 
 ```text
+zhihu
+-> cli/app.py main()
+-> cli/interactive.py
+-> Textual TUI
+
 zhihu interactive
 -> cli/interactive.py
 -> Textual TUI
 ```
 
-通过首页进入时：
+通过 onboarding 继续进入 launcher 时：
 
 ```text
-zhihu
+zhihu onboard
 -> cli/launcher_flow.py
 -> 选择 interactive
 -> cli/interactive.py
@@ -215,18 +222,25 @@ TUI 内部主流程：
 - 展示 configured path / active path
 - 显式提示是否仍命中旧 Cookie 路径兼容
 
+### `zhihu config set language <lang>`
+
+- 支持 `zh`、`en`、`zh_hant`
+- 与 TUI 内 `Ctrl+G` 使用同一套配置落盘字段
+- 会写入 `global.language` 与 `global.language_configured`
+
 ### `zhihu check`
 
 - 检查配置文件
-- 检查 Cookie 状态
+- 检查单主 Cookie 文件状态
 - 检查 configured path / active path 是否仍在命中旧路径兼容
 - 检查 Playwright 可用性
 - 目标是诊断，不是打印原始崩溃日志
 - 当前诊断逻辑在 `cli/healthcheck.py`
 
-### `zhihu manual`
+### `zhihu manual` / `zhihu man`
 
 - 打开内置 terminal manual
+- `man` 是 `manual` 的短别名
 - 内容来源于 `cli/manual_content.py`
 
 ## 10. 文档维护工作流
@@ -239,13 +253,15 @@ TUI 内部主流程：
 - 平台支持边界
 - TUI 行为
 
-文档同步顺序建议：
+文档同步判定与主顺序以 `AGENTS.md` 第 5 节为准。
+
+如果本文件描述的命令流、入口语义或产物落点发生变化，通常还要同步检查：
 
 1. `MANUAL.md`
 2. `README.md`
 3. `README_EN.md`
 4. `cli/manual_content.py`
-5. `docs/` 下相关专题文档
+5. `docs/VALIDATION_BASELINE.md`
 
 ## 11. 测试与回归工作流
 
@@ -257,7 +273,7 @@ TUI 内部主流程：
 
 完整当前矩阵见：
 
-- `docs/STAGE5_VALIDATION_MATRIX.md`
+- `docs/VALIDATION_BASELINE.md`
 
 ## 12. 当前维护建议
 

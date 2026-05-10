@@ -211,14 +211,8 @@ class ZhihuAPIClient:
                         self.log.warning("api_retrying", delay=delay)
                         time.sleep(delay)
                         
-                        if response.status_code == 403:
-                            cookie_manager.rotate_session()
-                            self._init_session()
                         continue
                     else:
-                        if response.status_code == 403:
-                            cookie_manager.rotate_session()
-                            self._init_session()
                         raise Exception(f"请求遭到 HTTP {response.status_code} 拦截，重试 {max_attempts} 次后仍失败。")
                 else:
                     self.log.error("api_error", status=response.status_code)
@@ -259,13 +253,13 @@ class ZhihuAPIClient:
         The flow is:
         1. warm up the zhuanlan origin
         2. fetch article HTML and parse `js-initialData`
-        3. if the first attempt fails, rotate cookies and retry once
+        3. if the first attempt fails, retry once with the same primary cookie
 
         通过协议层 HTML 请求获取专栏文章数据。
         流程为：
         1. 预热专栏域名
         2. 获取文章 HTML 并解析 `js-initialData`
-        3. 首轮失败时轮换 Cookie 并重试一次
+        3. 首轮失败时使用同一份主 Cookie 重试一次
         """
         url = f"https://zhuanlan.zhihu.com/p/{article_id}"
         referer = "https://zhuanlan.zhihu.com/"
@@ -274,7 +268,7 @@ class ZhihuAPIClient:
         for attempt in (1, 2):
             self.log.info("article_html_attempt", article_id=article_id, attempt=attempt, url=url)
             if attempt == 2:
-                print("🔁 专栏阶段 2/3: 已轮换 Cookie，正在重试协议路径...")
+                print("🔁 专栏阶段 2/3: 正在用主 Cookie 重试协议路径...")
             self._warmup_article_origin()
             try:
                 response = self.session.get(
@@ -320,12 +314,10 @@ class ZhihuAPIClient:
                     )
 
             if attempt == 1:
-                rotated = cookie_manager.rotate_session()
                 self._init_session()
                 self.log.warning(
-                    "article_cookie_rotated_retry",
+                    "article_protocol_retry",
                     article_id=article_id,
-                    rotated=bool(rotated),
                 )
 
         self.log.error("article_fetch_failed", article_id=article_id, error=last_error)

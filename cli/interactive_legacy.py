@@ -123,7 +123,7 @@ def _print_banner():
     frame_width, card_width = _layout_metrics()
     cookie_status = (
         ("已就绪", "success")
-        if has_available_cookie_sources(cfg.zhihu.cookies_file, cfg.zhihu.cookies_pool_dir)
+        if has_available_cookie_sources(cfg.zhihu.cookies_file)
         else ("未检测到", "warn")
     )
     browser_status = ("无头", "muted") if cfg.zhihu.browser.headless else ("显示窗口", "accent")

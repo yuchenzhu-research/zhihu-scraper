@@ -40,6 +40,7 @@
   "draft.done.summary": "Run complete: {success} succeeded, {failure} failed.",
   "draft.done.output": "Output directory: {output_dir}",
   "draft.done.saved": "{target} · saved {count} items",
+  "draft.done.translated": "Generated {count} translated files.",
   "draft.done.error": "{target} · failed: {error}",
   "draft.done.remaining": "{count} more targets completed; a full result panel is coming in a future release.",
 
@@ -76,6 +77,8 @@
   "history.summary": "Last run: {success} succeeded, {failure} failed.",
   "history.output": "Output directory: {output_dir}",
   "history.fail_detail": "Failed: {detail}",
+  "history.translated": "Translated files: {count}.",
+  "history.note": "Note: {note}",
   "history.rounds": "Kept the last {count} run summaries.",
   "history.retry_hint": "Press Ctrl+Y to retry failed items from the last run.",
   "history.unknown_error": "Unknown error",
@@ -87,6 +90,8 @@
 
   "detail.exec.title": "Execution Details",
   "detail.exec.saved": "{target} written to {path}",
+  "detail.exec.translated": "Translated file: {path}",
+  "detail.exec.note": "Note: {note}",
   "detail.exec.failed": "{target} failed: {error}",
   "detail.exec.log_tail": "Log tail: {line}",
   "detail.exec.empty": "No details for the last run yet.",
@@ -104,6 +109,8 @@
   "app.busy.line2": "Only one run at a time; concurrent execution is not supported.",
   "app.busy.retry_line1": "Cannot switch to a retry draft while the current run is active.",
   "app.busy.retry_line2": "Wait for the current run to finish, then load failed items.",
+  "app.busy.language_line1": "Cannot switch UI language while the current run is active.",
+  "app.busy.language_line2": "Wait for the current run to finish, then open the language selector.",
   "app.busy.quit_line1": "A background task is still running; cannot exit yet.",
   "app.busy.quit_line2": "Wait for the archive to complete before quitting.",
 
@@ -147,6 +154,8 @@
   "toast.task_partial.title": "Has Failures",
   "toast.task_failed": "All {count} targets failed.",
   "toast.task_failed.title": "Task Failed",
+  "toast.language_changed": "UI language switched to {language}.",
+  "toast.language_changed.title": "Language Updated",
 
   "init.preparing": "Preparing...",
   "init.phase": "Initializing backend task",
@@ -154,6 +163,9 @@
   "runner.phase.scraping": "Scraping and writing local archive",
   "runner.phase.translating": "Translating to {lang}",
   "runner.error.empty": "No savable content retrieved",
+  "runner.translation.unavailable": "Translation is enabled, but the openai dependency is not installed; skipped translation.",
+  "runner.translation.config_failed": "Translation config failed to initialize: {error}",
+  "runner.translation.failed": "Translation failed: {error}",
 
   "toast.translate_done": "Translation complete: {path}",
 
@@ -164,8 +176,13 @@
   "binding.focus_input": "Input",
   "binding.run": "Run",
   "binding.retry": "Retry",
+  "binding.language": "Language",
   "binding.quit": "Quit",
 
   "lang_selector.title": "🌍 Worldwide",
-  "lang_selector.hint": "Your selection will be saved as the default language"
+  "lang_selector.hint": "Your selection will be saved as the default language",
+  "question_limit.placeholder": "Custom positive integer, e.g. 50",
+  "question_limit.apply": "Apply",
+  "question_limit.cancel": "Cancel",
+  "question_limit.error": "Enter a positive integer greater than 0."
 }

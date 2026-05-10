@@ -38,14 +38,15 @@ def execute_draft_run(
 
     # Lazily initialize translator only when translation is enabled
     translator = None
+    translation_start_note: str | None = None
     if cfg.translation.enabled:
         try:
             from core.translator import ContentTranslator
             translator = ContentTranslator(cfg.translation)
         except ImportError:
-            pass  # openai not installed — silently skip translation
-        except Exception:
-            pass  # bad config — silently skip
+            translation_start_note = t("runner.translation.unavailable")
+        except Exception as exc:
+            translation_start_note = t("runner.translation.config_failed", error=str(exc))
 
     for index, target in enumerate(draft.targets, start=1):
         if progress_callback is not None:
@@ -79,6 +80,9 @@ def execute_draft_run(
             if not save_result.is_empty:
                 # --- Translation post-processing ---
                 translated_paths: list[str] = []
+                notes: list[str] = []
+                if translation_start_note:
+                    notes.append(translation_start_note)
                 if translator and save_result.markdown_paths:
                     if progress_callback is not None:
                         progress_callback(
@@ -87,7 +91,7 @@ def execute_draft_run(
                                 current_index=index,
                                 total=total,
                                 output_dir=str(output_dir),
-                                phase=t("runner.phase.translating"),
+                                phase=t("runner.phase.translating", lang=cfg.translation.target_language),
                             )
                         )
                     for md_path in save_result.markdown_paths:
@@ -95,14 +99,16 @@ def execute_draft_run(
                             translated_path = _translate_file(translator, md_path, cfg.translation.target_language)
                             if translated_path:
                                 translated_paths.append(translated_path)
-                        except Exception:
-                            pass  # Translation failure should not block archiving
+                        except Exception as exc:
+                            notes.append(t("runner.translation.failed", error=str(exc)))
 
                 records.append(
                     ExecutionRecord(
                         target=target,
                         saved_count=save_result.saved_count,
                         markdown_paths=save_result.markdown_paths,
+                        translated_paths=tuple(translated_paths),
+                        notes=tuple(notes),
                     )
                 )
             else:

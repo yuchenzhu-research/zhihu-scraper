@@ -53,7 +53,6 @@ config.yaml
 
 - `cookies`
   - `file`
-  - `pool_dir`
   - `required`
 - `browser`
   - `headless`
@@ -111,6 +110,38 @@ config.yaml
 - `file`
 - `log_exceptions`
 
+### 3.5 `global`
+
+负责界面语言状态。
+
+子项包括：
+
+- `language`
+- `language_configured`
+
+当前可通过两条路径修改：
+
+- TUI 内按 `Ctrl+G`
+- `zhihu config set language <zh|en|zh_hant>`
+
+### 3.6 `translation`
+
+负责可选翻译能力。该能力默认关闭；开启后 TUI 会在归档成功后尝试生成目标语言 Markdown。
+
+子项包括：
+
+- `enabled`
+- `target_language`
+- `engine`
+- `base_url`
+- `api_key`
+- `model`
+
+说明：
+
+- `openai` 依赖属于 `.[translate]` 可选依赖，不在基础安装层
+- 翻译失败不会阻断归档，但会显示在 TUI 的最近结果与执行详情中
+
 ## 4. 运行时路径约定
 
 当前默认运行时目录是：
@@ -122,20 +153,20 @@ config.yaml
 重要路径包括：
 
 - `.local/cookies.json`
-- `.local/cookie_pool/`
 - `.local/logs/`
 
 兼容历史路径：
 
 - `cookies.json`
-- `cookie_pool/`
 
 说明：
 
 - 仓库根目录不再推荐直接承载长期凭据
 - `.local/` 用于存放凭据、日志等运行态文件
 - `zhihu config --show` 会同时显示 configured path 和 active path
-- 如果由于兼容策略实际命中了仓库根目录旧路径，`zhihu config --show` 和 `zhihu check` 都会明确显示 legacy fallback 状态
+- 抓取运行时只加载一份主 Cookie 文件：`.local/cookies.json`
+- 旧配置里的 `pool_dir` 字段仍可被解析，但不再参与抓取或轮换
+- 如果由于兼容策略实际命中了仓库根目录旧 `cookies.json`，`zhihu config --show` 和 `zhihu check` 都会明确显示 legacy fallback 状态
 
 ## 5. 单例与 facade
 

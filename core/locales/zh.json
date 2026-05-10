@@ -40,6 +40,7 @@
   "draft.done.summary": "本轮执行完成：成功 {success} 个，失败 {failure} 个。",
   "draft.done.output": "输出目录：{output_dir}",
   "draft.done.saved": "{target} · 已保存 {count} 条内容",
+  "draft.done.translated": "已生成 {count} 个翻译文件。",
   "draft.done.error": "{target} · 失败：{error}",
   "draft.done.remaining": "其余 {count} 个目标已完成，后续阶段会补更完整的结果面板。",
 
@@ -76,6 +77,8 @@
   "history.summary": "最近一轮：成功 {success} 个，失败 {failure} 个。",
   "history.output": "输出目录：{output_dir}",
   "history.fail_detail": "失败：{detail}",
+  "history.translated": "翻译文件：{count} 个。",
+  "history.note": "提示：{note}",
   "history.rounds": "已保留最近 {count} 轮执行摘要。",
   "history.retry_hint": "按 Ctrl+Y 可从最近一轮失败项生成重试草案。",
   "history.unknown_error": "未知错误",
@@ -87,6 +90,8 @@
 
   "detail.exec.title": "执行详情",
   "detail.exec.saved": "{target} 已写入 {path}",
+  "detail.exec.translated": "翻译文件：{path}",
+  "detail.exec.note": "提示：{note}",
   "detail.exec.failed": "{target} 失败：{error}",
   "detail.exec.log_tail": "日志尾部：{line}",
   "detail.exec.empty": "最近一轮执行还没有明细。",
@@ -104,6 +109,8 @@
   "app.busy.line2": "阶段 5 仍保持单轮执行，不允许并发启动多个任务。",
   "app.busy.retry_line1": "当前归档尚未完成，暂时不能切换到失败重试草案。",
   "app.busy.retry_line2": "等待本轮执行结束后再加载失败项。",
+  "app.busy.language_line1": "当前归档尚未完成，暂时不能切换界面语言。",
+  "app.busy.language_line2": "等待本轮执行结束后再打开语言选择器。",
   "app.busy.quit_line1": "当前后台任务仍在执行，暂不退出工作台。",
   "app.busy.quit_line2": "等待本轮归档完成后再退出，避免留下半完成状态。",
 
@@ -147,6 +154,8 @@
   "toast.task_partial.title": "包含失败项",
   "toast.task_failed": "所有 {count} 个目标全部执行失败。",
   "toast.task_failed.title": "任务失败",
+  "toast.language_changed": "界面语言已切换为 {language}。",
+  "toast.language_changed.title": "语言已更新",
 
   "init.preparing": "准备启动...",
   "init.phase": "正在初始化后台任务",
@@ -154,6 +163,9 @@
   "runner.phase.scraping": "抓取与写入本地归档",
   "runner.phase.translating": "正在翻译为{lang}版本",
   "runner.error.empty": "未获取到可保存的内容",
+  "runner.translation.unavailable": "翻译已启用，但未安装 openai 依赖；已跳过翻译。",
+  "runner.translation.config_failed": "翻译配置初始化失败：{error}",
+  "runner.translation.failed": "翻译失败：{error}",
 
   "toast.translate_done": "翻译完成：{path}",
 
@@ -164,8 +176,13 @@
   "binding.focus_input": "输入",
   "binding.run": "执行",
   "binding.retry": "重试",
+  "binding.language": "语言",
   "binding.quit": "退出",
 
   "lang_selector.title": "🌍 世界各地",
-  "lang_selector.hint": "选择后将作为默认语言保存"
+  "lang_selector.hint": "选择后将作为默认语言保存",
+  "question_limit.placeholder": "自定义正整数，例如 50",
+  "question_limit.apply": "应用",
+  "question_limit.cancel": "取消",
+  "question_limit.error": "请输入大于 0 的正整数。"
 }
