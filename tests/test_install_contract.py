@@ -37,6 +37,26 @@ class InstallContractTests(unittest.TestCase):
         self.assertIn("pip install -e .", dependency_map)
         self.assertIn('pip install -e ".[full]"', dependency_map)
 
+    def test_ci_workflow_matches_documented_validation_baseline(self):
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        baseline = (REPO_ROOT / "docs" / "VALIDATION_BASELINE.md").read_text(encoding="utf-8")
+
+        expected_unittest = (
+            "python -m unittest -q tests.test_cli_compat tests.test_docs_sync "
+            "tests.test_command_surface tests.test_tui_rebuild tests.test_save_pipeline "
+            "tests.test_save_contracts tests.test_config_view tests.test_scraper_payloads "
+            "tests.test_scraper_contracts tests.test_config_schema tests.test_config_runtime "
+            "tests.test_install_contract tests.test_workflow_service tests.test_db_contract"
+        )
+
+        self.assertIn("pip install -e .", workflow)
+        self.assertIn(expected_unittest, workflow)
+        self.assertIn(expected_unittest, baseline)
+        self.assertIn("python cli/app.py man --help", workflow)
+        self.assertIn("python cli/app.py man --help", baseline)
+        self.assertNotIn("python -m pytest tests/", workflow)
+        self.assertNotIn("pip-audit", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
