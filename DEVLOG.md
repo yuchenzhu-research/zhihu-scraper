@@ -2,6 +2,45 @@
 
 ---
 
+## 2026-05-11 / CI 验证基线回归与 GitHub main 合并
+
+### 相关 commits
+- `99b8c11` ci: align workflow with validation baseline
+- `0bd7a48` Merge branch 'codex/governance-normalization-phase1'
+
+### 本次修改
+- 将 GitHub Actions 的测试步骤从 `pytest tests/` 回归为 `docs/VALIDATION_BASELINE.md` 中记录的固定 `unittest` 矩阵。
+- 移除 CI 中未纳入当前验证基线的 `pip-audit` 步骤，避免基础安装路径未安装额外工具时造成 CI 漂移。
+- 在 CLI smoke 中补回 `python cli/app.py man --help`，使 workflow 覆盖 `manual` 与 `man` 两个内置说明入口。
+- 在 `tests/test_install_contract.py` 中新增 workflow contract 测试，直接守卫 `.github/workflows/ci.yml` 与验证基线的一致性。
+- 推送 `codex/governance-normalization-phase1`，并将分支合并进 `main` 后推送到 GitHub。
+
+### 解决的问题
+- 解决了 CI 实际执行内容与 `docs/VALIDATION_BASELINE.md` 记录不一致的问题。
+- 解决了 `pip install -e .` 基础安装路径下直接运行 `pytest` 可能因缺少 dev 依赖而失败的问题。
+- 解决了 `man` 命令别名已经进入命令面，但 CI smoke 未覆盖该入口的问题。
+
+### 影响范围
+- `.github/workflows/ci.yml`
+- `tests/test_install_contract.py`
+- `DEVLOG.md`
+
+### 已验证
+- `./.venv/bin/python -m unittest -q tests.test_install_contract`
+- `./.venv/bin/python -m unittest -q tests.test_cli_compat tests.test_docs_sync tests.test_command_surface tests.test_tui_rebuild tests.test_save_pipeline tests.test_save_contracts tests.test_config_view tests.test_scraper_payloads tests.test_scraper_contracts tests.test_config_schema tests.test_config_runtime tests.test_install_contract tests.test_workflow_service tests.test_db_contract`
+- `git diff --check`
+- `git ls-remote origin refs/heads/main refs/heads/codex/governance-normalization-phase1`
+
+### 风险 / 未完成事项
+- 本轮仍未做真实联网抓取验证；CI 与本地验证只覆盖命令面、文档同步和离线 contract。
+- `pip-audit` 已从当前 smoke workflow 移除；如果后续需要安全审计，建议作为单独 workflow 或显式 dev/security 验证链路重新引入。
+
+### 下一步
+- 观察 GitHub Actions 在 `main` 上的实际运行结果。
+- 如要继续保留安全审计，应先定义依赖安装方式、失败策略和文档入口，再加入 CI。
+
+---
+
 ## 2026-05-09 / TUI 输入框、manual 入口与 Cookie 单文件收敛
 
 ### 相关 commits
