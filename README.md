@@ -1,3 +1,5 @@
+
+
 <div align="center">
 
 # Zhihu-Scraper
@@ -65,7 +67,7 @@ PowerShell 脚本同样会安装项目管理的 Chromium。
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
-uv sync --locked
+uv sync
 uv run playwright install chromium
 uv run zhihu --help
 ```
