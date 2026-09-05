@@ -155,11 +155,16 @@ zhihu fetch -s settings.toml -o "/path/to/archive" URL
 zhihu --version
 zhihu --help
 zhihu fetch --help
+zhihu login --help
 zhihu check --help
 zhihu init --help
 ```
 
 ## 安全配置 Cookie
+
+推荐运行 `zhihu login`，在打开的浏览器中完成登录。命令最多等待 180 秒，通过知乎身份接口验证后才原子保存 Cookie；默认位置为 `.local/cookies.json`。取消、超时或保存失败都会保留旧文件。按命令输出把 `network.cookie_file` 写入设置，再显式使用 `-s settings.toml`。使用 `zhihu login -s settings.toml` 可更新已配置的文件；普通抓取不会自动覆盖 Cookie。
+
+已有开启本机 CDP 的登录浏览器时，可运行 `zhihu login --cdp http://127.0.0.1:9222`；只读取知乎 Cookie，不操作已有页面。文件保存时会限制为当前用户访问，文件内容不加密。也可以继续手工导入：
 
 公开内容不一定需要登录，但部分接口会要求有效会话。项目读取浏览器导出的 JSON Cookie 文件，支持常见的对象格式和 `name` / `value` 列表格式。为避免误传其他网站凭证，列表格式只接收明确标记为 `zhihu.com` 或其子域的记录；对象格式应只放知乎 Cookie。
 
@@ -326,7 +331,7 @@ ZHIHU_LIVE=1 ZHIHU_COOKIE_FILE=/private/path/cookies.json \
   uv run pytest tests/live/live_archive.py
 ```
 
-架构边界见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，已确认但延期的 PDF 和登录体验改进见 [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md)。当前不提供数据库或原始 JSON 归档。
+架构边界见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，后续功能路线见 [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md)。当前不提供数据库或原始 JSON 归档。
 
 ## 参考与许可
 

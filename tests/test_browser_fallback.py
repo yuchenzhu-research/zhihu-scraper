@@ -125,6 +125,23 @@ def test_fetch_html_uses_a_persistent_headed_profile_and_waits_for_dom(tmp_path:
     assert executor.context.cleared_cookie_names == ["BEC", "__zse_ck"]
 
 
+def test_login_page_stays_open_until_the_managed_browser_is_closed(tmp_path: Path) -> None:
+    executor = FakeExecutor()
+    browser = BrowserFallback(executor=executor, runtime_platform=runtime_for(tmp_path))
+
+    browser.open_login_page()
+    browser.open_login_page()
+
+    assert executor.context.page.goto_calls == [
+        ("https://www.zhihu.com/signin", "domcontentloaded", 30_000)
+    ]
+    assert executor.context.page.closed is False
+    assert executor.launches[0][1] is False
+    browser.close()
+    assert executor.context.page.closed is True
+    assert executor.context.closed is True
+
+
 def test_explicit_profile_headless_mode_and_browser_context_are_reused(tmp_path: Path) -> None:
     installed_browser = tmp_path / "chromium"
     installed_browser.touch()

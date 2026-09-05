@@ -155,11 +155,16 @@ Command reference:
 zhihu --version
 zhihu --help
 zhihu fetch --help
+zhihu login --help
 zhihu check --help
 zhihu init --help
 ```
 
 ## Configure Cookies Safely
+
+Run `zhihu login` and sign in through the opened browser. The command waits up to 180 seconds and atomically saves cookies only after verification against Zhihu’s identity endpoint, defaulting to `.local/cookies.json`. Cancellation, timeout, or save failure preserves the previous file. Follow the printed instructions to set `network.cookie_file`, then explicitly pass `-s settings.toml`. Use `zhihu login -s settings.toml` to update the configured file; ordinary archive runs do not overwrite saved cookies.
+
+For an existing signed-in browser with local CDP enabled, use `zhihu login --cdp http://127.0.0.1:9222`; it reads only Zhihu cookies and leaves existing pages untouched. Saved files are restricted to the current user, but their contents are not encrypted. Manual imports remain supported:
 
 Public content may work without authentication, but some endpoints require a valid session. The project reads JSON exported from a browser, either a simple object or a common list of `name` / `value` records. To avoid leaking unrelated credentials, list records are accepted only when their domain is explicitly `zhihu.com` or a subdomain; object form should contain Zhihu cookies only.
 
@@ -326,7 +331,7 @@ ZHIHU_LIVE=1 ZHIHU_COOKIE_FILE=/private/path/cookies.json \
   uv run pytest tests/live/live_archive.py
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries. Deferred PDF and login-experience work is tracked in [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md). Database and raw JSON archives are not provided.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries. The feature roadmap is tracked in [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md). Database and raw JSON archives are not provided.
 
 ## References and License
 

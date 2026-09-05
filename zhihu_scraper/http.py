@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import random
+import tempfile
 import time
 from collections.abc import Callable, Iterable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC
 from email.utils import parsedate_to_datetime
@@ -16,6 +19,8 @@ from typing import Any, Protocol, Self, cast
 from urllib.parse import urljoin, urlparse
 
 from curl_cffi import requests
+
+from .platform import RuntimePlatform
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +317,42 @@ class ZhihuHttpClient:
             return response
 
         raise AssertionError("retry loop must return or raise")
+
+
+def save_cookies(path: Path, cookies: Mapping[str, str]) -> Path:
+    """Atomically save validated Zhihu cookies with private file permissions."""
+
+    cookie_path = Path(path).expanduser()
+    if not cookies or any(
+        not isinstance(name, str) or not name.strip() or not isinstance(value, str) or not value
+        for name, value in cookies.items()
+    ):
+        raise CookieFileError("Cannot save empty or invalid Zhihu cookies.")
+    temporary_path: Path | None = None
+    try:
+        cookie_path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, name = tempfile.mkstemp(
+            prefix=f".{cookie_path.name}.",
+            suffix=".tmp",
+            dir=cookie_path.parent,
+        )
+        temporary_path = Path(name)
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as cookie_file:
+            RuntimePlatform.detect().secure_private_file(temporary_path)
+            json.dump(dict(cookies), cookie_file, ensure_ascii=False, indent=2)
+            cookie_file.write("\n")
+            cookie_file.flush()
+            os.fsync(cookie_file.fileno())
+        os.replace(temporary_path, cookie_path)
+        return cookie_path
+    except OSError:
+        raise CookieFileError(
+            f"Could not safely save Cookie file {cookie_path.name}; the previous file was preserved."
+        ) from None
+    finally:
+        if temporary_path is not None:
+            with suppress(OSError):
+                temporary_path.unlink(missing_ok=True)
 
 
 def load_cookies(path: Path) -> dict[str, str]:

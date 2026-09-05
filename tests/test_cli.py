@@ -2,7 +2,7 @@ import io
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import chdir, redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -10,11 +10,73 @@ from unittest.mock import patch
 from zhihu_scraper.application import ArchiveReport
 from zhihu_scraper.archive import ArchiveReceipt
 from zhihu_scraper.cli import run_cli
+from zhihu_scraper.facade import LoginReport, LoginTimeoutError
 from zhihu_scraper.http import CookieDiagnostic, LoginStatus
 from zhihu_scraper.normalize import normalize_article
 
 
 class NewCommandLineTests(unittest.TestCase):
+    def test_login_accepts_cookie_destination_and_cdp_and_prints_config_guidance(self):
+        output = io.StringIO()
+        cookie_file = Path(".local/renewed-cookies.json")
+        with patch(
+            "zhihu_scraper.cli.login_session",
+            return_value=LoginReport(cookie_file=cookie_file, authenticated=True),
+        ) as login:
+            with redirect_stdout(output):
+                result = run_cli(
+                    [
+                        "login",
+                        "--cookie-file",
+                        str(cookie_file),
+                        "--cdp",
+                        "http://localhost:9222",
+                    ]
+                )
+
+        self.assertEqual(0, result)
+        settings = login.call_args.args[0]
+        self.assertEqual(cookie_file, settings.cookie_file)
+        self.assertEqual("http://localhost:9222", settings.cdp_url)
+        self.assertIn("登录状态已验证", output.getvalue())
+        self.assertIn("zhihu check --cookie-file", output.getvalue())
+        self.assertIn("cookie_file =", output.getvalue())
+        self.assertIn("zhihu fetch URL -s", output.getvalue())
+
+    def test_login_without_settings_does_not_create_a_settings_file(self):
+        with tempfile.TemporaryDirectory() as temporary_directory, chdir(temporary_directory):
+            with patch(
+                "zhihu_scraper.cli.login_session",
+                return_value=LoginReport(Path(".local/cookies.json"), True),
+            ) as login:
+                with redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, run_cli(["login"]))
+            self.assertIsNone(login.call_args.args[0].cookie_file)
+            self.assertEqual([], list(Path(".").iterdir()))
+
+    def test_login_keeps_existing_settings_unchanged_and_reports_cancellation(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings_path = Path(temporary_directory) / "settings.toml"
+            original = '[network]\ncookie_file = ".local/existing.json"\n'
+            settings_path.write_text(original, encoding="utf-8")
+            for error, expected_exit in (
+                (KeyboardInterrupt(), 130),
+                (LoginTimeoutError("超时"), 1),
+            ):
+                with self.subTest(error=type(error).__name__):
+                    with (
+                        patch("zhihu_scraper.cli.login_session", side_effect=error) as login,
+                        redirect_stdout(io.StringIO()),
+                        redirect_stderr(io.StringIO()),
+                    ):
+                        self.assertEqual(
+                            expected_exit, run_cli(["login", "-s", str(settings_path)])
+                        )
+                    self.assertEqual(
+                        Path(".local/existing.json"), login.call_args.args[0].cookie_file
+                    )
+                    self.assertEqual(original, settings_path.read_text(encoding="utf-8"))
+
     def test_chinese_output_survives_windows_legacy_redirect_encoding(self):
         stdout_bytes = io.BytesIO()
         stderr_bytes = io.BytesIO()
@@ -59,6 +121,7 @@ class NewCommandLineTests(unittest.TestCase):
         self.assertIn("fetch", rendered)
         self.assertIn("check", rendered)
         self.assertIn("init", rendered)
+        self.assertIn("login", rendered)
         self.assertIn("zhihu fetch --html URL", rendered)
         self.assertIn("zhihu fetch --comments URL", rendered)
         self.assertNotIn("tui", rendered.casefold())

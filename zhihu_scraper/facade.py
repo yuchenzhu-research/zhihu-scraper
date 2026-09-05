@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import math
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from .application import ArchiveReport, ArchiveSink, ArchiveWorkflow, BrowserReader
 from .archive import LocalArchive
@@ -14,6 +17,7 @@ from .http import (
     ZhihuHttpClient,
     diagnose_cookies,
     load_cookies,
+    save_cookies,
 )
 from .settings import ArchiveSettings
 from .settings import BrowserFallback as BrowserFallbackMode
@@ -24,6 +28,81 @@ from .source import ZhihuSource
 class SessionReport:
     cookie_diagnostic: CookieDiagnostic
     login_status: LoginStatus | None
+
+
+@dataclass(frozen=True, slots=True)
+class LoginReport:
+    cookie_file: Path
+    authenticated: bool
+
+
+class LoginTimeoutError(TimeoutError):
+    """No verified login became available within the interactive time limit."""
+
+
+def login_session(
+    settings: ArchiveSettings | None = None,
+    *,
+    timeout: float = 180.0,
+    poll_interval: float = 2.0,
+    browser_factory: Callable[[], BrowserFallback] | None = None,
+    client_factory: Callable[[Mapping[str, str], float], ZhihuHttpClient] | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    monotonic: Callable[[], float] = time.monotonic,
+) -> LoginReport:
+    """Let the user log in, then save only cookies verified by Zhihu's identity endpoint."""
+
+    for name, value in (("timeout", timeout), ("poll_interval", poll_interval)):
+        if isinstance(value, bool) or not math.isfinite(value) or not 0 < value <= 600:
+            raise ValueError(f"{name} must be between 0 and 600 seconds.")
+    effective_settings = settings or ArchiveSettings()
+    cookie_file = effective_settings.cookie_file or Path(".local/cookies.json")
+    deadline = monotonic() + timeout
+
+    def configured_browser() -> BrowserFallback:
+        return BrowserFallback(
+            cdp_url=effective_settings.cdp_url,
+            headless=False,
+            proxy=effective_settings.proxy,
+            timeout_ms=max(1, int(min(effective_settings.timeout, timeout) * 1000)),
+        )
+
+    def configured_client(cookies: Mapping[str, str], remaining: float) -> ZhihuHttpClient:
+        return ZhihuHttpClient(
+            cookies=cookies,
+            proxy=effective_settings.proxy,
+            timeout=remaining,
+            max_retries=0,
+            request_interval=effective_settings.request_interval,
+            request_jitter=effective_settings.request_jitter,
+        )
+
+    create_browser = browser_factory or configured_browser
+    create_client = client_factory or configured_client
+    with create_browser() as browser:
+        browser.open_login_page()
+        while monotonic() < deadline:
+            cookies = browser.cookie_dict()
+            remaining = deadline - monotonic()
+            # curl uses integer milliseconds; a sub-millisecond timeout would
+            # round down to zero and disable its request deadline.
+            if remaining < 0.001:
+                break
+            if cookies.get("z_c0"):
+                client = create_client(
+                    cookies, min(max(0.001, effective_settings.timeout), remaining)
+                )
+                try:
+                    status = client.check_login()
+                finally:
+                    client.close()
+                if status.authenticated and monotonic() < deadline:
+                    saved_path = save_cookies(cookie_file, cookies)
+                    return LoginReport(cookie_file=saved_path, authenticated=True)
+            remaining = deadline - monotonic()
+            if remaining > 0:
+                sleep(min(poll_interval, remaining))
+    raise LoginTimeoutError("等待知乎登录超时；原有 Cookie 文件未改动，请重新运行 zhihu login。")
 
 
 def archive_url(
@@ -122,7 +201,10 @@ __all__ = [
     "ArchiveReport",
     "ArchiveSettings",
     "SessionReport",
+    "LoginReport",
+    "LoginTimeoutError",
     "archive_url",
     "build_workflow",
     "check_session",
+    "login_session",
 ]

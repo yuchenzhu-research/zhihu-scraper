@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import platform as system_platform
+import re
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -26,6 +28,39 @@ class RuntimePlatform:
     operating_system: OperatingSystem
     user_data_directory: PurePath
     browser_candidates: tuple[PurePath, ...]
+
+    def secure_private_file(self, path: Path) -> None:
+        """Restrict a newly created temporary credential file before writing secrets."""
+        if self.operating_system is not OperatingSystem.WINDOWS:
+            os.chmod(path, 0o600)
+            return
+        system_directory = PureWindowsPath(os.environ.get("SystemRoot", "C:/Windows")) / "System32"
+        try:
+            identity = subprocess.run(
+                [str(system_directory / "whoami.exe"), "/user", "/fo", "csv", "/nh"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            sid = re.search(r"S-1-(?:\d+-)+\d+", identity.stdout)
+            if sid is None:
+                raise OSError("无法确认当前 Windows 用户权限。")
+            subprocess.run(
+                [
+                    str(system_directory / "icacls.exe"),
+                    str(path),
+                    "/inheritance:r",
+                    "/grant:r",
+                    f"*{sid.group()}:F",
+                    "/Q",
+                ],
+                check=True,
+                capture_output=True,
+                timeout=10,
+            )
+        except (subprocess.SubprocessError, OSError):
+            raise OSError("无法为 Cookie 临时文件设置当前用户专属权限，未保存凭证。") from None
 
     @classmethod
     @cache

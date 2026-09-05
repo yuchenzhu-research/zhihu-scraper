@@ -151,6 +151,27 @@ def test_cdp_close_disconnects_driver_without_closing_the_external_context(
     assert executor.close_count == 1
 
 
+def test_cdp_login_only_reads_cookies_and_leaves_external_pages_and_context_untouched(
+    tmp_path: Path,
+) -> None:
+    executor = FakeExecutor()
+    with BrowserFallback(
+        cdp_url="http://localhost:9222",
+        executor=executor,
+        runtime_platform=runtime_for(tmp_path),
+    ) as browser:
+        browser.open_login_page()
+        assert browser.cookie_dict() == {"z_c0": "secret"}
+
+    assert executor.connections == ["http://localhost:9222"]
+    assert executor.context.pages == []
+    assert executor.context.init_scripts == []
+    assert executor.context.added_cookies == []
+    assert executor.context.cleared_cookie_names == []
+    assert executor.context.closed is False
+    assert executor.closed is True
+
+
 @pytest.mark.parametrize(
     "cdp_url",
     [

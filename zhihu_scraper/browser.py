@@ -191,7 +191,30 @@ class BrowserFallback:
         self._executor: BrowserExecutor = executor or _PlaywrightExecutor()
         self._sleep = sleep
         self._context: BrowserContext | None = None
+        self._login_page: BrowserPage | None = None
         self._closed = False
+
+    def open_login_page(self) -> None:
+        """Keep a managed sign-in page open while the user logs in manually."""
+
+        if self.cdp_url is not None:
+            self._ensure_context(prepare=False)
+            return
+        if self._login_page is not None:
+            return
+        try:
+            context = self._ensure_context()
+            self._clear_managed_challenge_cookies(context)
+            self._login_page = context.new_page()
+            self._login_page.goto(
+                "https://www.zhihu.com/signin",
+                wait_until="domcontentloaded",
+                timeout=self.timeout_ms,
+            )
+        except BrowserFallbackError:
+            raise
+        except Exception:
+            raise BrowserNavigationError("The Zhihu login page could not be opened.") from None
 
     def fetch_html(self, url: str) -> str:
         _validate_zhihu_url(url)
@@ -244,7 +267,7 @@ class BrowserFallback:
     def cookie_dict(self) -> dict[str, str]:
         """Return browser cookies scoped to Zhihu without logging their values."""
         try:
-            cookie_records = self._ensure_context().cookies()
+            cookie_records = self._ensure_context(prepare=False).cookies()
         except BrowserFallbackError:
             raise
         except Exception:
@@ -289,7 +312,7 @@ class BrowserFallback:
                 "The Zhihu cookies could not be imported into the browser session."
             ) from None
 
-    def _ensure_context(self) -> BrowserContext:
+    def _ensure_context(self, *, prepare: bool = True) -> BrowserContext:
         if self._closed:
             raise BrowserFallbackError("Browser fallback is closed.")
         if self._context is not None:
@@ -303,7 +326,8 @@ class BrowserFallback:
                 raise BrowserLaunchError(
                     "The running Chrome browser could not be connected."
                 ) from None
-            self._prepare_context(self._context)
+            if prepare:
+                self._prepare_context(self._context)
             return self._context
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         installed_browser = self._installed_browser()
@@ -360,6 +384,13 @@ class BrowserFallback:
             return
         self._closed = True
         failed = False
+        login_page = self._login_page
+        self._login_page = None
+        if login_page is not None:
+            try:
+                login_page.close()
+            except Exception:
+                failed = True
         context = self._context
         self._context = None
         if context is not None and self.cdp_url is None:

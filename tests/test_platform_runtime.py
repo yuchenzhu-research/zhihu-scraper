@@ -1,5 +1,8 @@
+import tempfile
 import unittest
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from types import SimpleNamespace
+from unittest.mock import patch
 
 from zhihu_scraper.platform import (
     OperatingSystem,
@@ -9,6 +12,34 @@ from zhihu_scraper.platform import (
 
 
 class RuntimePlatformTests(unittest.TestCase):
+    def test_private_files_are_owner_only_on_posix(self):
+        for system in ("Linux", "Darwin"):
+            runtime = RuntimePlatform.for_system(
+                system, home_directory=PurePosixPath("/home/ada"), environment={}
+            )
+            with self.subTest(system=system), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "cookies.tmp"
+                path.touch()
+                with patch("zhihu_scraper.platform.os.chmod") as chmod:
+                    runtime.secure_private_file(path)
+                chmod.assert_called_once_with(path, 0o600)
+
+    def test_windows_private_file_acl_grants_only_current_user_without_inheritance(self):
+        runtime = RuntimePlatform.for_system(
+            "Windows", home_directory=PureWindowsPath("C:/Users/Ada"), environment={}
+        )
+        path = Path("cookies.tmp")
+        with patch("zhihu_scraper.platform.subprocess.run") as run:
+            run.side_effect = [
+                SimpleNamespace(stdout='"PC\\Ada","S-1-5-21-123-1001"\n'),
+                SimpleNamespace(stdout=""),
+            ]
+            runtime.secure_private_file(path)
+        command = run.call_args.args[0]
+        self.assertIn("/inheritance:r", command)
+        self.assertIn("*S-1-5-21-123-1001:F", command)
+        self.assertIn(str(path), command)
+
     def test_windows_runtime_uses_local_app_data_and_windows_browser_locations(self):
         runtime = RuntimePlatform.for_system(
             "Windows",

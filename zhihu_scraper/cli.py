@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path
 
-from .facade import ArchiveReport, archive_url, check_session
+from .facade import ArchiveReport, archive_url, check_session, login_session
 from .settings import (
     ArchiveSettings,
     BrowserFallback,
@@ -32,6 +33,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 准备与检查：
   zhihu init                         生成 settings.toml
+  zhihu login                        在浏览器中登录并保存验证后的 Cookie
   zhihu check -s settings.toml       检查 Cookie 登录状态""",
     )
     parser.add_argument(
@@ -72,6 +74,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     fetch_path.add_argument("--cdp", help="连接本机已登录 Chrome 的 CDP 地址")
 
+    login = subcommands.add_parser("login", help="手动登录知乎并安全保存已验证的 Cookie")
+    _settings_argument(login)
+    login.add_argument(
+        "--cookie-file",
+        type=Path,
+        help="Cookie 保存路径；默认使用配置路径或 .local/cookies.json",
+    )
+    login.add_argument("--cdp", help="只读取本机已登录 Chrome 的 Cookie，不操作现有页面")
+
     check = subcommands.add_parser("check", help="检查 Cookie 是否存在且仍可登录")
     _settings_argument(check)
     check.add_argument("--cookie-file", type=Path, help="覆盖 Cookie 文件路径")
@@ -102,6 +113,25 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
             return 0
 
         settings = load_settings(arguments.settings)
+        if arguments.command == "login":
+            if arguments.cookie_file is not None:
+                settings = replace(settings, cookie_file=arguments.cookie_file)
+            if arguments.cdp is not None:
+                settings = replace(settings, cdp_url=arguments.cdp)
+            if settings.cdp_url is None:
+                print("请在打开的浏览器中手动登录知乎；最多等待 180 秒，Ctrl+C 可取消。")
+            else:
+                print("正在读取本机浏览器的知乎登录状态；现有页面保持不变。")
+            login_report = login_session(settings)
+            settings_path = arguments.settings or Path("settings.toml")
+            print(f"登录状态已验证，Cookie 已安全保存：{login_report.cookie_file}")
+            print(f'检查：zhihu check --cookie-file "{login_report.cookie_file}"')
+            if arguments.settings is None:
+                print(f'生成设置：zhihu init "{settings_path}"')
+            cookie_setting = json.dumps(str(login_report.cookie_file.resolve()), ensure_ascii=False)
+            print(f"在 {settings_path} 的 [network] 分区中设置：cookie_file = {cookie_setting}")
+            print(f'然后抓取：zhihu fetch URL -s "{settings_path}"')
+            return 0
         if arguments.command == "check":
             if arguments.cookie_file is not None:
                 settings = replace(settings, cookie_file=arguments.cookie_file)
