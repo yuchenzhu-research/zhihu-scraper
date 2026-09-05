@@ -32,7 +32,7 @@ The project serves developers studying an engineered crawler as well as non-tech
 
 The content parser covers paragraphs, headings, lists, quotes, tables, code, links, images, animations, and TeX formulas. For a standalone video, it selects the rendition with the largest known dimensions. Interrupted downloads retain a `.part` file; archiving the same target again uses HTTP Range when reliable validators permit resuming, or safely restarts otherwise and checks the final byte count when the server provides a length. A stale body image, animation, or cover does not destroy the text archive: remaining assets continue and structured warnings identify failures. Undownloaded remote media is shown as an ordinary link rather than an automatic browser request. Failure of a standalone video's primary file remains explicit and fatal.
 
-Column collections, video embedded inside an article or answer, author profiles, search results, pins, favorites, and Yanxuan content are not supported.
+Zhihu video cards embedded in articles and answers can resolve to downloadable direct media such as MP4. Unavailable videos keep their original page links and produce a warning. Disabling media downloads also skips embedded-video requests. Column collections, author profiles, search results, pins, favorites, and Yanxuan content are not supported.
 
 HTTP/API, pagination, and comments share request pacing: by default, request starts are spaced by 0.5 seconds plus a random 0–0.5 seconds. Configure `network.request_interval` and `network.request_jitter`; setting both to 0 disables pacing. The first request does not wait.
 
@@ -326,7 +326,7 @@ ZHIHU_LIVE=1 ZHIHU_COOKIE_FILE=/private/path/cookies.json \
   uv run pytest tests/live/live_archive.py
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries. Deferred PDF, embedded-video, and login-experience work is tracked in [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md). Database and raw JSON archives are not provided.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries. Deferred PDF and login-experience work is tracked in [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md). Database and raw JSON archives are not provided.
 
 ## References and License
 

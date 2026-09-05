@@ -18,6 +18,7 @@ from .domain import (
     CodeBlock,
     CodeSpan,
     Divider,
+    EmbeddedVideo,
     FormulaBlock,
     Heading,
     Inline,
@@ -102,7 +103,10 @@ def _parse_block_children(
             continue
 
         name = node.name.casefold()
-        if name == "p":
+        if video := _video_from_node(node, base_url=base_url):
+            flush_loose_text()
+            blocks.append(video)
+        elif name == "p":
             flush_loose_text()
             blocks.extend(_parse_paragraph(node, base_url=base_url))
         elif name == "div":
@@ -174,6 +178,10 @@ def _parse_paragraph(node: Tag, *, base_url: str) -> list[Block]:
         inlines.clear()
 
     for child in node.children:
+        if isinstance(child, Tag) and (video := _video_from_node(child, base_url=base_url)):
+            flush_inlines()
+            blocks.append(video)
+            continue
         if isinstance(child, Tag) and child.name == "img" and not _formula_from_node(child):
             flush_inlines()
             media = _media_from_image(child)
@@ -408,6 +416,69 @@ def _media_from_image(image: Tag) -> MediaAsset | None:
         renditions=renditions,
         alt_text=str(image.get("alt") or ""),
     )
+
+
+def _video_from_node(node: Tag, *, base_url: str) -> Block | None:
+    raw_id = str(node.get("data-lens-id") or "").strip()
+    is_card = "video-box" in _css_classes(node)
+    if not raw_id and not is_card and node.name != "video":
+        return None
+    title = _block_text(str(node.get("title") or node.get_text(" ", strip=True)))
+    renditions = []
+    fallback_url = ""
+    candidates = (node, *node.find_all("source", recursive=False)) if node.name == "video" else ()
+    for candidate in candidates:
+        source_url = _safe_link(str(candidate.get("src") or ""), base_url=base_url)
+        if not source_url:
+            continue
+        fallback_url = fallback_url or source_url
+        parsed = urlparse(source_url)
+        if parsed.scheme not in {"http", "https"} or not parsed.path.casefold().endswith(
+            (".mp4", ".webm", ".mov", ".m4v")
+        ):
+            continue
+        renditions.append(
+            MediaRendition(
+                source_url=source_url,
+                mime_type=str(candidate.get("type") or "") or None,
+                width=_optional_int(node.get("width")),
+                height=_optional_int(node.get("height")),
+            )
+        )
+    if renditions:
+        asset_id = hashlib.sha256(renditions[0].source_url.encode()).hexdigest()[:20]
+        return MediaBlock(
+            MediaAsset(
+                id=f"inline-video-{asset_id}",
+                kind=MediaKind.VIDEO,
+                renditions=tuple(renditions),
+                alt_text=title,
+            )
+        )
+    if raw_id or is_card:
+        source_url = _safe_link(str(node.get("href") or ""), base_url=base_url)
+        parsed = urlparse(source_url)
+        trusted_page = (
+            parsed.scheme in {"http", "https"}
+            and parsed.hostname in {"www.zhihu.com", "zhihu.com"}
+            and parsed.username is None
+            and parsed.password is None
+        )
+        video_id = raw_id if re.fullmatch(r"[0-9]{1,30}", raw_id) else ""
+        if not raw_id and trusted_page:
+            match = re.fullmatch(r"/video/([0-9]{1,30})/?", parsed.path)
+            video_id = match.group(1) if match else ""
+        if video_id:
+            return EmbeddedVideo(
+                video_id=video_id,
+                source_url=source_url
+                if trusted_page
+                else f"https://www.zhihu.com/video/{video_id}",
+                title=title,
+            )
+    if fallback_url:
+        return Paragraph((Link(title or "视频页面", fallback_url),))
+    return None
 
 
 def _safe_link(raw_url: str, *, base_url: str) -> str:

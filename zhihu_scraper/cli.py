@@ -196,6 +196,10 @@ def _print_archive_report(report: ArchiveReport) -> None:
         for failure in media_failures:
             message = failure.display_message
             print(f"- {message}")
+    if report.embedded_video_warnings:
+        print(f"内嵌视频警告：{len(report.embedded_video_warnings)} 个视频未下载，已保留原链接。")
+        for warning in report.embedded_video_warnings:
+            print(f"- {warning.display_message}")
 
 
 if __name__ == "__main__":

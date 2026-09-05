@@ -224,7 +224,9 @@ def normalize_video(
     video_id = _required_identifier(payload.get("id"), label="video id")
     canonical_url = source_url or f"https://www.zhihu.com/zvideo/{video_id}"
     video_payload = payload.get("video")
-    renditions = _video_renditions(video_payload if isinstance(video_payload, Mapping) else payload)
+    renditions = normalize_video_renditions(
+        video_payload if isinstance(video_payload, Mapping) else payload
+    )
     if not renditions:
         raise NormalizationError("video payload contains no downloadable rendition")
     raw_description = payload.get("description")
@@ -285,7 +287,9 @@ def _normalize_author(value: object) -> Author:
     return Author(id=identifier, name=name, url=url)
 
 
-def _video_renditions(payload: Mapping[str, Any]) -> tuple[MediaRendition, ...]:
+def normalize_video_renditions(payload: Mapping[str, Any]) -> tuple[MediaRendition, ...]:
+    """Normalize the playlist fields shared by Zhihu video and lens responses."""
+
     containers: list[Mapping[str, Any]] = []
     for key in ("playlist", "playlist_v2", "playlistV2", "playlists"):
         candidate = payload.get(key)

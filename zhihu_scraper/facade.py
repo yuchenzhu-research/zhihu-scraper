@@ -76,6 +76,7 @@ def build_workflow(
         sink=archive_sink,
         settings=settings,
         comment_client=http_client,
+        embedded_video_fetcher=http_client.get_json,
         browser_factory=browser_factory,
         browser_cookies=configured_cookies,
         browser_cookie_sink=getattr(http_client, "update_cookies", None),

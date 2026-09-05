@@ -19,6 +19,7 @@ from .domain import (
     ColumnRef,
     QuestionArchive,
 )
+from .embedded_video import EmbeddedVideoWarning, resolve_embedded_videos
 from .http import InvalidResponseError, TransportError, ZhihuHttpError
 from .normalize import (
     NormalizationError,
@@ -91,6 +92,7 @@ class ArchiveReport:
     receipt: ArchiveReceipt
     used_browser: bool
     media_failures: tuple[MediaArchiveFailure, ...] = ()
+    embedded_video_warnings: tuple[EmbeddedVideoWarning, ...] = ()
 
 
 class ArchiveWorkflow:
@@ -103,6 +105,7 @@ class ArchiveWorkflow:
         sink: ArchiveSink,
         settings: ArchiveSettings,
         comment_client: CommentClient | None = None,
+        embedded_video_fetcher: Callable[[str], object] | None = None,
         browser_factory: Callable[[], BrowserReader] | None = None,
         browser_cookies: Mapping[str, str] | None = None,
         browser_cookie_sink: Callable[[Mapping[str, str]], None] | None = None,
@@ -113,6 +116,7 @@ class ArchiveWorkflow:
         self._sink = sink
         self._settings = settings
         self._comment_client = comment_client
+        self._embedded_video_fetcher = embedded_video_fetcher
         self._browser_factory = browser_factory
         self._browser_cookies = dict(browser_cookies or {})
         self._browser_cookie_sink = browser_cookie_sink
@@ -127,6 +131,11 @@ class ArchiveWorkflow:
         self._used_browser = False
         routed = route_zhihu_url(raw_url)
         target = self._collect(routed)
+        embedded_video_warnings: tuple[EmbeddedVideoWarning, ...] = ()
+        if self._settings.media_download and self._embedded_video_fetcher is not None:
+            resolution = resolve_embedded_videos(target, get_json=self._embedded_video_fetcher)
+            target = resolution.target
+            embedded_video_warnings = resolution.warnings
         receipt = self._sink.archive(target)
         if not isinstance(receipt, ArchiveReceipt):
             raise TypeError("Archive sinks must return an ArchiveReceipt.")
@@ -135,6 +144,7 @@ class ArchiveWorkflow:
             receipt=receipt,
             used_browser=self._used_browser,
             media_failures=receipt.media_failures,
+            embedded_video_warnings=embedded_video_warnings,
         )
 
     def close(self) -> None:

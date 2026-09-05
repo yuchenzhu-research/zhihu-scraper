@@ -111,6 +111,15 @@ class MediaBlock:
 
 
 @dataclass(frozen=True, slots=True)
+class EmbeddedVideo:
+    """A video card whose page is distinct from its downloadable media."""
+
+    video_id: str
+    source_url: str
+    title: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class TableBlock:
     headers: tuple[TableCell, ...]
     rows: tuple[tuple[TableCell, ...], ...]
@@ -129,6 +138,7 @@ Block = (
     | CodeBlock
     | FormulaBlock
     | MediaBlock
+    | EmbeddedVideo
     | TableBlock
     | Divider
 )

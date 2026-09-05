@@ -23,6 +23,7 @@ from .domain import (
     Comment,
     CommentThread,
     Divider,
+    EmbeddedVideo,
     FormulaBlock,
     Heading,
     Inline,
@@ -226,6 +227,8 @@ def content_plain_text(blocks: Sequence[Block]) -> str:
             parts.append(block.tex)
         elif isinstance(block, MediaBlock):
             parts.extend(part for part in (block.asset.alt_text, block.caption) if part)
+        elif isinstance(block, EmbeddedVideo):
+            parts.append(block.title or "内嵌视频")
         elif isinstance(block, TableBlock):
             parts.extend(_inlines_plain_text(cell) for cell in block.headers)
             parts.extend(_inlines_plain_text(cell) for row in block.rows for cell in row)
@@ -960,6 +963,8 @@ def _block_to_markdown(block: Block, *, paths: Mapping[str, str]) -> str:
         return f"{fence}{language}\n{block.code}\n{fence}"
     if isinstance(block, FormulaBlock):
         return f"$$\n{_markdown_formula_tex(block.tex)}\n$$"
+    if isinstance(block, EmbeddedVideo):
+        return _markdown_link(f"视频：{block.title or '查看原视频'}", block.source_url)
     if isinstance(block, MediaBlock):
         source = _media_source(block.asset, paths=paths)
         if not source:
@@ -1077,6 +1082,9 @@ def _block_to_html(
         tex = html.escape(_safe_formula_trace(block.tex), quote=True)
         mathml = _formula_to_html(block.tex, display="block")
         return f'{indent}<div class="math-display" data-tex="{tex}">{mathml}</div>'
+    if isinstance(block, EmbeddedVideo):
+        link = _html_link(f"视频：{block.title or '查看原视频'}", block.source_url)
+        return f"{indent}<p>{link}</p>"
     if isinstance(block, MediaBlock):
         source = _safe_url(_media_source(block.asset, paths=paths))
         if not source:

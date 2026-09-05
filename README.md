@@ -32,7 +32,7 @@ Zhihu-Scraper 是一个本地优先的知乎归档工具。输入文章、回答
 
 正文解析覆盖段落、标题、列表、引用、表格、代码、链接、图片、动图和 TeX 数学公式。独立视频自动选择已知尺寸最大的清晰度；下载中断时保留 `.part` 文件，下次对同一目标归档时，有可靠验证信息才使用 HTTP Range 续传，否则安全地重新下载，并在服务端提供长度时校验最终字节数。单张正文图片、动图或封面失效不会毁掉整篇归档：程序会继续保存正文和其他媒体，并在报告中列出失败项；未下载的远程媒体只显示为普通链接，不会在打开 HTML 时自动请求。独立视频主文件失败则明确报错。
 
-暂不支持专栏合集、内嵌于文章/回答的视频、作者主页、搜索结果、想法、收藏夹和盐选内容。
+文章和回答中的知乎视频卡片可解析并下载已公开的 MP4 等直连文件；解析失败会保留原视频页面链接并显示警告。关闭媒体下载时不请求内嵌视频接口。暂不支持专栏合集、作者主页、搜索结果、想法、收藏夹和盐选内容。
 
 HTTP/API、分页和评论共用请求节奏，默认相邻请求启动间隔为 0.5 秒，加随机 0–0.5 秒。设置 `network.request_interval` 和 `network.request_jitter` 可调整，两项均为 0 时关闭；首个请求不等待。
 
@@ -326,7 +326,7 @@ ZHIHU_LIVE=1 ZHIHU_COOKIE_FILE=/private/path/cookies.json \
   uv run pytest tests/live/live_archive.py
 ```
 
-架构边界见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，已确认但延期的 PDF、内嵌视频和登录体验改进见 [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md)。当前不提供数据库或原始 JSON 归档。
+架构边界见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，已确认但延期的 PDF 和登录体验改进见 [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md)。当前不提供数据库或原始 JSON 归档。
 
 ## 参考与许可
 
