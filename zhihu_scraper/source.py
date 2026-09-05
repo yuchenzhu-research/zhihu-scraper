@@ -154,6 +154,7 @@ class ZhihuSource:
         current_url = page_url(offset)
         visited_urls: set[str] = set()
         seen_item_ids: set[str] = set()
+        stagnant_pages = 0
 
         while True:
             if current_url in visited_urls:
@@ -169,6 +170,7 @@ class ZhihuSource:
             raw_data = page.get("data")
             if not isinstance(raw_data, list):
                 raise InvalidZhihuPayloadError(f"{payload_label}的 data 字段必须是列表。")
+            new_items = 0
             for index, item in enumerate(raw_data):
                 if not isinstance(item, Mapping):
                     raise InvalidZhihuPayloadError(f"{payload_label}第 {index + 1} 项必须是对象。")
@@ -178,10 +180,14 @@ class ZhihuSource:
                     if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool)
                     else ""
                 )
-                if stable_id:
-                    if stable_id in seen_item_ids:
-                        continue
-                    seen_item_ids.add(stable_id)
+                if not stable_id:
+                    raise InvalidZhihuPayloadError(
+                        f"{payload_label}第 {index + 1} 项缺少有效 ID，无法判断分页进展。"
+                    )
+                if stable_id in seen_item_ids:
+                    continue
+                seen_item_ids.add(stable_id)
+                new_items += 1
                 yield dict(item)
 
             raw_paging = page.get("paging", {})
@@ -195,6 +201,14 @@ class ZhihuSource:
             is_end = raw_is_end if isinstance(raw_is_end, bool) else len(raw_data) < page_size
             if is_end:
                 return
+
+            # A shifting feed can overlap one whole page. Persistent lack of
+            # new content is a loop even when each next URL has a new cursor.
+            stagnant_pages = stagnant_pages + 1 if new_items == 0 else 0
+            if stagnant_pages >= 2:
+                raise PaginationLoopError(
+                    f"{payload_label}连续两页没有新增内容，已停止以避免无限循环。"
+                )
 
             offset += len(raw_data)
             raw_next = raw_paging.get("next")

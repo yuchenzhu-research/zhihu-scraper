@@ -384,6 +384,69 @@ class PaginationSourceTests(unittest.TestCase):
             client.json_calls,
         )
 
+    def test_stops_when_changing_offsets_keep_returning_the_same_items(self):
+        client = FakeClient(
+            json_responses=[{"data": [{"id": 1}], "paging": {"is_end": False}} for _ in range(4)]
+        )
+
+        with self.assertRaisesRegex(PaginationLoopError, "没有新增"):
+            list(ZhihuSource(client).iter_column_article_payloads("demo", page_size=1))
+
+        self.assertEqual(3, len(client.json_calls))
+        self.assertEqual(3, len(set(client.json_calls)))
+
+    def test_stops_repeated_page_sequences_even_when_next_urls_keep_changing(self):
+        for pages in (([1], [2], [1], [2]), ([], [])):
+            with self.subTest(pages=pages):
+                client = FakeClient(
+                    json_responses=[
+                        {
+                            "data": [{"id": item_id} for item_id in page_ids],
+                            "paging": {
+                                "is_end": False,
+                                "next": (
+                                    f"/api/v4/questions/100/answers?limit=1&offset={index + 1}"
+                                ),
+                            },
+                        }
+                        for index, page_ids in enumerate(pages)
+                    ]
+                )
+
+                with self.assertRaisesRegex(PaginationLoopError, "没有新增"):
+                    list(ZhihuSource(client).iter_question_answer_payloads("100", page_size=1))
+
+                self.assertEqual(len(pages), len(client.json_calls))
+
+    def test_one_overlapping_page_can_recover_and_terminal_duplicates_are_allowed(self):
+        ids = [1, 1, 2, 2, 3, 3]
+        client = FakeClient(
+            json_responses=[
+                {"data": [{"id": item_id}], "paging": {"is_end": index == len(ids) - 1}}
+                for index, item_id in enumerate(ids)
+            ]
+        )
+
+        articles = list(ZhihuSource(client).iter_column_article_payloads("demo", page_size=1))
+
+        self.assertEqual([{"id": 1}, {"id": 2}, {"id": 3}], articles)
+        self.assertEqual(len(ids), len(client.json_calls))
+
+    def test_pagination_rejects_items_without_stable_ids_before_requesting_more(self):
+        for item in ({}, {"id": " "}, {"id": True}, {"id": []}):
+            with self.subTest(item=item):
+                client = FakeClient(
+                    json_responses=[
+                        {"data": [item], "paging": {"is_end": False}},
+                        {"data": [], "paging": {"is_end": True}},
+                    ]
+                )
+
+                with self.assertRaisesRegex(InvalidZhihuPayloadError, "ID"):
+                    list(ZhihuSource(client).iter_column_article_payloads("demo", page_size=1))
+
+                self.assertEqual(1, len(client.json_calls))
+
     def test_detects_repeated_next_urls_before_requesting_forever(self):
         repeated_url = (
             "https://www.zhihu.com/api/v4/questions/100/answers"
