@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from dataclasses import replace
@@ -49,6 +50,62 @@ class FakeDownloader:
 
 
 class LocalArchiveLayoutTests(unittest.TestCase):
+    def test_column_catalog_is_published_only_after_all_documents_and_styles_are_saved(self):
+        first = Article(
+            id="1",
+            title="第一篇",
+            source_url="https://zhuanlan.zhihu.com/p/1",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(Paragraph((Text("第一篇正文"),)),),
+        )
+        second = replace(first, id="2", title="第二篇", source_url="https://zhuanlan.zhihu.com/p/2")
+        column = ColumnArchive(
+            column=Column("test", "测试专栏", "https://www.zhihu.com/column/test", "", AUTHOR, 2),
+            articles=(first, second),
+            archived_at=NOW,
+        )
+        for existing, failed_filename in (
+            (False, "第二篇.html"),
+            (True, "第二篇.html"),
+            (False, "archive.css"),
+            (True, "archive.css"),
+        ):
+            with self.subTest(existing=existing, failed_filename=failed_filename):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = Path(temporary_directory)
+                    sink = LocalArchive(root, html=True, media_download=False)
+                    catalogs = tuple(
+                        root / "测试专栏" / f"测试专栏{suffix}" for suffix in (".md", ".html")
+                    )
+                    if existing:
+                        sink.archive(replace(column, articles=(first,)))
+                    before = tuple(
+                        path.read_bytes() if path.exists() else None for path in catalogs
+                    )
+                    replace_file = os.replace
+
+                    def fail_file_write(source, destination):
+                        if Path(destination).name == failed_filename:
+                            raise OSError("模拟文件写入失败")
+                        return replace_file(source, destination)
+
+                    with patch("zhihu_scraper.archive.os.replace", side_effect=fail_file_write):
+                        with self.assertRaisesRegex(OSError, "模拟文件写入失败"):
+                            sink.archive(column)
+
+                    self.assertEqual(
+                        before,
+                        tuple(path.read_bytes() if path.exists() else None for path in catalogs),
+                    )
+                    self.assertFalse(any(root.rglob("*.tmp")))
+                    retried = sink.archive(column)
+                    self.assertIn(
+                        "内容/第二篇.md", retried.markdown_path.read_text(encoding="utf-8")
+                    )
+                    self.assertIn("内容/第二篇.html", retried.html_path.read_text(encoding="utf-8"))
+                    self.assertTrue(all(path.exists() for path in retried.child_html_paths))
+
     def test_enabling_html_preserves_an_existing_unidentified_file(self):
         article = Article(
             id="1",

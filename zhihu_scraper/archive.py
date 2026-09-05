@@ -183,29 +183,27 @@ class LocalArchive:
         html_path = entry_directory / f"{column_filename}.html" if self._html else None
         markdown_renderer = MarkdownRenderer()
         html_renderer = HtmlRenderer()
+        catalogs: list[tuple[Path, str]] = []
         if markdown_path is not None:
-            _atomic_write_text(
-                markdown_path,
-                markdown_renderer.render(
-                    archive,
-                    directory_entries=directory_entries,
-                ),
+            catalogs.append(
+                (
+                    markdown_path,
+                    markdown_renderer.render(archive, directory_entries=directory_entries),
+                )
             )
         if html_path is not None:
-            _atomic_write_text(
-                html_path,
-                html_renderer.render(
-                    archive,
-                    directory_entries=directory_entries,
-                ),
+            catalogs.append(
+                (
+                    html_path,
+                    html_renderer.render(archive, directory_entries=directory_entries),
+                )
             )
-            self._write_html_assets(entry_directory / "assets")
 
+        documents: list[tuple[Path, str]] = []
         child_markdown_paths: list[Path] = []
         child_html_paths: list[Path] = []
         if archive.articles and (self._markdown or self._html):
             content_directory = entry_directory / "内容"
-            content_directory.mkdir(exist_ok=True)
             child_media_paths = {
                 source_url: f"../{relative_path}"
                 for source_url, relative_path in render_paths.items()
@@ -252,26 +250,41 @@ class LocalArchive:
                 )
                 if self._markdown:
                     article_markdown = content_directory / f"{name}.md"
-                    _atomic_write_text(
-                        article_markdown,
-                        markdown_renderer.render(
-                            article,
-                            media_paths=child_media_paths,
-                            column_context=context,
-                        ),
+                    documents.append(
+                        (
+                            article_markdown,
+                            markdown_renderer.render(
+                                article,
+                                media_paths=child_media_paths,
+                                column_context=context,
+                            ),
+                        )
                     )
                     child_markdown_paths.append(article_markdown)
                 if self._html:
                     article_html = content_directory / f"{name}.html"
-                    _atomic_write_text(
-                        article_html,
-                        html_renderer.render(
-                            article,
-                            media_paths=child_media_paths,
-                            column_context=context,
-                        ),
+                    documents.append(
+                        (
+                            article_html,
+                            html_renderer.render(
+                                article,
+                                media_paths=child_media_paths,
+                                column_context=context,
+                            ),
+                        )
                     )
                     child_html_paths.append(article_html)
+
+        if html_path is not None:
+            documents.extend(
+                (entry_directory / "assets" / filename, content)
+                for filename, content in HtmlRenderer.assets().items()
+            )
+        for path, content in documents:
+            _atomic_write_text(path, content)
+        # The catalog advertises only a batch whose document and style writes completed.
+        for path, content in catalogs:
+            _atomic_write_text(path, content)
 
         return ArchiveReceipt(
             entry_directory=entry_directory,
