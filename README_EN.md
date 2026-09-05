@@ -30,7 +30,7 @@ The project serves developers studying an engineered crawler as well as non-tech
 | `https://www.zhihu.com/column/<column token>` | A column directory and its articles |
 | `https://www.zhihu.com/zvideo/<video ID>` | A standalone Zhihu video |
 
-The content parser covers paragraphs, headings, lists, quotes, tables, code, links, images, animations, and TeX formulas. For a standalone video, it selects the rendition with the largest known dimensions. Interrupted downloads retain a `.part` file; archiving the same target again uses an HTTP Range request to resume and checks the final byte count when the server provides a length. A stale body image, animation, or cover does not destroy the text archive: remaining assets continue and structured warnings identify failures. Undownloaded remote media is shown as an ordinary link rather than an automatic browser request. Failure of a standalone video's primary file remains explicit and fatal.
+The content parser covers paragraphs, headings, lists, quotes, tables, code, links, images, animations, and TeX formulas. For a standalone video, it selects the rendition with the largest known dimensions. Interrupted downloads retain a `.part` file; archiving the same target again uses HTTP Range when reliable validators permit resuming, or safely restarts otherwise and checks the final byte count when the server provides a length. A stale body image, animation, or cover does not destroy the text archive: remaining assets continue and structured warnings identify failures. Undownloaded remote media is shown as an ordinary link rather than an automatic browser request. Failure of a standalone video's primary file remains explicit and fatal.
 
 Column collections, video embedded inside an article or answer, author profiles, search results, pins, favorites, and Yanxuan content are not supported.
 
@@ -267,6 +267,8 @@ A single article, answer, whole question, or standalone video uses this compact 
 With `--html` or `html = true`, a same-name `.html` and an `assets/` folder containing local reading styles are added; each article under a column's `内容/` also gets HTML. Answers under a question become sections in one question document and do not create `内容/`. `media/` is created only when downloadable media exists. HTML is regenerated from the normalized model and does not copy Zhihu's HTML, CSS, or JavaScript.
 
 Original TeX is retained: Markdown uses `$…$` / `$$…$$`; HTML converts it to locally generated, browser-native MathML while keeping a safe trace expression in `data-tex`. No network-loaded KaTeX or MathJax is required. Generated MathML is stripped of link, event, and style attributes; malformed expressions safely fall back to readable TeX.
+
+Interrupted downloads retain `.part` and temporary `.part.resume` files containing only a resource fingerprint, validators, and total length; resume state is removed on success. `If-Range` confirms the resource version before resuming; downloads restart when reliable validators are unavailable. Known media lengths validate cached files and trigger replacement of damaged files. Existing files of unknown length are not remotely revalidated.
 
 Media filenames distinguish actual source resources: replacing a cover or media source downloads a new file, while changes only to the known `pkey` / `expiration` signature parameters reuse the resource. Old media files are preserved; the first archive after upgrading may download them again.
 

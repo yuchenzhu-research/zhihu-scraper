@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import os
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from html import unescape
 from pathlib import Path
 from urllib.parse import quote
 
-from .assets import AssetArchiveReceipt, MediaArchiveFailure, archive_assets
+from .assets import AssetArchiveReceipt, AssetDownloader, MediaArchiveFailure, archive_assets
 from .domain import (
     Answer,
     ArchiveTarget,
@@ -32,7 +31,7 @@ from .render import (
 from .settings import ArchiveSettings
 from .urls import UnsupportedZhihuUrlError, route_zhihu_url
 
-MediaDownloader = Callable[[str, Path], MediaDownloadReceipt]
+MediaDownloader = AssetDownloader
 _MARKDOWN_SOURCE = re.compile(
     r"^> (知乎原文|知乎原问题|知乎专栏)：\[[^\n]*\]\(([^\n]*)\)$", re.MULTILINE
 )

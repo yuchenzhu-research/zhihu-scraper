@@ -38,11 +38,12 @@ class InterruptingHttpResponse(FakeHttpResponse):
         first_chunk: bytes,
         expected_total: int,
         failure: BaseException | None = None,
+        headers: dict[str, str] | None = None,
     ):
         super().__init__(
             status=200,
             body=first_chunk,
-            headers={"Content-Length": str(expected_total)},
+            headers={"Content-Length": str(expected_total), **(headers or {})},
         )
         self._read_count = 0
         self._failure = failure or ConnectionError("connection interrupted")
@@ -126,6 +127,302 @@ class ResumableMediaDownloadTests(unittest.TestCase):
         )
         self.public_dns.start()
         self.addCleanup(self.public_dns.stop)
+
+    def _interrupt_download(self, destination, *, headers, source_url=None):
+        with self.assertRaises(MediaDownloadError):
+            download_media(
+                source_url or "https://media.example/video.mp4",
+                destination,
+                transport=RecordingTransport(
+                    InterruptingHttpResponse(
+                        first_chunk=b"hello", expected_total=11, headers=headers
+                    )
+                ),
+                max_retries=0,
+            )
+
+    def test_matching_known_size_reuses_the_file_without_network(self):
+        transport = SequencedTransport()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "image.jpg"
+            destination.write_bytes(b"complete")
+
+            receipt = download_media(
+                "https://media.example/image.jpg", destination, expected_size=8, transport=transport
+            )
+
+            self.assertEqual(receipt.bytes_total, 8)
+            self.assertEqual(transport.requests, [])
+
+    def test_known_size_replaces_an_existing_truncated_file_without_a_head_request(self):
+        transport = RecordingTransport(
+            FakeHttpResponse(status=200, body=b"complete", headers={"Content-Length": "8"})
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "image.jpg"
+            destination.write_bytes(b"bad")
+
+            receipt = download_media(
+                "https://media.example/image.jpg", destination, expected_size=8, transport=transport
+            )
+
+            self.assertEqual(destination.read_bytes(), b"complete")
+            self.assertEqual(receipt.bytes_total, 8)
+            self.assertEqual([request.get_method() for request in transport.requests], ["GET"])
+
+    def test_response_must_match_the_known_size_even_without_content_length(self):
+        transport = RecordingTransport(FakeHttpResponse(status=200, body=b"short", headers={}))
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "image.jpg"
+            with self.assertRaises(MediaDownloadError):
+                download_media(
+                    "https://media.example/image.jpg",
+                    destination,
+                    expected_size=8,
+                    transport=transport,
+                    max_retries=0,
+                )
+            self.assertFalse(destination.exists())
+
+    def test_known_size_rejects_invalid_values_before_creating_output(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "new" / "image.jpg"
+            for expected_size in (0, -1, True, 1.5):
+                with self.subTest(expected_size=expected_size), self.assertRaises(ValueError):
+                    download_media(
+                        "https://media.example/image.jpg", destination, expected_size=expected_size
+                    )
+            self.assertFalse(destination.parent.exists())
+
+    def test_persisted_etag_guards_resume_after_a_signed_url_refresh(self):
+        transport = SequencedTransport(
+            InterruptingHttpResponse(
+                first_chunk=b"hello", expected_total=11, headers={"ETag": '"version-1"'}
+            ),
+            FakeHttpResponse(
+                status=206,
+                body=b" world",
+                headers={
+                    "Content-Length": "6",
+                    "Content-Range": "bytes 5-10/11",
+                    "ETag": '"version-1"',
+                },
+            ),
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "video.mp4"
+            with self.assertRaises(MediaDownloadError):
+                download_media(
+                    "https://media.example/video.mp4?pkey=old&expiration=1",
+                    destination,
+                    transport=transport,
+                    max_retries=0,
+                )
+
+            receipt = download_media(
+                "https://media.example/video.mp4?pkey=new&expiration=2",
+                destination,
+                transport=transport,
+            )
+
+            self.assertEqual(transport.requests[1].get_header("If-range"), '"version-1"')
+            self.assertEqual(transport.requests[1].get_header("Range"), "bytes=5-")
+            self.assertEqual(destination.read_bytes(), b"hello world")
+            self.assertEqual(receipt.resumed_from, 5)
+            self.assertEqual(list(destination.parent.iterdir()), [destination])
+
+    def test_a_changed_etag_in_a_partial_response_never_appends_new_version_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "video.mp4"
+            self._interrupt_download(destination, headers={"ETag": '"old"'})
+            transport = RecordingTransport(
+                FakeHttpResponse(
+                    status=206,
+                    body=b" world",
+                    headers={"Content-Range": "bytes 5-10/11", "ETag": '"new"'},
+                )
+            )
+            with self.assertRaisesRegex(MediaDownloadError, "validator"):
+                download_media("https://media.example/video.mp4", destination, transport=transport)
+
+            self.assertFalse(destination.exists())
+            self.assertEqual(destination.with_suffix(".mp4.part").read_bytes(), b"hello")
+
+    def test_last_modified_is_used_only_when_it_is_a_strong_validator(self):
+        modified = "Wed, 02 Sep 2026 12:00:00 GMT"
+        for response_headers, should_resume in (
+            ({"Last-Modified": modified, "Date": "Wed, 02 Sep 2026 12:02:00 GMT"}, True),
+            ({"Last-Modified": modified}, False),
+            ({"Last-Modified": modified, "Date": modified}, False),
+            (
+                {
+                    "ETag": 'W/"weak"',
+                    "Last-Modified": modified,
+                    "Date": "Wed, 02 Sep 2026 12:02:00 GMT",
+                },
+                False,
+            ),
+        ):
+            with self.subTest(response_headers=response_headers):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    destination = Path(temporary_directory) / "video.mp4"
+                    self._interrupt_download(destination, headers=response_headers)
+                    transport = RecordingTransport(
+                        FakeHttpResponse(
+                            status=206 if should_resume else 200,
+                            body=b" world" if should_resume else b"hello world",
+                            headers={"Content-Range": "bytes 5-10/11"} if should_resume else {},
+                        )
+                    )
+                    download_media(
+                        "https://media.example/video.mp4", destination, transport=transport
+                    )
+
+                    self.assertEqual(
+                        transport.requests[0].get_header("If-range"),
+                        modified if should_resume else None,
+                    )
+                    self.assertEqual(destination.read_bytes(), b"hello world")
+
+    def test_malformed_range_headers_cannot_publish_or_modify_the_partial_file(self):
+        for response_headers in (
+            {"Content-Range": "bytes 5-4/11"},
+            {"Content-Range": "bytes 5-11/11"},
+            {"Content-Range": "bytes 5-10/12"},
+            {"Content-Range": "bytes 5-10/11", "Content-Length": "5"},
+            {"Content-Range": "bytes 5-10/11", "Content-Length": "invalid"},
+        ):
+            with self.subTest(response_headers=response_headers):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    destination = Path(temporary_directory) / "video.mp4"
+                    self._interrupt_download(destination, headers={"ETag": '"version-1"'})
+                    transport = RecordingTransport(
+                        FakeHttpResponse(status=206, body=b" world", headers=response_headers)
+                    )
+                    with self.assertRaises(MediaDownloadError):
+                        download_media(
+                            "https://media.example/video.mp4", destination, transport=transport
+                        )
+                    self.assertFalse(destination.exists())
+                    self.assertEqual(destination.with_suffix(".mp4.part").read_bytes(), b"hello")
+
+    def test_a_changed_source_does_not_resume_even_when_reusing_the_destination(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "video.mp4"
+            self._interrupt_download(destination, headers={"ETag": '"version-1"'})
+            transport = RecordingTransport(
+                FakeHttpResponse(status=200, body=b"replacement", headers={"Content-Length": "11"})
+            )
+
+            download_media("https://media.example/new-video.mp4", destination, transport=transport)
+
+            self.assertIsNone(transport.requests[0].get_header("Range"))
+            self.assertEqual(destination.read_bytes(), b"replacement")
+
+    def test_missing_or_corrupt_resume_state_restarts_an_orphaned_partial_file(self):
+        for state_bytes in (None, b"broken state", b"\xff"):
+            with self.subTest(state_bytes=state_bytes):
+                transport = RecordingTransport(
+                    FakeHttpResponse(status=200, body=b"complete", headers={"Content-Length": "8"})
+                )
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    destination = Path(temporary_directory) / "image.jpg"
+                    destination.with_suffix(".jpg.part").write_bytes(b"stale")
+                    state_path = destination.with_suffix(".jpg.part.resume")
+                    if state_bytes is not None:
+                        state_path.write_bytes(state_bytes)
+
+                    receipt = download_media(
+                        "https://media.example/image.jpg", destination, transport=transport
+                    )
+
+                    self.assertIsNone(transport.requests[0].get_header("Range"))
+                    self.assertEqual(receipt.resumed_from, 0)
+                    self.assertEqual(destination.read_bytes(), b"complete")
+                    self.assertEqual(list(destination.parent.iterdir()), [destination])
+
+    def test_a_partial_response_with_extra_bytes_is_not_published_or_resumed(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "video.mp4"
+            self._interrupt_download(destination, headers={"ETag": '"version-1"'})
+            oversized = RecordingTransport(
+                FakeHttpResponse(
+                    status=206,
+                    body=b" world-extra",
+                    headers={"Content-Range": "bytes 5-10/11", "ETag": '"version-1"'},
+                )
+            )
+            with self.assertRaises(MediaDownloadError):
+                download_media(
+                    "https://media.example/video.mp4",
+                    destination,
+                    transport=oversized,
+                    max_retries=0,
+                )
+            self.assertFalse(destination.exists())
+            replacement = RecordingTransport(
+                FakeHttpResponse(status=200, body=b"hello world", headers={"Content-Length": "11"})
+            )
+
+            download_media("https://media.example/video.mp4", destination, transport=replacement)
+
+            self.assertIsNone(replacement.requests[0].get_header("Range"))
+            self.assertEqual(destination.read_bytes(), b"hello world")
+
+    def test_resume_state_does_not_persist_a_signed_url_or_leave_files_after_success(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "video.mp4"
+            self._interrupt_download(
+                destination,
+                headers={"ETag": '"version-1"'},
+                source_url="https://media.example/video.mp4?pkey=secret&expiration=123456",
+            )
+            saved_state = destination.with_suffix(".mp4.part.resume").read_text(encoding="utf-8")
+            self.assertNotIn("secret", saved_state)
+            self.assertNotIn("123456", saved_state)
+            self.assertNotIn("https://", saved_state)
+            transport = RecordingTransport(
+                FakeHttpResponse(
+                    status=200,
+                    body=b"new version",
+                    headers={"Content-Length": "11", "ETag": '"version-2"'},
+                )
+            )
+
+            receipt = download_media(
+                "https://media.example/video.mp4?pkey=renewed&expiration=123457",
+                destination,
+                transport=transport,
+            )
+
+            self.assertEqual(transport.requests[0].get_header("If-range"), '"version-1"')
+            self.assertEqual(receipt.resumed_from, 0)
+            self.assertEqual(destination.read_bytes(), b"new version")
+            self.assertEqual(list(destination.parent.iterdir()), [destination])
+
+    def test_partial_without_a_validator_restarts_without_a_range_request(self):
+        transport = SequencedTransport(
+            InterruptingHttpResponse(first_chunk=b"old", expected_total=8),
+            FakeHttpResponse(status=200, body=b"new data", headers={"Content-Length": "8"}),
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            destination = Path(temporary_directory) / "image.jpg"
+            with self.assertRaises(MediaDownloadError):
+                download_media(
+                    "https://media.example/image.jpg",
+                    destination,
+                    transport=transport,
+                    max_retries=0,
+                )
+
+            receipt = download_media(
+                "https://media.example/image.jpg", destination, transport=transport
+            )
+
+            self.assertIsNone(transport.requests[1].get_header("Range"))
+            self.assertIsNone(transport.requests[1].get_header("If-range"))
+            self.assertEqual(destination.read_bytes(), b"new data")
+            self.assertEqual(receipt.resumed_from, 0)
 
     def test_refuses_credential_bearing_and_local_media_urls_before_network_access(self):
         transport = SequencedTransport(
@@ -412,7 +709,9 @@ class ResumableMediaDownloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             destination = Path(temporary_directory) / "video.mp4"
             partial_path = destination.with_name(f"{destination.name}.part")
-            partial_path.write_bytes(b"hello")
+            self._interrupt_download(
+                destination, headers={"ETag": '"version-1"'}, source_url=source_url
+            )
 
             receipt = download_media(source_url, destination, transport=transport)
 
@@ -436,8 +735,9 @@ class ResumableMediaDownloadTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temporary_directory:
             destination = Path(temporary_directory) / "video.mp4"
-            partial_path = destination.with_name(f"{destination.name}.part")
-            partial_path.write_bytes(b"stale")
+            self._interrupt_download(
+                destination, headers={"ETag": '"version-1"'}, source_url=source_url
+            )
 
             receipt = download_media(source_url, destination, transport=transport)
 
@@ -458,6 +758,7 @@ class ResumableMediaDownloadTests(unittest.TestCase):
                         first_chunk=b"hello",
                         expected_total=11,
                         failure=failure,
+                        headers={"ETag": '"version-1"'},
                     ),
                     FakeHttpResponse(
                         status=206,

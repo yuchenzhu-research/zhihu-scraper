@@ -44,7 +44,9 @@ class RecordingDownloader:
     def __init__(self) -> None:
         self.calls: list[tuple[str, Path]] = []
 
-    def __call__(self, source_url: str, destination: Path) -> MediaDownloadReceipt:
+    def __call__(
+        self, source_url: str, destination: Path, *, expected_size=None
+    ) -> MediaDownloadReceipt:
         self.calls.append((source_url, destination))
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(source_url.encode())
@@ -72,6 +74,40 @@ def image(
 
 
 class AssetPipelineTests(unittest.TestCase):
+    def test_known_asset_length_repairs_a_truncated_cached_file(self):
+        from unittest.mock import patch
+
+        source_url = "https://pic1.zhimg.com/sized.png"
+        asset = MediaAsset("sized", MediaKind.IMAGE, (MediaRendition(source_url, size_bytes=5),))
+        article = Article(
+            "1", "带尺寸图片", "https://zhuanlan.zhihu.com/p/1", AUTHOR, NOW, (MediaBlock(asset),)
+        )
+        requests = []
+
+        @contextmanager
+        def transport(request):
+            requests.append(request)
+            yield SimpleNamespace(
+                status=200, headers={"Content-Length": "5"}, read=io.BytesIO(b"image").read
+            )
+
+        def downloader(url, destination, *, expected_size=None):
+            return download_media(
+                url, destination, transport=transport, expected_size=expected_size
+            )
+
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("zhihu_scraper.media._resolve_media_host"),
+        ):
+            media = Path(directory) / "media"
+            initial = archive_assets(article, media, downloader=downloader)
+            destination = initial.downloads[0].destination
+            destination.write_bytes(b"x")
+            archive_assets(article, media, downloader=downloader)
+            self.assertEqual(b"image", destination.read_bytes())
+            self.assertEqual(2, len(requests))
+
     def test_changed_cover_source_downloads_new_bytes_for_the_same_article(self):
         old_url = "https://pic1.zhimg.com/old.jpg"
         for new_url in (
@@ -188,13 +224,16 @@ class AssetPipelineTests(unittest.TestCase):
                                 raise ConnectionResetError("interrupted") from None
 
                         yield SimpleNamespace(
-                            status=200, headers={"Content-Length": "9"}, read=interrupted_read
+                            status=200,
+                            headers={"Content-Length": "9", "ETag": '"cover-v1"'},
+                            read=interrupted_read,
                         )
                     else:
                         body = b" cover" if should_resume else b"new cover"
                         headers = {"Content-Length": str(len(body))}
                         if should_resume:
                             headers["Content-Range"] = "bytes 3-8/9"
+                            headers["ETag"] = '"cover-v1"'
                         with io.BytesIO(body) as response_body:
                             yield SimpleNamespace(
                                 status=206 if should_resume else 200,

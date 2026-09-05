@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
+from collections.abc import Collection, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
-from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
+from typing import Protocol
+from urllib.parse import unquote, urlsplit
 
 from .domain import (
     Answer,
@@ -28,9 +29,13 @@ from .domain import (
     Quote,
     Video,
 )
-from .media import MediaDownloadError, MediaDownloadReceipt, download_media
+from .media import MediaDownloadError, MediaDownloadReceipt, download_media, media_source_identity
 
-AssetDownloader = Callable[[str, Path], MediaDownloadReceipt]
+
+class AssetDownloader(Protocol):
+    def __call__(
+        self, source_url: str, destination: Path, *, expected_size: int | None = None
+    ) -> MediaDownloadReceipt: ...
 
 
 class MediaArchiveRole(StrEnum):
@@ -128,7 +133,12 @@ def archive_assets(
             filename = _archive_filename(asset, selected)
             destination = media_directory / filename
             try:
-                receipt = downloader(selected.source_url, destination)
+                if selected.size_bytes is not None and selected.size_bytes > 0:
+                    receipt = downloader(
+                        selected.source_url, destination, expected_size=selected.size_bytes
+                    )
+                else:
+                    receipt = downloader(selected.source_url, destination)
             except MediaDownloadError as error:
                 failure = MediaArchiveFailure(
                     asset_id=asset.id,
@@ -306,7 +316,6 @@ _IMAGE_EXTENSIONS = frozenset(
 _ANIMATION_EXTENSIONS = frozenset({".gif", ".png", ".webp"})
 _VIDEO_EXTENSIONS = frozenset({".m4v", ".mkv", ".mov", ".mp4", ".ts", ".webm"})
 _SAFE_STEM = re.compile(r"[^a-z0-9._-]+")
-_SIGNATURE_PARAMETERS = frozenset({"pkey", "expiration"})
 
 
 def _archive_filename(asset: MediaAsset, rendition: MediaRendition) -> str:
@@ -318,7 +327,7 @@ def _archive_filename(asset: MediaAsset, rendition: MediaRendition) -> str:
         (
             asset.kind.value,
             asset.id,
-            _source_identity(rendition.source_url),
+            media_source_identity(rendition.source_url),
             rendition.mime_type or "",
             str(rendition.width or ""),
             str(rendition.height or ""),
@@ -329,20 +338,6 @@ def _archive_filename(asset: MediaAsset, rendition: MediaRendition) -> str:
     )
     digest = hashlib.sha256(stable_identity.encode()).hexdigest()[:10]
     return f"{stem}-{digest}{extension}"
-
-
-def _source_identity(source_url: str) -> str:
-    """Keep resource changes distinct while ignoring Zhihu's expiring signatures."""
-
-    parsed = urlsplit(source_url)
-    query = urlencode(
-        [
-            (key, value)
-            for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-            if key.casefold() not in _SIGNATURE_PARAMETERS
-        ]
-    )
-    return parsed._replace(query=query, fragment="").geturl()
 
 
 def _extension(kind: MediaKind, rendition: MediaRendition) -> str:
