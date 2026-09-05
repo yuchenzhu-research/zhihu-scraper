@@ -63,6 +63,7 @@ jobs:
           uv run --no-sync zhihu fetch --help
           uv run --no-sync zhihu check --help
           uv run --no-sync zhihu init --help
+          uv run --no-sync zhihu login --help
 
   browser-smoke:
     name: Managed Chromium smoke / Ubuntu / Python 3.14
@@ -96,3 +97,8 @@ jobs:
           p=sync_playwright().start(); b=p.chromium.launch(headless=True);
           page=b.new_page(); page.set_content('<title>ready</title><p>browser smoke</p>');
           assert page.title() == 'ready'; b.close(); p.stop()"
+
+      - name: Export offline PDFs with managed Chromium
+        run: python tests/smoke/pdf_export.py
+        env:
+          PYTHONWARNINGS: error::ResourceWarning
