@@ -2,9 +2,9 @@ import json
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 from zhihu_scraper.application import ArchiveWorkflow
+from zhihu_scraper.archive import ArchiveReceipt
 from zhihu_scraper.assets import MediaArchiveFailure, MediaArchiveRole
 from zhihu_scraper.domain import (
     Answer,
@@ -76,7 +76,7 @@ class FakeSink:
 
     def archive(self, target):
         self.targets.append(target)
-        return f"receipt:{target.id}"
+        return ArchiveReceipt(Path(f"receipt-{target.id}"), None, None)
 
 
 class FakeCommentClient:
@@ -119,6 +119,17 @@ class FakeBrowser:
 
 
 class ArchiveWorkflowTests(unittest.TestCase):
+    def test_rejects_an_archive_sink_without_a_structured_receipt(self):
+        class InvalidSink:
+            def archive(self, target):
+                return "saved"
+
+        workflow = ArchiveWorkflow(
+            source=FakeSource(), sink=InvalidSink(), settings=ArchiveSettings()
+        )
+        with self.assertRaisesRegex(TypeError, "ArchiveReceipt"):
+            workflow.run("https://zhuanlan.zhihu.com/p/1")
+
     def test_report_exposes_structured_media_failures_from_the_archive_sink(self):
         failure = MediaArchiveFailure(
             asset_id="missing-image",
@@ -133,7 +144,7 @@ class ArchiveWorkflowTests(unittest.TestCase):
         class FailureReportingSink(FakeSink):
             def archive(self, target):
                 self.targets.append(target)
-                return SimpleNamespace(media_failures=(failure,))
+                return ArchiveReceipt(Path("saved"), None, None, media_failures=(failure,))
 
         report = ArchiveWorkflow(
             source=FakeSource(),
@@ -168,7 +179,9 @@ class ArchiveWorkflowTests(unittest.TestCase):
 
                 self.assertIsInstance(report.target, expected_type)
                 self.assertIs(report.target, sink.targets[0])
-                self.assertEqual(f"receipt:{report.target.id}", report.receipt)
+                self.assertEqual(
+                    Path(f"receipt-{report.target.id}"), report.receipt.entry_directory
+                )
                 self.assertFalse(report.used_browser)
 
     def test_column_articles_record_all_memberships_and_current_archive_origin(self):

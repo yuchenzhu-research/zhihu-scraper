@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from types import TracebackType
 from typing import Protocol, Self
 
+from .archive import ArchiveReceipt
 from .assets import MediaArchiveFailure
 from .comments import CommentClient, InvalidCommentPayloadError, fetch_comment_thread
 from .domain import (
@@ -34,7 +35,7 @@ from .urls import TargetKind, ZhihuTarget, route_zhihu_url
 
 
 class ArchiveSink(Protocol):
-    def archive(self, target: ArchiveTarget) -> object: ...
+    def archive(self, target: ArchiveTarget) -> ArchiveReceipt: ...
 
 
 class PayloadSource(Protocol):
@@ -87,7 +88,7 @@ class BrowserFallbackUnavailableError(RuntimeError):
 @dataclass(frozen=True, slots=True)
 class ArchiveReport:
     target: ArchiveTarget
-    receipt: object
+    receipt: ArchiveReceipt
     used_browser: bool
     media_failures: tuple[MediaArchiveFailure, ...] = ()
 
@@ -127,11 +128,13 @@ class ArchiveWorkflow:
         routed = route_zhihu_url(raw_url)
         target = self._collect(routed)
         receipt = self._sink.archive(target)
+        if not isinstance(receipt, ArchiveReceipt):
+            raise TypeError("Archive sinks must return an ArchiveReceipt.")
         return ArchiveReport(
             target=target,
             receipt=receipt,
             used_browser=self._used_browser,
-            media_failures=_receipt_media_failures(receipt),
+            media_failures=receipt.media_failures,
         )
 
     def close(self) -> None:
@@ -425,12 +428,3 @@ def _validate_answer_payload(
     answer = normalize_answer(payload, source_url=source_url)
     if not answer.blocks:
         raise NormalizationError("answer payload is missing full content")
-
-
-def _receipt_media_failures(receipt: object) -> tuple[MediaArchiveFailure, ...]:
-    candidates = getattr(receipt, "media_failures", ())
-    if not isinstance(candidates, tuple):
-        return ()
-    return tuple(
-        candidate for candidate in candidates if isinstance(candidate, MediaArchiveFailure)
-    )

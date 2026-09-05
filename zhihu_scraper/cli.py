@@ -9,7 +9,7 @@ from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path
 
-from .facade import archive_url, check_session
+from .facade import ArchiveReport, archive_url, check_session
 from .settings import (
     ArchiveSettings,
     BrowserFallback,
@@ -177,24 +177,24 @@ def _run_check(settings: ArchiveSettings) -> int:
     return 1
 
 
-def _print_archive_report(report: object) -> None:
-    target = getattr(report, "target")
-    receipt = getattr(report, "receipt")
+def _print_archive_report(report: ArchiveReport) -> None:
+    target = report.target
+    receipt = report.receipt
     print(f"归档完成：{target.title}")
     print(f"目录：{receipt.entry_directory}")
     if receipt.markdown_path is not None:
         print(f"Markdown：{receipt.markdown_path}")
     if receipt.html_path is not None:
         print(f"HTML：{receipt.html_path}")
-    if getattr(report, "used_browser", False):
+    if report.used_browser:
         print("抓取路径：浏览器回退")
     else:
         print("抓取路径：HTTP/API")
-    media_failures = getattr(report, "media_failures", ())
+    media_failures = report.media_failures
     if media_failures:
         print(f"媒体警告：{len(media_failures)} 个非必要媒体下载失败，正文归档已保留。")
         for failure in media_failures:
-            message = getattr(failure, "display_message", "媒体下载失败，已保留远程链接。")
+            message = failure.display_message
             print(f"- {message}")
 
 

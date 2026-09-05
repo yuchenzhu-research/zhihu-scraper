@@ -288,7 +288,7 @@ print(report.target.title)
 print(report.receipt.entry_directory)
 ```
 
-`archive_url(URL, settings) -> ArchiveReport` is the shared synchronous entry point for the CLI, agents, and future interfaces. The source, browser, and archive boundaries are injectable through `build_workflow` for tests and extensions.
+`archive_url(URL, settings) -> ArchiveReport` is the shared synchronous entry point for the CLI, agents, and future interfaces. The source, browser, and archive boundaries are injectable through `build_workflow` for tests and extensions. Custom archive sinks must return a structured `ArchiveReceipt` with output paths and media failures; invalid receipts fail explicitly.
 
 ## Three Platforms and Development
 

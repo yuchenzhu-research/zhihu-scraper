@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from zhihu_scraper.archive import ArchiveReceipt
 from zhihu_scraper.domain import Article
 from zhihu_scraper.facade import archive_url, build_workflow, check_session
 from zhihu_scraper.http import LoginStatus
@@ -32,7 +33,7 @@ class FakeSink:
 
     def archive(self, target):
         self.saved.append(target)
-        return "saved"
+        return ArchiveReceipt(Path("saved"), None, None)
 
 
 class PublicApiTests(unittest.TestCase):
@@ -76,7 +77,7 @@ class PublicApiTests(unittest.TestCase):
         report = workflow.run("https://zhuanlan.zhihu.com/p/1")
 
         self.assertIsInstance(report.target, Article)
-        self.assertEqual("saved", report.receipt)
+        self.assertEqual(Path("saved"), report.receipt.entry_directory)
         self.assertEqual(["/api/v4/articles/1"], client.calls)
         self.assertEqual([report.target], sink.saved)
 

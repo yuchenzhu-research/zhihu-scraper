@@ -7,8 +7,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from zhihu_scraper.application import ArchiveReport
+from zhihu_scraper.archive import ArchiveReceipt
 from zhihu_scraper.cli import run_cli
 from zhihu_scraper.http import CookieDiagnostic, LoginStatus
+from zhihu_scraper.normalize import normalize_article
 
 
 class NewCommandLineTests(unittest.TestCase):
@@ -71,13 +74,13 @@ class NewCommandLineTests(unittest.TestCase):
         self.assertEqual("zhihu 4.0.0", output.getvalue().strip())
 
     def test_fetch_applies_command_overrides_and_prints_readable_paths(self):
-        receipt = SimpleNamespace(
+        receipt = ArchiveReceipt(
             entry_directory=Path("/archive/文章"),
             markdown_path=Path("/archive/文章/文章.md"),
             html_path=Path("/archive/文章/文章.html"),
         )
-        report = SimpleNamespace(
-            target=SimpleNamespace(title="文章"),
+        report = ArchiveReport(
+            target=normalize_article({"id": 1, "title": "文章", "content": "<p>正文</p>"}),
             receipt=receipt,
             used_browser=False,
         )
@@ -111,13 +114,13 @@ class NewCommandLineTests(unittest.TestCase):
         self.assertNotIn("SQLite", output.getvalue())
 
     def test_fetch_without_comment_option_keeps_comments_disabled(self):
-        receipt = SimpleNamespace(
+        receipt = ArchiveReceipt(
             entry_directory=Path("/archive/文章"),
             markdown_path=Path("/archive/文章/文章.md"),
             html_path=Path("/archive/文章/文章.html"),
         )
-        report = SimpleNamespace(
-            target=SimpleNamespace(title="文章"),
+        report = ArchiveReport(
+            target=normalize_article({"id": 1, "title": "文章", "content": "<p>正文</p>"}),
             receipt=receipt,
             used_browser=False,
         )
@@ -131,13 +134,13 @@ class NewCommandLineTests(unittest.TestCase):
         self.assertFalse(archive.call_args.args[1].html)
 
     def test_no_html_overrides_a_settings_file_that_enables_html(self):
-        receipt = SimpleNamespace(
+        receipt = ArchiveReceipt(
             entry_directory=Path("/archive/文章"),
             markdown_path=Path("/archive/文章/文章.md"),
             html_path=None,
         )
-        report = SimpleNamespace(
-            target=SimpleNamespace(title="文章"),
+        report = ArchiveReport(
+            target=normalize_article({"id": 1, "title": "文章", "content": "<p>正文</p>"}),
             receipt=receipt,
             used_browser=False,
         )
@@ -182,14 +185,14 @@ class NewCommandLineTests(unittest.TestCase):
         self.assertNotIn("private-name", rendered)
 
     def test_fetch_reports_nonfatal_media_failures_without_marking_archive_failed(self):
-        receipt = SimpleNamespace(
+        receipt = ArchiveReceipt(
             entry_directory=Path("/archive/文章"),
             markdown_path=Path("/archive/文章/文章.md"),
             html_path=Path("/archive/文章/文章.html"),
         )
         failure = SimpleNamespace(display_message="正文媒体下载失败，已保留远程链接：image-1")
-        report = SimpleNamespace(
-            target=SimpleNamespace(title="文章"),
+        report = ArchiveReport(
+            target=normalize_article({"id": 1, "title": "文章", "content": "<p>正文</p>"}),
             receipt=receipt,
             used_browser=False,
             media_failures=(failure,),

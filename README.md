@@ -288,7 +288,7 @@ print(report.target.title)
 print(report.receipt.entry_directory)
 ```
 
-`archive_url(URL, settings) -> ArchiveReport` 是 CLI、Agent 和未来界面共用的同步入口。网络来源、浏览器和保存器边界都可以通过 `build_workflow` 注入，便于测试和二次开发。
+`archive_url(URL, settings) -> ArchiveReport` 是 CLI、Agent 和未来界面共用的同步入口。网络来源、浏览器和保存器边界都可以通过 `build_workflow` 注入，便于测试和二次开发。 自定义保存器必须返回结构化的 `ArchiveReceipt`，统一提供输出路径与媒体失败信息；无效回执会明确报错。
 
 ## 三平台与开发验证
 
