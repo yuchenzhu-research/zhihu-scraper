@@ -228,8 +228,7 @@ class PublicApiTests(unittest.TestCase):
 
     def test_invalid_output_settings_do_not_acquire_http_resources(self):
         for settings, error in (
-            (ArchiveSettings(pdf=True), NotImplementedError),
-            (ArchiveSettings(markdown=False, html=False), ValueError),
+            (ArchiveSettings(markdown=False, html=False, pdf=False), ValueError),
         ):
             with (
                 self.subTest(settings=settings),

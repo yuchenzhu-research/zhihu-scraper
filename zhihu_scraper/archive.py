@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from html import unescape
 from pathlib import Path
@@ -22,6 +22,7 @@ from .domain import (
 )
 from .filenames import safe_filename
 from .media import MediaDownloadReceipt, download_media
+from .pdf_export import PdfDocument, PdfExporter, export_pdfs, pdf_source_url
 from .render import (
     ColumnRenderContext,
     HtmlRenderer,
@@ -47,6 +48,8 @@ class ArchiveReceipt:
     child_html_paths: tuple[Path, ...] = ()
     media_downloads: tuple[MediaDownloadReceipt, ...] = ()
     media_failures: tuple[MediaArchiveFailure, ...] = ()
+    pdf_path: Path | None = None
+    child_pdf_paths: tuple[Path, ...] = ()
 
 
 class LocalArchive:
@@ -58,16 +61,20 @@ class LocalArchive:
         *,
         markdown: bool = True,
         html: bool = False,
+        pdf: bool = False,
         media_download: bool = True,
         downloader: MediaDownloader = download_media,
+        pdf_exporter: PdfExporter = export_pdfs,
     ) -> None:
-        if not any((markdown, html)):
-            raise ValueError("至少启用 Markdown 或 HTML 中的一种输出。")
+        if not any((markdown, html, pdf)):
+            raise ValueError("至少启用 Markdown 或 HTML 或 PDF 中的一种输出。")
         self._root = Path(root)
         self._markdown = markdown
         self._html = html
+        self._pdf = pdf
         self._media_download = media_download
         self._downloader = downloader
+        self._pdf_exporter = pdf_exporter
 
     @classmethod
     def from_settings(
@@ -75,13 +82,14 @@ class LocalArchive:
         settings: ArchiveSettings,
         *,
         downloader: MediaDownloader | None = None,
+        pdf_exporter: PdfExporter = export_pdfs,
     ) -> LocalArchive:
-        if settings.pdf:
-            raise NotImplementedError("PDF 输出仍是待办功能，请先保持 pdf = false。")
         return cls(
             settings.output_dir,
             markdown=settings.markdown,
             html=settings.html,
+            pdf=settings.pdf,
+            pdf_exporter=pdf_exporter,
             media_download=settings.media_download,
             downloader=downloader
             or partial(
@@ -121,6 +129,7 @@ class LocalArchive:
         render_paths = assets.source_paths
         markdown_path = entry_directory / f"{filename}.md" if self._markdown else None
         html_path = entry_directory / f"{filename}.html" if self._html else None
+        pdf_path = entry_directory / f"{filename}.pdf" if self._pdf else None
 
         if markdown_path is not None:
             _atomic_write_text(
@@ -140,12 +149,19 @@ class LocalArchive:
             )
             self._write_html_assets(entry_directory / "assets")
 
+        if pdf_path is not None:
+            self._pdf_exporter(
+                (PdfDocument(pdf_path, HtmlRenderer().render(target, media_paths=render_paths)),),
+                resource_root=entry_directory,
+            )
+
         return ArchiveReceipt(
             entry_directory=entry_directory,
             markdown_path=markdown_path,
             html_path=html_path,
             media_downloads=assets.downloads,
             media_failures=assets.failures,
+            pdf_path=pdf_path,
         )
 
     def _archive_column(
@@ -180,6 +196,7 @@ class LocalArchive:
         }
         markdown_path = entry_directory / f"{column_filename}.md" if self._markdown else None
         html_path = entry_directory / f"{column_filename}.html" if self._html else None
+        pdf_path = entry_directory / f"{column_filename}.pdf" if self._pdf else None
         markdown_renderer = MarkdownRenderer()
         html_renderer = HtmlRenderer()
         catalogs: list[tuple[Path, str]] = []
@@ -199,9 +216,11 @@ class LocalArchive:
             )
 
         documents: list[tuple[Path, str]] = []
+        pdf_documents: list[PdfDocument] = []
         child_markdown_paths: list[Path] = []
         child_html_paths: list[Path] = []
-        if archive.articles and (self._markdown or self._html):
+        child_pdf_paths: list[Path] = []
+        if archive.articles:
             content_directory = entry_directory / "内容"
             child_media_paths = {
                 source_url: f"../{relative_path}"
@@ -273,6 +292,43 @@ class LocalArchive:
                         )
                     )
                     child_html_paths.append(article_html)
+                if self._pdf:
+                    article_pdf = content_directory / f"{name}.pdf"
+                    pdf_context = replace(
+                        context,
+                        directory=RenderNavigationItem(
+                            title=column.title,
+                            markdown_href="",
+                            html_href=_relative_href(f"../{column_filename}.pdf"),
+                        ),
+                        previous=_article_navigation(
+                            archive.articles[index - 1],
+                            article_names[index - 1],
+                            markdown=False,
+                            html=True,
+                            html_extension="pdf",
+                        )
+                        if index > 0
+                        else None,
+                        next=_article_navigation(
+                            archive.articles[index + 1],
+                            article_names[index + 1],
+                            markdown=False,
+                            html=True,
+                            html_extension="pdf",
+                        )
+                        if index + 1 < len(archive.articles)
+                        else None,
+                    )
+                    pdf_documents.append(
+                        PdfDocument(
+                            article_pdf,
+                            html_renderer.render(
+                                article, media_paths=child_media_paths, column_context=pdf_context
+                            ),
+                        )
+                    )
+                    child_pdf_paths.append(article_pdf)
 
         if html_path is not None:
             documents.extend(
@@ -281,6 +337,22 @@ class LocalArchive:
             )
         for path, content in documents:
             _atomic_write_text(path, content)
+        if pdf_path is not None:
+            pdf_entries = {
+                article.id: RenderNavigationItem(
+                    title=article.title,
+                    markdown_href="",
+                    html_href=_relative_href(f"内容/{name}.pdf"),
+                )
+                for article, name in zip(archive.articles, article_names, strict=True)
+            }
+            pdf_documents.append(
+                PdfDocument(
+                    pdf_path,
+                    html_renderer.render(archive, directory_entries=pdf_entries),
+                )
+            )
+            self._pdf_exporter(pdf_documents, resource_root=entry_directory)
         # The catalog advertises only a batch whose document and style writes completed.
         for path, content in catalogs:
             _atomic_write_text(path, content)
@@ -293,6 +365,8 @@ class LocalArchive:
             child_html_paths=tuple(child_html_paths),
             media_downloads=assets.downloads,
             media_failures=assets.failures,
+            pdf_path=pdf_path,
+            child_pdf_paths=tuple(child_pdf_paths),
         )
 
     def _archive_media(
@@ -363,11 +437,12 @@ def _article_navigation(
     *,
     markdown: bool,
     html: bool,
+    html_extension: str = "html",
 ) -> RenderNavigationItem:
     return RenderNavigationItem(
         title=article.title,
         markdown_href=_relative_href(f"{filename}.md") if markdown else "",
-        html_href=_relative_href(f"{filename}.html") if html else "",
+        html_href=_relative_href(f"{filename}.{html_extension}") if html else "",
     )
 
 
@@ -413,7 +488,7 @@ class _DocumentNames:
         self.identities: set[tuple[str, str]] = set()
         self._existing: dict[tuple[str, str], str] = {}
         for document in documents:
-            if document.suffix.casefold() not in {".md", ".html"}:
+            if document.suffix.casefold() not in {".md", ".html", ".pdf"}:
                 continue
             identity = _document_identity(document)
             groups.setdefault(document.stem.casefold(), []).append((document, identity))
@@ -458,6 +533,9 @@ def _source_identity(source_url: str, label: str) -> tuple[str, str]:
 
 
 def _document_identity(document: Path) -> tuple[str, str] | None:
+    if document.suffix.casefold() == ".pdf":
+        source_url = pdf_source_url(document)
+        return _source_identity(source_url, "知乎原文") if source_url is not None else None
     try:
         with document.open(encoding="utf-8") as source:
             prefix = source.read(16_384)

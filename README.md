@@ -50,7 +50,7 @@ HTTP/API、分页和评论共用请求节奏，默认相邻请求启动间隔为
 - 文章的所属专栏信息，回答对应的问题信息，问题详情及全部可访问回答，或者专栏简介、目录及全部可访问文章。
 - 可阅读的 `.md` 和成功下载的 `media/` 文件。
 
-默认**不生成 HTML，也不抓评论**。传入 `--html` 才生成可直接双击打开的离线 `.html` 和本地样式；传入 `--comments` 才抓取最多 10 条一级评论及每条最多 10 条二级回复。两个选项也可以在设置文件中长期开启。项目不创建 SQLite 数据库、原始 JSON、搜索索引或知识图谱；PDF 仍未实现。
+默认**不生成 HTML，也不抓评论**。传入 `--html` 才生成可直接双击打开的离线 `.html` 和本地样式；传入 `--comments` 才抓取最多 10 条一级评论及每条最多 10 条二级回复。两个选项也可以在设置文件中长期开启。项目不创建 SQLite 数据库、原始 JSON、搜索索引或知识图谱；传入 `--pdf` 可额外生成 PDF。
 
 ## 安装
 
@@ -112,6 +112,7 @@ Playwright 属于核心运行依赖，因为浏览器回退是可靠抓取链路
 | 查看当前版本 | `zhihu --version` | 确认正在使用项目当前版本 |
 | 普通归档 | `zhihu fetch URL` | Markdown + 下载媒体 |
 | 同时生成网页 | `zhihu fetch --html URL` | Markdown + 离线 HTML + 下载媒体 |
+| 生成 PDF | `zhihu fetch --pdf URL` | Markdown + 媒体 + PDF |
 | 同时抓取评论 | `zhihu fetch --comments URL` | Markdown + 媒体 + 10×10 评论 |
 | 网页和评论都要 | `zhihu fetch --html --comments URL` | 同时开启两个可选能力 |
 | 不下载媒体 | `zhihu fetch --no-media URL` | Markdown 中保留远程媒体链接 |
@@ -159,6 +160,8 @@ zhihu login --help
 zhihu check --help
 zhihu init --help
 ```
+
+PDF 默认关闭，可用 `--pdf` 或 `archive.pdf = true` 开启。只要安装了 Chrome 或执行过 `playwright install chromium`，即可由隔离的无登录浏览器打印本地内容；PDF 导出不请求远程资源，支持中文、公式、表格和已下载图片。视频保留原链接，不嵌入可播放视频。专栏为目录和每篇文章分别生成 PDF，整体移动目录后相对导航仍有效（取决于阅读器是否允许打开本地链接）。仅需 PDF 时，在设置中使用 `markdown = false`、`html = false`、`pdf = true`；不留下中间 HTML 或样式文件。
 
 ## 安全配置 Cookie
 

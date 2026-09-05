@@ -37,7 +37,7 @@ class FakeDownloader:
     def __init__(self):
         self.calls = []
 
-    def __call__(self, source_url, destination):
+    def __call__(self, source_url, destination, *, expected_size=None):
         self.calls.append((source_url, destination))
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"media")
@@ -464,6 +464,7 @@ class LocalArchiveLayoutTests(unittest.TestCase):
             proxy=None,
             timeout=30.0,
             max_retries=0,
+            expected_size=None,
         ):
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(b"media")

@@ -27,6 +27,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="""常用选择：
   zhihu fetch URL                    Markdown + 媒体（默认）
   zhihu fetch --html URL             再生成离线 HTML
+  zhihu fetch --pdf URL              再生成适合阅读和打印的 PDF
   zhihu fetch --comments URL         再抓取 10×10 评论
   zhihu fetch --html --comments URL  同时开启 HTML 和评论
   zhihu fetch --no-media URL         不下载媒体，只保留远程链接
@@ -53,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="本次开启/关闭离线 HTML 输出（默认关闭）",
+    )
+    output_options.add_argument(
+        "--pdf",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="本次开启/关闭 PDF 输出（默认关闭）",
     )
     output_options.add_argument(
         "--comments",
@@ -141,6 +148,8 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
             settings = replace(settings, output_dir=arguments.output)
         if arguments.html is not None:
             settings = replace(settings, html=arguments.html)
+        if arguments.pdf is not None:
+            settings = replace(settings, pdf=arguments.pdf)
         if arguments.comments is not None:
             settings = replace(settings, comments=arguments.comments)
         if arguments.media is not None:
@@ -216,6 +225,8 @@ def _print_archive_report(report: ArchiveReport) -> None:
         print(f"Markdown：{receipt.markdown_path}")
     if receipt.html_path is not None:
         print(f"HTML：{receipt.html_path}")
+    if receipt.pdf_path is not None:
+        print(f"PDF：{receipt.pdf_path}")
     if report.used_browser:
         print("抓取路径：浏览器回退")
     else:

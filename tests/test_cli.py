@@ -298,3 +298,31 @@ class NewCommandLineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_pdf_flag_enables_output_and_reports_its_path(capsys):
+    report = ArchiveReport(
+        target=normalize_article({"id": 1, "title": "文章", "content": "<p>正文</p>"}),
+        receipt=ArchiveReceipt(Path("archive"), None, None, pdf_path=Path("archive/文章.pdf")),
+        used_browser=False,
+    )
+    with patch("zhihu_scraper.cli.archive_url", return_value=report) as archive:
+        assert run_cli(["fetch", "https://zhuanlan.zhihu.com/p/1", "--pdf"]) == 0
+    assert archive.call_args.args[1].pdf is True
+    assert "PDF：" in capsys.readouterr().out
+
+
+def test_no_pdf_overrides_persistent_pdf_choice(tmp_path):
+    settings = tmp_path / "settings.toml"
+    settings.write_text("[archive]\npdf = true\n", encoding="utf-8")
+    report = ArchiveReport(
+        target=normalize_article({"id": 1, "title": "文章", "content": "<p>正文</p>"}),
+        receipt=ArchiveReceipt(Path("archive"), Path("archive/article.md"), None),
+        used_browser=False,
+    )
+    with patch("zhihu_scraper.cli.archive_url", return_value=report) as archive:
+        assert (
+            run_cli(["fetch", "https://zhuanlan.zhihu.com/p/1", "-s", str(settings), "--no-pdf"])
+            == 0
+        )
+    assert archive.call_args.args[1].pdf is False
