@@ -20,6 +20,8 @@ class NewInstallContractTests(unittest.TestCase):
                 self.assertIn(version, workflow)
 
         self.assertIn('python -m pip install -e ".[dev]"', workflow)
+        self.assertIn("uv sync --locked --extra dev", workflow)
+        self.assertIn("uv run --no-sync python -m pytest", workflow)
         self.assertIn("python -m pytest", workflow)
         self.assertIn("python -m ruff check", workflow)
         self.assertIn("python -m ruff format --check", workflow)

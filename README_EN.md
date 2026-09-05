@@ -282,7 +282,7 @@ print(report.receipt.entry_directory)
 
 ## Three Platforms and Development
 
-Fetching, normalization, rendering, and media behavior are shared across Windows, macOS, and Linux. The platform adapter contains real differences such as browser locations, application-data directories, and safe filenames. CI covers Python 3.12, 3.13, and 3.14 on all three operating systems. Zhihu endpoints and anti-bot behavior can change at any time, so a green test suite cannot guarantee that every future URL will remain fetchable.
+Fetching, normalization, rendering, and media behavior are shared across Windows, macOS, and Linux. The platform adapter contains real differences such as browser locations, application-data directories, and safe filenames. CI tests locked dependencies with Python 3.12, 3.13, and 3.14 on all three operating systems, and separately checks allowed dependency versions and browser startup on Ubuntu. Zhihu endpoints and anti-bot behavior can change at any time, so a green test suite cannot guarantee that every future URL will remain fetchable.
 
 Set up a development environment:
 

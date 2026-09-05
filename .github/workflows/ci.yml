@@ -33,39 +33,36 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
-      - name: Upgrade packaging tools
-        run: python -m pip install --upgrade pip
-
-      - name: Install project and development dependencies
-        run: python -m pip install -e ".[dev]"
+      - name: Install locked project and development dependencies
+        run: uv sync --locked --extra dev --python "${{ matrix.python-version }}"
 
       - name: Compile package
-        run: python -m compileall -q zhihu_scraper
+        run: uv run --no-sync python -m compileall -q zhihu_scraper
 
       - name: Check lock file
         run: uv lock --check
 
       - name: Lint
-        run: python -m ruff check zhihu_scraper tests
+        run: uv run --no-sync python -m ruff check zhihu_scraper tests
 
       - name: Check formatting
-        run: python -m ruff format --check zhihu_scraper tests
+        run: uv run --no-sync python -m ruff format --check zhihu_scraper tests
 
       - name: Type check
-        run: python -m mypy zhihu_scraper
+        run: uv run --no-sync python -m mypy zhihu_scraper
 
       - name: Run tests
-        run: python -m pytest
+        run: uv run --no-sync python -m pytest
         env:
           PYTHONWARNINGS: error::ResourceWarning
 
       - name: Check command-line entry point
         run: |
-          zhihu --version
-          zhihu --help
-          zhihu fetch --help
-          zhihu check --help
-          zhihu init --help
+          uv run --no-sync zhihu --version
+          uv run --no-sync zhihu --help
+          uv run --no-sync zhihu fetch --help
+          uv run --no-sync zhihu check --help
+          uv run --no-sync zhihu init --help
 
   browser-smoke:
     name: Managed Chromium smoke / Ubuntu / Python 3.14
@@ -82,8 +79,13 @@ jobs:
           python-version: "3.14"
           cache: pip
 
-      - name: Install project
-        run: python -m pip install -e .
+      - name: Install allowed dependency versions
+        run: python -m pip install -e ".[dev]"
+
+      - name: Test allowed dependency versions
+        run: python -m pytest
+        env:
+          PYTHONWARNINGS: error::ResourceWarning
 
       - name: Install managed Chromium and system dependencies
         run: python -m playwright install --with-deps chromium
