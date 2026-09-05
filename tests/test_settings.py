@@ -13,6 +13,39 @@ from zhihu_scraper.settings import (
 
 
 class ArchiveSettingsTests(unittest.TestCase):
+    def test_request_pacing_defaults_are_generated_loaded_and_reported(self):
+        defaults = ArchiveSettings()
+        self.assertEqual(0.5, defaults.request_interval)
+        self.assertEqual(0.5, defaults.request_jitter)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            settings_path = Path(temporary_directory) / "settings.toml"
+            generate_default_settings(settings_path)
+            generated = load_settings(settings_path)
+        self.assertEqual(0.5, generated.request_interval)
+        self.assertEqual(0.5, generated.request_jitter)
+
+        configured = ArchiveSettings.from_mapping(
+            {"network": {"request_interval": 2, "request_jitter": 0.25}}
+        )
+        self.assertEqual(2.0, configured.request_interval)
+        self.assertEqual(0.25, configured.request_jitter)
+        network = configured.to_safe_summary()["network"]
+        self.assertEqual(2.0, network["request_interval"])
+        self.assertEqual(0.25, network["request_jitter"])
+
+    def test_request_pacing_requires_finite_numbers_between_zero_and_sixty(self):
+        for name in ("request_interval", "request_jitter"):
+            for value in (-0.1, 60.1, float("inf"), float("nan"), True, "0.5"):
+                with self.subTest(name=name, value=value):
+                    with self.assertRaisesRegex(SettingsError, f"network.{name}"):
+                        ArchiveSettings.from_mapping({"network": {name: value}})
+                    with self.assertRaisesRegex(SettingsError, f"network.{name}"):
+                        ArchiveSettings(**{name: value})
+            for value in (0, 60):
+                with self.subTest(name=name, allowed=value):
+                    self.assertEqual(float(value), getattr(ArchiveSettings(**{name: value}), name))
+
     def test_defaults_favor_a_complete_local_archive_without_optional_features(self):
         settings = ArchiveSettings()
 

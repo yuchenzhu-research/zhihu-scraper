@@ -34,6 +34,8 @@ The content parser covers paragraphs, headings, lists, quotes, tables, code, lin
 
 Column collections, video embedded inside an article or answer, author profiles, search results, pins, favorites, and Yanxuan content are not supported.
 
+HTTP/API, pagination, and comments share request pacing: by default, request starts are spaced by 0.5 seconds plus a random 0–0.5 seconds. Configure `network.request_interval` and `network.request_jitter`; setting both to 0 disables pacing. The first request does not wait.
+
 Each HTTP request has a 60-second cumulative retry-wait budget. Excessive or invalid server wait instructions stop explicitly with a suggestion to retry later, without an early retry or browser fallback.
 
 Question and column pagination tolerates one fully overlapping page. Two consecutive unfinished pages with no new content stop with an explicit error; normal archives have no total page limit.
@@ -216,6 +218,8 @@ media_download = true
 timeout = 30.0
 retries = 3
 page_size = 20
+request_interval = 0.5
+request_jitter = 0.5
 
 [browser]
 fallback = "auto"

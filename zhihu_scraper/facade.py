@@ -57,6 +57,8 @@ def build_workflow(
         proxy=settings.proxy,
         max_retries=settings.retries,
         timeout=settings.timeout,
+        request_interval=settings.request_interval,
+        request_jitter=settings.request_jitter,
     )
     if browser_factory is None and settings.browser_fallback is not BrowserFallbackMode.NEVER:
 
@@ -97,6 +99,8 @@ def check_session(settings: ArchiveSettings | None = None) -> SessionReport:
         proxy=effective_settings.proxy,
         max_retries=effective_settings.retries,
         timeout=effective_settings.timeout,
+        request_interval=effective_settings.request_interval,
+        request_jitter=effective_settings.request_jitter,
     )
     try:
         return SessionReport(

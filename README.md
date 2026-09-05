@@ -34,6 +34,8 @@ Zhihu-Scraper 是一个本地优先的知乎归档工具。输入文章、回答
 
 暂不支持专栏合集、内嵌于文章/回答的视频、作者主页、搜索结果、想法、收藏夹和盐选内容。
 
+HTTP/API、分页和评论共用请求节奏，默认相邻请求启动间隔为 0.5 秒，加随机 0–0.5 秒。设置 `network.request_interval` 和 `network.request_jitter` 可调整，两项均为 0 时关闭；首个请求不等待。
+
 单次 HTTP 请求的累计重试等待最多 60 秒；服务器要求超长等待或返回无效等待值时，会明确停止并提示稍后重试，不提前重试或转而打开浏览器。
 
 问题和专栏分页允许一页完全重叠；连续两个未结束分页没有新增内容时，会停止并明确报错。正常归档不限制总页数。
@@ -216,6 +218,8 @@ media_download = true
 timeout = 30.0
 retries = 3
 page_size = 20
+request_interval = 0.5
+request_jitter = 0.5
 
 [browser]
 fallback = "auto"

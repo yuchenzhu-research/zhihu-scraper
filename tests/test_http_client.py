@@ -65,6 +65,19 @@ class ExplodingSession:
         raise RuntimeError(self._message)
 
 
+class VirtualTime:
+    def __init__(self):
+        self.elapsed = 0.0
+        self.delays = []
+
+    def monotonic(self):
+        return self.elapsed
+
+    def sleep(self, delay):
+        self.delays.append(delay)
+        self.elapsed += delay
+
+
 class CookieLoadingTests(unittest.TestCase):
     def test_loads_browser_cookie_list_and_reports_missing_core_cookie_names(self):
         secret_value = "secret-z-c0-value"
@@ -158,6 +171,85 @@ class CookieLoadingTests(unittest.TestCase):
 
 
 class ZhihuHttpClientTests(unittest.TestCase):
+    def test_shared_client_spaces_json_html_and_comment_requests_with_jitter(self):
+        timer = VirtualTime()
+        random_values = iter((0.0, 1.0, 0.5, 0.0))
+        session = FakeSession([FakeResponse() for _ in range(4)])
+        client = ZhihuHttpClient(
+            session=session,
+            request_interval=0.5,
+            request_jitter=0.5,
+            sleep=timer.sleep,
+            monotonic=timer.monotonic,
+            random=lambda: next(random_values),
+        )
+
+        client.get_json("/api/v4/articles/1")
+        self.assertEqual([], timer.delays)
+        client.get_html("https://zhuanlan.zhihu.com/p/1")
+        client.get_json("/api/v4/questions/1/answers?offset=20")
+        client.get_json("/api/v4/comment_v5/articles/1/root_comment")
+
+        self.assertEqual([0.5, 1.0, 0.75], timer.delays)
+        self.assertEqual(4, len(session.calls))
+
+    def test_retry_pacing_obeys_server_waits_and_the_same_total_budget(self):
+        cases = ((10, 0, "20", 20), (10, 0, "2", 10), (60, 60, "1", None))
+        for interval, jitter, retry_after, expected_time in cases:
+            with self.subTest(interval=interval, jitter=jitter, retry_after=retry_after):
+                timer = VirtualTime()
+                session = FakeSession(
+                    [
+                        FakeResponse(status_code=429, headers={"Retry-After": retry_after}),
+                        FakeResponse(json_data={"ok": True}),
+                    ]
+                )
+                client = ZhihuHttpClient(
+                    session=session,
+                    request_interval=interval,
+                    request_jitter=jitter,
+                    max_retries=1,
+                    sleep=timer.sleep,
+                    monotonic=timer.monotonic,
+                    random=lambda: 1.0,
+                )
+
+                if expected_time is None:
+                    with self.assertRaisesRegex(RetryWaitError, "60-second"):
+                        client.get_json("/api/v4/items")
+                    self.assertLessEqual(timer.elapsed, 60)
+                    self.assertEqual(1, len(session.calls))
+                else:
+                    self.assertEqual({"ok": True}, client.get_json("/api/v4/items"))
+                    self.assertEqual(expected_time, timer.elapsed)
+                    self.assertEqual(2, len(session.calls))
+
+    def test_direct_client_rejects_invalid_pacing_values(self):
+        for name in ("request_interval", "request_jitter"):
+            for value in (-0.1, 60.1, float("nan"), float("inf"), True, "0.5"):
+                with self.subTest(name=name, value=value):
+                    with self.assertRaisesRegex(ValueError, name):
+                        ZhihuHttpClient(session=FakeSession([]), **{name: value})
+
+    def test_elapsed_time_counts_towards_request_spacing_without_using_wall_clock(self):
+        timer = VirtualTime()
+        client = ZhihuHttpClient(
+            session=FakeSession([FakeResponse() for _ in range(3)]),
+            request_interval=1,
+            sleep=timer.sleep,
+            monotonic=timer.monotonic,
+            clock=lambda: self.fail("Request pacing must not read the wall clock."),
+        )
+
+        client.get_json("/api/v4/articles/1")
+        timer.elapsed += 2
+        client.get_json("/api/v4/articles/2")
+        self.assertEqual([], timer.delays)
+        timer.elapsed += 0.25
+        client.get_json("/api/v4/articles/3")
+
+        self.assertEqual([0.75], timer.delays)
+
     def test_context_manager_closes_the_owned_session_exactly_once(self):
         session = FakeSession([])
         client = ZhihuHttpClient(session=session)

@@ -44,6 +44,8 @@ class ArchiveSettings:
     cookie_file: Path | None = None
     proxy: str | None = None
     timeout: float = 30.0
+    request_interval: float = 0.5
+    request_jitter: float = 0.5
     retries: int = 3
     page_size: int = 20
 
@@ -73,11 +75,24 @@ class ArchiveSettings:
             _number_in_range(
                 self.timeout,
                 "network.timeout",
-                minimum_exclusive=0,
+                minimum=0,
                 maximum=300,
                 range_description="大于 0 且不超过 300 秒",
             ),
         )
+        for name in ("request_interval", "request_jitter"):
+            object.__setattr__(
+                self,
+                name,
+                _number_in_range(
+                    getattr(self, name),
+                    f"network.{name}",
+                    minimum=0,
+                    maximum=60,
+                    include_minimum=True,
+                    range_description="在 0 到 60 秒之间",
+                ),
+            )
 
         for field_name in (
             "markdown",
@@ -157,7 +172,15 @@ class ArchiveSettings:
         _reject_unknown_fields(
             network,
             "network",
-            {"cookie_file", "proxy", "timeout", "retries", "page_size"},
+            {
+                "cookie_file",
+                "proxy",
+                "timeout",
+                "retries",
+                "page_size",
+                "request_interval",
+                "request_jitter",
+            },
         )
         _reject_unknown_fields(
             browser,
@@ -199,6 +222,8 @@ class ArchiveSettings:
             ),
             proxy=_value(network, "proxy", defaults.proxy),
             timeout=_value(network, "timeout", defaults.timeout),
+            request_interval=_value(network, "request_interval", defaults.request_interval),
+            request_jitter=_value(network, "request_jitter", defaults.request_jitter),
             retries=_value(network, "retries", defaults.retries),
             page_size=_value(network, "page_size", defaults.page_size),
             browser_fallback=_value(
@@ -228,6 +253,8 @@ class ArchiveSettings:
                 "cookie_file_configured": self.cookie_file is not None,
                 "proxy_configured": self.proxy is not None,
                 "timeout": self.timeout,
+                "request_interval": self.request_interval,
+                "request_jitter": self.request_jitter,
                 "retries": self.retries,
                 "page_size": self.page_size,
             },
@@ -257,6 +284,9 @@ media_download = true
 # cookie_file = "~/.config/zhihu-scraper/cookies.json"
 # proxy = "http://127.0.0.1:7890"
 timeout = 30.0
+# 相邻 HTTP 请求的启动间隔：固定秒数 + 0 到 request_jitter 的随机秒数。
+request_interval = 0.5
+request_jitter = 0.5
 retries = 3
 page_size = 20
 
@@ -420,16 +450,17 @@ def _number_in_range(
     value: object,
     field_name: str,
     *,
-    minimum_exclusive: float,
+    minimum: float,
     maximum: float,
     range_description: str,
+    include_minimum: bool = False,
 ) -> float:
     if isinstance(value, bool) or not isinstance(value, int | float):
         raise SettingsError(f"配置项 {field_name} 必须是数字")
-    normalized = float(value)
-    if not minimum_exclusive < normalized <= maximum:
+    in_range = minimum <= value <= maximum if include_minimum else minimum < value <= maximum
+    if not in_range:
         raise SettingsError(f"配置项 {field_name} 必须{range_description}")
-    return normalized
+    return float(value)
 
 
 def _browser_fallback(value: object) -> BrowserFallback:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import random
 import time
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -111,9 +112,23 @@ class ZhihuHttpClient:
         session: _HttpSession | None = None,
         max_retries: int = 2,
         timeout: float = 20.0,
+        request_interval: float = 0.0,
+        request_jitter: float = 0.0,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.time,
+        monotonic: Callable[[], float] = time.monotonic,
+        random: Callable[[], float] = random.random,
     ) -> None:
+        for name, value in (
+            ("request_interval", request_interval),
+            ("request_jitter", request_jitter),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not 0 <= value <= 60
+            ):
+                raise ValueError(f"{name} must be a finite number between 0 and 60 seconds.")
         self._cookies = dict(cookies or {})
         self._proxy = proxy
         self._session = session or cast(
@@ -124,6 +139,11 @@ class ZhihuHttpClient:
         self._timeout = timeout
         self._sleep = sleep
         self._clock = clock
+        self._request_interval = float(request_interval)
+        self._request_jitter = float(request_jitter)
+        self._monotonic = monotonic
+        self._random = random
+        self._next_request_at: float | None = None
         self._closed = False
 
     def update_cookies(self, cookies: Mapping[str, str]) -> None:
@@ -227,9 +247,8 @@ class ZhihuHttpClient:
 
         waited = 0.0
 
-        def wait_before_retry(headers: Mapping[str, str], retry_number: int) -> None:
+        def wait_before_retry(delay: float) -> None:
             nonlocal waited
-            delay = _retry_delay(headers, retry_number, now=self._clock())
             if delay > 60.0 - waited:
                 raise RetryWaitError(
                     "Zhihu retry would exceed the 60-second total waiting budget; "
@@ -239,18 +258,27 @@ class ZhihuHttpClient:
             waited += delay
 
         for retry_number in range(self._max_retries + 1):
+            if self._next_request_at is not None:
+                remaining = self._next_request_at - self._monotonic()
+                if remaining > 0:
+                    if retry_number:
+                        wait_before_retry(remaining)
+                    else:
+                        self._sleep(remaining)
+            jitter = self._random() * self._request_jitter if self._request_jitter else 0.0
+            self._next_request_at = self._monotonic() + self._request_interval + jitter
             try:
                 response = self._session.get(url, **request_options)
             except Exception:
                 if retry_number < self._max_retries:
-                    wait_before_retry({}, retry_number)
+                    wait_before_retry(_retry_delay({}, retry_number, now=self._clock()))
                     continue
                 raise TransportError(
                     "Zhihu request failed after limited retries; check the network or proxy."
                 ) from None
             should_retry = response.status_code == 429 or 500 <= response.status_code <= 599
             if should_retry and retry_number < self._max_retries:
-                wait_before_retry(response.headers, retry_number)
+                wait_before_retry(_retry_delay(response.headers, retry_number, now=self._clock()))
                 continue
             if response.status_code == 401:
                 raise AuthenticationError(
