@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from email.utils import formatdate
 from pathlib import Path
 
 from zhihu_scraper.http import (
@@ -9,6 +10,7 @@ from zhihu_scraper.http import (
     CookieFileError,
     InvalidResponseError,
     RateLimitError,
+    RetryWaitError,
     ServerError,
     TransportError,
     UnsafeZhihuUrlError,
@@ -39,14 +41,17 @@ class FakeResponse:
 
 
 class FakeSession:
-    def __init__(self, responses: list[FakeResponse]):
+    def __init__(self, responses: list[FakeResponse | Exception]):
         self._responses = list(responses)
         self.calls: list[tuple[str, dict[str, object]]] = []
         self.close_count = 0
 
     def get(self, url: str, **kwargs):
         self.calls.append((url, kwargs))
-        return self._responses.pop(0)
+        response = self._responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
 
     def close(self):
         self.close_count += 1
@@ -320,6 +325,129 @@ class ZhihuHttpClientTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 429)
         self.assertEqual(len(session.calls), 2)
         self.assertEqual(delays, [1.0])
+
+    def test_excessive_retry_after_stops_without_waiting_or_requesting_early(self):
+        for status in (429, 503):
+            with self.subTest(status=status):
+                session = FakeSession(
+                    [
+                        FakeResponse(status_code=status, headers={"Retry-After": "86400"}),
+                        FakeResponse(json_data={"unexpected": "early retry"}),
+                    ]
+                )
+                delays = []
+                client = ZhihuHttpClient(session=session, max_retries=2, sleep=delays.append)
+
+                with self.assertRaisesRegex(RetryWaitError, "try again later"):
+                    client.get_json("/api/v4/items")
+
+                self.assertEqual([], delays)
+                self.assertEqual(1, len(session.calls))
+
+    def test_invalid_retry_after_stops_without_guessing_an_earlier_retry(self):
+        for retry_after in ("inf", "-inf", "nan", "-1", "not-a-date"):
+            with self.subTest(retry_after=retry_after):
+                session = FakeSession(
+                    [
+                        FakeResponse(status_code=429, headers={"Retry-After": retry_after}),
+                        FakeResponse(json_data={"unexpected": "early retry"}),
+                    ]
+                )
+                delays = []
+                client = ZhihuHttpClient(session=session, max_retries=1, sleep=delays.append)
+
+                with self.assertRaisesRegex(RetryWaitError, "try again later"):
+                    client.get_json("/api/v4/items")
+
+                self.assertEqual([], delays)
+                self.assertEqual(1, len(session.calls))
+
+    def test_retry_after_http_dates_respect_the_clock_and_waiting_budget(self):
+        now = 1_800_000_000.0
+        for seconds in (-10, 30, 86400):
+            with self.subTest(seconds=seconds):
+                session = FakeSession(
+                    [
+                        FakeResponse(
+                            status_code=503,
+                            headers={"retry-after": formatdate(now + seconds, usegmt=True)},
+                        ),
+                        FakeResponse(json_data={"ok": True}),
+                    ]
+                )
+                delays = []
+                client = ZhihuHttpClient(
+                    session=session,
+                    max_retries=1,
+                    sleep=delays.append,
+                    clock=lambda: now,
+                )
+
+                if seconds > 60:
+                    with self.assertRaisesRegex(RetryWaitError, "try again later"):
+                        client.get_json("/api/v4/items")
+                    self.assertEqual([], delays)
+                    self.assertEqual(1, len(session.calls))
+                else:
+                    self.assertEqual({"ok": True}, client.get_json("/api/v4/items"))
+                    self.assertEqual([max(0.0, seconds)], delays)
+                    self.assertEqual(2, len(session.calls))
+
+    def test_retry_wait_budget_counts_all_server_and_transport_delays(self):
+        cases = (
+            (
+                [
+                    FakeResponse(status_code=429, headers={"Retry-After": "40"}),
+                    FakeResponse(status_code=503, headers={"Retry-After": "30"}),
+                ],
+                [40.0],
+            ),
+            (
+                [
+                    RuntimeError("temporary network failure"),
+                    FakeResponse(status_code=429, headers={"Retry-After": "60"}),
+                ],
+                [1.0],
+            ),
+        )
+        for responses, expected_delays in cases:
+            with self.subTest(expected_delays=expected_delays):
+                session = FakeSession(responses)
+                delays = []
+                client = ZhihuHttpClient(session=session, max_retries=3, sleep=delays.append)
+
+                with self.assertRaisesRegex(RetryWaitError, "60-second"):
+                    client.get_json("/api/v4/items")
+
+                self.assertEqual(expected_delays, delays)
+                self.assertEqual(2, len(session.calls))
+
+    def test_exactly_sixty_seconds_of_retry_wait_can_still_succeed(self):
+        session = FakeSession(
+            [
+                FakeResponse(status_code=429, headers={"Retry-After": "30"}),
+                FakeResponse(status_code=429, headers={"Retry-After": "30"}),
+                FakeResponse(json_data={"ok": True}),
+            ]
+        )
+        delays = []
+        client = ZhihuHttpClient(session=session, max_retries=2, sleep=delays.append)
+
+        self.assertEqual({"ok": True}, client.get_json("/api/v4/items"))
+        self.assertEqual([30.0, 30.0], delays)
+
+    def test_transport_only_backoff_also_respects_the_total_wait_budget(self):
+        delays = []
+        client = ZhihuHttpClient(
+            session=ExplodingSession("private proxy detail"),
+            max_retries=10,
+            sleep=delays.append,
+        )
+
+        with self.assertRaisesRegex(RetryWaitError, "try again later"):
+            client.get_json("/api/v4/items")
+
+        self.assertEqual([1.0, 2.0, 4.0, *([8.0] * 6)], delays)
 
     def test_server_error_retries_then_raises_a_distinct_error(self):
         session = FakeSession(

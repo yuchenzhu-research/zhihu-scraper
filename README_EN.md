@@ -34,6 +34,8 @@ The content parser covers paragraphs, headings, lists, quotes, tables, code, lin
 
 Column collections, video embedded inside an article or answer, author profiles, search results, pins, favorites, and Yanxuan content are not supported.
 
+Each HTTP request has a 60-second cumulative retry-wait budget. Excessive or invalid server wait instructions stop explicitly with a suggestion to retry later, without an early retry or browser fallback.
+
 Question and column pagination tolerates one fully overlapping page. Two consecutive unfinished pages with no new content stop with an explicit error; normal archives have no total page limit.
 
 ## What a default fetch saves
