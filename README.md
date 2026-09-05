@@ -316,6 +316,6 @@ ZHIHU_LIVE=1 ZHIHU_COOKIE_FILE=/private/path/cookies.json \
 
 ## 参考与许可
 
-重建设计过程中对照研究了 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)、[CrawlerTutorial](https://github.com/NanmiCoder/CrawlerTutorial)、[Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper) 和 [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download)。本仓库实现和测试独立维护，不把外部仓库源码复制进项目。
+重建设计过程中对照研究了 [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler)、[CrawlerTutorial](https://github.com/NanmiCoder/CrawlerTutorial)、[Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper) 和 [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download)。本仓库实现和测试独立维护，不把外部仓库源码复制进项目。 参考版本和用途记录在 [架构文档的参考清单](docs/ARCHITECTURE.md#8-外部参考版本)，便于换机器后复现研究基线。
 
 本项目使用 [MIT License](LICENSE)。

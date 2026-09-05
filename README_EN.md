@@ -316,6 +316,6 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries. Deferred
 
 ## References and License
 
-The rebuild compared ideas from [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler), [CrawlerTutorial](https://github.com/NanmiCoder/CrawlerTutorial), [Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper), and [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download). This repository independently maintains its implementation and tests; it does not vendor source from those projects.
+The rebuild compared ideas from [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler), [CrawlerTutorial](https://github.com/NanmiCoder/CrawlerTutorial), [Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper), and [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download). This repository independently maintains its implementation and tests; it does not vendor source from those projects. Pinned research revisions and their purposes are recorded in the [architecture reference inventory](docs/ARCHITECTURE.md#8-外部参考版本).
 
 Licensed under the [MIT License](LICENSE).

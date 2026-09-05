@@ -115,3 +115,24 @@ URL、内容模型、渲染、媒体和知乎字段解析保持共用，业务�
 5. 提交并推送。
 
 单元/集成测试使用固定数据；默认测试只收集确定性测试。`tests/live/live_archive.py` 是必须显式指定文件并传入 Cookie 的受控在线烟雾套件，不在普通测试中制造 skip。完整门禁覆盖 pytest、Ruff、mypy、`compileall`、锁文件、CLI smoke 和三系统 CI。
+
+## 8. 外部参考版本
+
+以下清单锁定本地研究资料的版本。参考源码不纳入主项目、不参与运行或测试，也不自动更新；重新克隆主项目后，需要按来源地址单独获取并检出对应提交。本文中的 commit 是研究基线，并不宣称始终为上游最新版。
+
+| 本地目录 | 来源 | 固定 commit | 参考用途 |
+| --- | --- | --- | --- |
+| `MediaCrawler` | [NanmiCoder/MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) | `17f66121e0fcc40fc23958b995bec873d422667d` | HTTP/浏览器会话、错误分类与请求重试 |
+| `CrawlerTutorial` | [NanmiCoder/CrawlerTutorial](https://github.com/NanmiCoder/CrawlerTutorial) | `43cc58cf48b6d070d48cc8525a481588e7b94fd7` | 爬虫基础和工程化学习资料 |
+| `zhihu-scraper` | [Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper) | `6c7730a6362096d12c8fb97b421a1b6768fed813` | 知乎正文与内容结构 |
+| `zhihu-download` | [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download) | `0c4fa675ccdaadb6cf322620adb7a409282fbb1c` | 知乎本地导出与可读输出 |
+| `scrapy` | [scrapy/scrapy](https://github.com/scrapy/scrapy) | `185d6b9a20b7d0e77f4c60435d17e5072bd4d704` | 分页、请求调度和抓取生命周期 |
+| `yt-dlp` | [yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) | `d23e6f5a387d5933bc24e1eb5437da8fd563c1f0` | 媒体格式与下载恢复 |
+| `you-get` | [soimort/you-get](https://github.com/soimort/you-get) | `049548f3f3f35e67ba8d3181c71fdc71d11cf260` | 媒体下载处理 |
+| `lux` | [iawia002/lux](https://github.com/iawia002/lux) | `dd00f6d258d80b6684a0b9402d7124e5c18ef42f` | 媒体提取与格式选择 |
+| `WechatSogou` | [chyroc/WechatSogou](https://github.com/chyroc/WechatSogou) | `6a7e08caa82dd7cf47331d7c303f578a4b325360` | 其他平台抓取设计对照 |
+| `weiboSpider` | [dataabc/weiboSpider](https://github.com/dataabc/weiboSpider) | `720d52a58aeff3bdafdc552b90443842ebb94ba7` | 其他平台归档与评论处理 |
+
+核对日期：2026-09-05。MediaCrawler、Scrapy、yt-dlp 的本地研究基线分别落后本次核对的上游 15、254、104 个提交；其他七个有效参考一致。MediaCrawler 这批差异没有修改 `media_platform/zhihu/`。
+
+`references/external/openclaw` 只有 Git 目录，无有效 HEAD，不属于可用的研究基线；项目不依赖它。
