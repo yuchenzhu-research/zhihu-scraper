@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -48,6 +49,193 @@ class FakeDownloader:
 
 
 class LocalArchiveLayoutTests(unittest.TestCase):
+    def test_enabling_html_preserves_an_existing_unidentified_file(self):
+        article = Article(
+            id="1",
+            title="归档标题",
+            source_url="https://zhuanlan.zhihu.com/p/1",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(Paragraph((Text("正文"),)),),
+        )
+        column = ColumnArchive(
+            column=Column("test", "专栏", "https://www.zhihu.com/column/test", "", AUTHOR, 1),
+            articles=(article,),
+            archived_at=NOW,
+        )
+        for target in (article, column):
+            with self.subTest(target=type(target).__name__):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = Path(temporary_directory)
+                    original = LocalArchive(root, media_download=False).archive(target)
+                    original_page = (
+                        original.child_markdown_paths[0]
+                        if original.child_markdown_paths
+                        else original.markdown_path
+                    )
+                    user_file = original_page.with_suffix(".html")
+                    user_file.write_text("用户已有 HTML", encoding="utf-8")
+
+                    updated = LocalArchive(root, html=True, media_download=False).archive(target)
+                    updated_page = (
+                        updated.child_html_paths[0]
+                        if updated.child_html_paths
+                        else updated.html_path
+                    )
+                    self.assertEqual(original.entry_directory, updated.entry_directory)
+                    self.assertNotEqual(user_file, updated_page)
+                    self.assertEqual("用户已有 HTML", user_file.read_text(encoding="utf-8"))
+                    self.assertIn("正文", updated_page.read_text(encoding="utf-8"))
+
+    def test_archive_identity_uses_the_zhihu_id_across_source_url_variants(self):
+        article = Article(
+            id="123",
+            title="稳定标识",
+            source_url="http://www.zhuanlan.zhihu.com/p/123/?from=old",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(Paragraph((Text("正文"),)),),
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            original = LocalArchive(root, markdown=False, html=True, media_download=False).archive(
+                article
+            )
+            updated = LocalArchive(root, media_download=False).archive(
+                replace(article, source_url="https://zhuanlan.zhihu.com/p/123", title="新标题")
+            )
+            self.assertEqual(original.entry_directory, updated.entry_directory)
+            self.assertEqual(original.html_path.stem, updated.markdown_path.stem)
+
+    def test_existing_unidentified_directories_are_not_overwritten(self):
+        article = Article(
+            id="1",
+            title="同名标题",
+            source_url="https://zhuanlan.zhihu.com/p/1",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(Paragraph((Text("归档正文"),)),),
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            occupied = (root / article.title, root / f"{article.title}--article-1")
+            for directory in occupied:
+                directory.mkdir()
+                (directory / f"{article.title}.md").write_text("用户已有文件", encoding="utf-8")
+
+            sink = LocalArchive(root, media_download=False)
+            receipt = sink.archive(article)
+            repeated = sink.archive(article)
+
+            self.assertNotIn(receipt.entry_directory, occupied)
+            self.assertEqual(receipt.markdown_path, repeated.markdown_path)
+            self.assertIn("归档正文", receipt.markdown_path.read_text(encoding="utf-8"))
+            for directory in occupied:
+                self.assertEqual(
+                    "用户已有文件", (directory / f"{article.title}.md").read_text(encoding="utf-8")
+                )
+
+    def test_renaming_an_archive_preserves_its_directory_and_document_stem(self):
+        article = Article(
+            id="1",
+            title="原始标题",
+            source_url="https://zhuanlan.zhihu.com/p/1",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(Paragraph((Text("原始正文"),)),),
+        )
+        column = ColumnArchive(
+            column=Column("test", "原始标题", "https://www.zhihu.com/column/test", "", AUTHOR, 1),
+            articles=(article,),
+            archived_at=NOW,
+        )
+        renamed_article = replace(article, title="更新标题")
+        renamed_column = replace(
+            column,
+            column=replace(column.column, title="更新标题"),
+            articles=(renamed_article,),
+        )
+        for original_target, renamed_target in (
+            (article, renamed_article),
+            (column, renamed_column),
+        ):
+            for markdown, html in ((True, False), (False, True)):
+                with self.subTest(target=type(original_target).__name__, markdown=markdown):
+                    with tempfile.TemporaryDirectory() as temporary_directory:
+                        root = Path(temporary_directory)
+                        original = LocalArchive(
+                            root, markdown=markdown, html=html, media_download=False
+                        ).archive(original_target)
+                        original_document = original.markdown_path or original.html_path
+                        original_children = (
+                            original.child_markdown_paths or original.child_html_paths
+                        )
+                        refreshed = LocalArchive(root, html=True, media_download=False).archive(
+                            renamed_target
+                        )
+
+                        self.assertEqual(original.entry_directory, refreshed.entry_directory)
+                        self.assertEqual(original_document.stem, refreshed.markdown_path.stem)
+                        self.assertEqual(original_document.stem, refreshed.html_path.stem)
+                        self.assertEqual(1, len(list(root.iterdir())))
+                        self.assertIn(
+                            "更新标题", refreshed.markdown_path.read_text(encoding="utf-8")
+                        )
+                        self.assertIn("更新标题", refreshed.html_path.read_text(encoding="utf-8"))
+                        if original_children:
+                            self.assertEqual(
+                                original_children[0].stem, refreshed.child_markdown_paths[0].stem
+                            )
+                            self.assertEqual(
+                                original_children[0].stem, refreshed.child_html_paths[0].stem
+                            )
+                            child = refreshed.child_markdown_paths[0].read_text(encoding="utf-8")
+                            self.assertIn("../原始标题.md", child)
+
+    def test_column_rearchive_preserves_article_paths_when_names_collide(self):
+        first = Article(
+            id="1",
+            title="同名文章",
+            source_url="https://zhuanlan.zhihu.com/p/1",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(Paragraph((Text("第一篇正文"),)),),
+        )
+        second = replace(
+            first,
+            id="2",
+            source_url="https://zhuanlan.zhihu.com/p/2",
+            blocks=(Paragraph((Text("第二篇正文"),)),),
+        )
+        column = ColumnArchive(
+            column=Column("test", "测试专栏", "https://www.zhihu.com/column/test", "", AUTHOR, 2),
+            articles=(first, second),
+            archived_at=NOW,
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            sink = LocalArchive(Path(temporary_directory), html=True, media_download=False)
+            original = sink.archive(column)
+            reordered = sink.archive(replace(column, articles=(second, first)))
+            self.assertEqual(
+                tuple(reversed(original.child_markdown_paths)), reordered.child_markdown_paths
+            )
+            self.assertEqual(tuple(reversed(original.child_html_paths)), reordered.child_html_paths)
+
+            remaining = sink.archive(replace(column, articles=(second,)))
+            self.assertEqual((original.child_markdown_paths[1],), remaining.child_markdown_paths)
+            self.assertEqual((original.child_html_paths[1],), remaining.child_html_paths)
+            self.assertIn(
+                "第一篇正文", original.child_markdown_paths[0].read_text(encoding="utf-8")
+            )
+            self.assertIn(
+                "第二篇正文", remaining.child_markdown_paths[0].read_text(encoding="utf-8")
+            )
+            self.assertEqual(2, len(list(original.child_markdown_paths[0].parent.glob("*.md"))))
+            self.assertIn(
+                "内容/同名文章--article-2.md", remaining.markdown_path.read_text(encoding="utf-8")
+            )
+
     def test_only_whole_columns_create_the_content_directory(self):
         column_ref = ColumnRef(
             token="machinelearningpku",

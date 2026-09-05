@@ -262,6 +262,8 @@ With `--html` or `html = true`, a same-name `.html` and an `assets/` folder cont
 
 Original TeX is retained: Markdown uses `$…$` / `$$…$$`; HTML converts it to locally generated, browser-native MathML while keeping a safe trace expression in `data-tex`. No network-loaded KaTeX or MathJax is required. Generated MathML is stripped of link, event, and style attributes; malformed expressions safely fall back to readable TeX.
 
+Repeated archives reuse existing directories and document paths by Zhihu content ID. Titles and navigation update while filenames may retain an older title. Previously archived column articles that are no longer accessible remain on disk, but the current directory lists only articles fetched this time. Unknown or conflicting files and directories are preserved by choosing another name.
+
 The project deliberately maintains no database, search index, or knowledge graph. Markdown, media, and opt-in HTML are the complete archive, so users can read, move, back up, or delete it without hidden state.
 
 ## Python API

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from html import escape
+from html import unescape
 from pathlib import Path
 from urllib.parse import quote
 
@@ -29,8 +30,13 @@ from .render import (
     RenderNavigationItem,
 )
 from .settings import ArchiveSettings
+from .urls import UnsupportedZhihuUrlError, route_zhihu_url
 
 MediaDownloader = Callable[[str, Path], MediaDownloadReceipt]
+_MARKDOWN_SOURCE = re.compile(
+    r"^> (知乎原文|知乎原问题|知乎专栏)：\[[^\n]*\]\(([^\n]*)\)$", re.MULTILINE
+)
+_HTML_SOURCE = re.compile(r'<a href="([^"]*)">(知乎原文|知乎原问题|知乎专栏)</a>')
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,12 +104,17 @@ class LocalArchive:
         target: ArchiveTarget,
     ) -> ArchiveReceipt:
         title = target.title
-        filename = safe_filename(title)
         entry_directory = self._entry_directory(
             title=title,
             target_type=_target_type(target),
             target_id=target.id,
             source_url=target.source_url,
+        )
+        filename = _DocumentNames(entry_directory).name_for(
+            title=title,
+            source_url=target.source_url,
+            target_type=_target_type(target),
+            target_id=target.id,
         )
         entry_directory.mkdir(parents=True, exist_ok=True)
 
@@ -143,18 +154,23 @@ class LocalArchive:
         archive: ColumnArchive,
     ) -> ArchiveReceipt:
         column = archive.column
-        column_filename = safe_filename(column.title)
         entry_directory = self._entry_directory(
             title=column.title,
             target_type="column",
             target_id=column.token,
             source_url=column.source_url,
         )
+        column_filename = _DocumentNames(entry_directory).name_for(
+            title=column.title,
+            source_url=column.source_url,
+            target_type="column",
+            target_id=column.token,
+        )
         entry_directory.mkdir(parents=True, exist_ok=True)
         assets = self._archive_media(archive, entry_directory)
         render_paths = assets.source_paths
 
-        article_names = _unique_article_names(archive.articles)
+        article_names = _unique_article_names(archive.articles, entry_directory / "内容")
         directory_entries = {
             article.id: RenderNavigationItem(
                 title=article.title,
@@ -294,31 +310,39 @@ class LocalArchive:
         source_url: str,
     ) -> Path:
         base = self._root / safe_filename(title)
-        if not base.exists() or _directory_belongs_to(
+        if _directory_belongs_to(
             base,
             source_url,
             target_type=target_type,
         ):
             return base
+        for directory in sorted(self._root.iterdir()):
+            if directory.is_dir() and _directory_belongs_to(
+                directory, source_url, target_type=target_type
+            ):
+                return directory
+        occupied = {entry.name.casefold() for entry in self._root.iterdir()}
+        if base.name.casefold() not in occupied:
+            return base
         suffix = safe_filename(f"{title}--{target_type}-{target_id}")
+        counter = 2
+        while suffix.casefold() in occupied:
+            suffix = safe_filename(f"{title}--{target_type}-{target_id}-{counter}")
+            counter += 1
         return self._root / suffix
 
 
-def _unique_article_names(articles: tuple[Article, ...]) -> tuple[str, ...]:
-    used: set[str] = set()
-    names: list[str] = []
-    for article in articles:
-        base = safe_filename(article.title)
-        name = base
-        if name.casefold() in used:
-            name = safe_filename(f"{article.title}--article-{article.id}")
-        counter = 2
-        while name.casefold() in used:
-            name = safe_filename(f"{article.title}--article-{article.id}-{counter}")
-            counter += 1
-        used.add(name.casefold())
-        names.append(name)
-    return tuple(names)
+def _unique_article_names(articles: tuple[Article, ...], directory: Path) -> tuple[str, ...]:
+    names = _DocumentNames(directory)
+    return tuple(
+        names.name_for(
+            title=article.title,
+            source_url=article.source_url,
+            target_type="article",
+            target_id=article.id,
+        )
+        for article in articles
+    )
 
 
 def _article_navigation(
@@ -364,22 +388,80 @@ def _directory_belongs_to(
     *,
     target_type: str,
 ) -> bool:
-    label = {
+    identity = _source_identity(source_url, _source_label(target_type))
+    return identity in _DocumentNames(directory).identities
+
+
+class _DocumentNames:
+    """Recover reusable names from visible source links, never from hidden state."""
+
+    def __init__(self, directory: Path) -> None:
+        documents = sorted(directory.iterdir()) if directory.is_dir() else []
+        groups: dict[str, list[tuple[Path, tuple[str, str] | None]]] = {}
+        self.identities: set[tuple[str, str]] = set()
+        self._existing: dict[tuple[str, str], str] = {}
+        for document in documents:
+            if document.suffix.casefold() not in {".md", ".html"}:
+                continue
+            identity = _document_identity(document)
+            groups.setdefault(document.stem.casefold(), []).append((document, identity))
+            if identity is not None:
+                self.identities.add(identity)
+        self._used = set(groups)
+        for group in groups.values():
+            document, identity = group[0]
+            # An unknown or differently owned sibling format must stay untouched.
+            if identity is not None and all(owner == identity for _, owner in group):
+                self._existing.setdefault(identity, document.stem)
+
+    def name_for(self, *, title: str, source_url: str, target_type: str, target_id: str) -> str:
+        identity = _source_identity(source_url, _source_label(target_type))
+        if existing := self._existing.get(identity):
+            return existing
+        name = safe_filename(title)
+        if name.casefold() in self._used:
+            name = safe_filename(f"{title}--{target_type}-{target_id}")
+        counter = 2
+        while name.casefold() in self._used:
+            name = safe_filename(f"{title}--{target_type}-{target_id}-{counter}")
+            counter += 1
+        self._used.add(name.casefold())
+        self._existing[identity] = name
+        return name
+
+
+def _source_label(target_type: str) -> str:
+    return {
         "question": "知乎原问题",
         "column": "知乎专栏",
     }.get(target_type, "知乎原文")
-    markdown_marker = f"> {label}：[{source_url}]({source_url})"
-    html_marker = f'<a href="{escape(source_url, quote=True)}">{label}</a>'
-    for suffix in ("*.md", "*.html"):
-        for document in directory.glob(suffix):
-            try:
-                prefix = document.read_text(encoding="utf-8")[:16_384]
-            except (OSError, UnicodeError):
-                continue
-            marker = markdown_marker if document.suffix == ".md" else html_marker
-            if marker in prefix:
-                return True
-    return False
+
+
+def _source_identity(source_url: str, label: str) -> tuple[str, str]:
+    try:
+        target = route_zhihu_url(source_url)
+    except UnsupportedZhihuUrlError:
+        return label, source_url
+    return target.kind.value, target.content_id
+
+
+def _document_identity(document: Path) -> tuple[str, str] | None:
+    try:
+        with document.open(encoding="utf-8") as source:
+            prefix = source.read(16_384)
+    except (OSError, UnicodeError):
+        return None
+    if document.suffix.casefold() == ".md":
+        match = _MARKDOWN_SOURCE.search(prefix)
+        if match is not None:
+            label, source_url = match.groups()
+            return _source_identity(source_url, label)
+    else:
+        match = _HTML_SOURCE.search(prefix)
+        if match is not None:
+            source_url, label = match.groups()
+            return _source_identity(unescape(source_url), label)
+    return None
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
