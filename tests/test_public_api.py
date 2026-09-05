@@ -36,6 +36,19 @@ class FakeSink:
 
 
 class PublicApiTests(unittest.TestCase):
+    def test_invalid_output_settings_do_not_acquire_http_resources(self):
+        for settings, error in (
+            (ArchiveSettings(pdf=True), NotImplementedError),
+            (ArchiveSettings(markdown=False, html=False), ValueError),
+        ):
+            with (
+                self.subTest(settings=settings),
+                patch("zhihu_scraper.facade.ZhihuHttpClient") as create_client,
+            ):
+                with self.assertRaises(error):
+                    archive_url("https://zhuanlan.zhihu.com/p/1", settings)
+                create_client.assert_not_called()
+
     def test_archive_url_closes_the_internally_built_workflow(self):
         workflow = Mock()
         workflow.run.return_value = "report"

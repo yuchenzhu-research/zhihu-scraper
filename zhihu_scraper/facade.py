@@ -50,6 +50,7 @@ def build_workflow(
 ) -> ArchiveWorkflow:
     """Compose the public workflow while keeping every boundary injectable."""
 
+    archive_sink = sink if sink is not None else LocalArchive.from_settings(settings)
     configured_cookies = dict(cookies) if cookies is not None else _configured_cookies(settings)
     http_client = client or ZhihuHttpClient(
         cookies=configured_cookies,
@@ -57,7 +58,6 @@ def build_workflow(
         max_retries=settings.retries,
         timeout=settings.timeout,
     )
-    archive_sink = sink or LocalArchive.from_settings(settings)
     if browser_factory is None and settings.browser_fallback is not BrowserFallbackMode.NEVER:
 
         def configured_browser() -> BrowserFallback:
