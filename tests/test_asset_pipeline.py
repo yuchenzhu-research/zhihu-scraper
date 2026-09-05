@@ -1,7 +1,11 @@
+import io
 import tempfile
 import unittest
+from contextlib import contextmanager
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 from zhihu_scraper.archive import LocalArchive
 from zhihu_scraper.assets import (
@@ -30,7 +34,7 @@ from zhihu_scraper.domain import (
     Text,
     Video,
 )
-from zhihu_scraper.media import MediaDownloadError, MediaDownloadReceipt
+from zhihu_scraper.media import MediaDownloadError, MediaDownloadReceipt, download_media
 
 NOW = datetime(2026, 7, 27, tzinfo=UTC)
 AUTHOR = Author(id="writer", name="作者")
@@ -68,6 +72,158 @@ def image(
 
 
 class AssetPipelineTests(unittest.TestCase):
+    def test_changed_cover_source_downloads_new_bytes_for_the_same_article(self):
+        old_url = "https://pic1.zhimg.com/old.jpg"
+        for new_url in (
+            "https://pic1.zhimg.com/new.jpg",
+            "https://pic2.zhimg.com/old.jpg",
+            "https://pic1.zhimg.com/old.jpg?width=100",
+        ):
+            with self.subTest(new_url=new_url):
+                article = Article(
+                    id="updated-cover",
+                    title="更新封面",
+                    source_url="https://zhuanlan.zhihu.com/p/updated-cover",
+                    author=AUTHOR,
+                    published_at=NOW,
+                    blocks=(),
+                    cover_url=old_url,
+                )
+                requested_urls = []
+
+                @contextmanager
+                def transport(request):
+                    requested_urls.append(request.full_url)
+                    body = b"old cover" if request.full_url == old_url else b"new cover"
+                    with io.BytesIO(body) as response_body:
+                        yield SimpleNamespace(
+                            status=200,
+                            headers={"Content-Length": str(len(body))},
+                            read=response_body.read,
+                        )
+
+                def downloader(source_url, destination):
+                    return download_media(source_url, destination, transport=transport)
+
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = Path(temporary_directory)
+                    old_result = archive_assets(article, root / "media", downloader=downloader)
+                    new_result = archive_assets(
+                        replace(article, cover_url=new_url), root / "media", downloader=downloader
+                    )
+
+                    self.assertEqual(
+                        (root / new_result.source_paths[new_url]).read_bytes(), b"new cover"
+                    )
+                    self.assertEqual(
+                        (root / old_result.source_paths[old_url]).read_bytes(), b"old cover"
+                    )
+                    self.assertEqual(requested_urls, [old_url, new_url])
+                    self.assertEqual(new_result.downloads[0].source_url, new_url)
+
+    def test_signed_cover_refresh_reuses_a_completed_download(self):
+        old_url = "https://pic1.zhimg.com/cover.jpg?pkey=old&expiration=1"
+        new_url = "https://pic1.zhimg.com/cover.jpg?pkey=new&expiration=2"
+        article = Article(
+            id="signed-cover",
+            title="签名更新",
+            source_url="https://zhuanlan.zhihu.com/p/signed-cover",
+            author=AUTHOR,
+            published_at=NOW,
+            blocks=(),
+            cover_url=old_url,
+        )
+        requested_urls = []
+
+        @contextmanager
+        def transport(request):
+            requested_urls.append(request.full_url)
+            with io.BytesIO(b"cover") as response_body:
+                yield SimpleNamespace(
+                    status=200, headers={"Content-Length": "5"}, read=response_body.read
+                )
+
+        def downloader(source_url, destination):
+            return download_media(source_url, destination, transport=transport)
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            first = archive_assets(article, root / "media", downloader=downloader)
+            refreshed = archive_assets(
+                replace(article, cover_url=new_url), root / "media", downloader=downloader
+            )
+
+            self.assertEqual((root / refreshed.source_paths[new_url]).read_bytes(), b"cover")
+            self.assertEqual(first.source_paths[old_url], refreshed.source_paths[new_url])
+            self.assertEqual(requested_urls, [old_url])
+
+    def test_signed_refresh_resumes_partial_media_but_changed_path_starts_new_download(self):
+        old_url = "https://pic1.zhimg.com/old.jpg?pkey=old&expiration=1"
+        for new_url, should_resume in (
+            ("https://pic1.zhimg.com/old.jpg?pkey=new&expiration=2", True),
+            ("https://pic1.zhimg.com/new.jpg?pkey=new&expiration=2", False),
+        ):
+            with self.subTest(new_url=new_url):
+                article = Article(
+                    id="partial-cover",
+                    title="续传封面",
+                    source_url="https://zhuanlan.zhihu.com/p/partial-cover",
+                    author=AUTHOR,
+                    published_at=NOW,
+                    blocks=(),
+                    cover_url=old_url,
+                )
+                requests = []
+
+                @contextmanager
+                def transport(request):
+                    requests.append(request)
+                    if len(requests) == 1:
+                        chunks = iter((b"old",))
+
+                        def interrupted_read(_size):
+                            try:
+                                return next(chunks)
+                            except StopIteration:
+                                raise ConnectionResetError("interrupted") from None
+
+                        yield SimpleNamespace(
+                            status=200, headers={"Content-Length": "9"}, read=interrupted_read
+                        )
+                    else:
+                        body = b" cover" if should_resume else b"new cover"
+                        headers = {"Content-Length": str(len(body))}
+                        if should_resume:
+                            headers["Content-Range"] = "bytes 3-8/9"
+                        with io.BytesIO(body) as response_body:
+                            yield SimpleNamespace(
+                                status=206 if should_resume else 200,
+                                headers=headers,
+                                read=response_body.read,
+                            )
+
+                def downloader(source_url, destination):
+                    return download_media(
+                        source_url, destination, transport=transport, max_retries=0
+                    )
+
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = Path(temporary_directory)
+                    interrupted = archive_assets(article, root / "media", downloader=downloader)
+                    self.assertEqual(len(interrupted.failures), 1)
+                    refreshed = archive_assets(
+                        replace(article, cover_url=new_url), root / "media", downloader=downloader
+                    )
+
+                    self.assertEqual(
+                        requests[1].get_header("Range"), "bytes=3-" if should_resume else None
+                    )
+                    self.assertEqual(refreshed.downloads[0].resumed_from, 3 if should_resume else 0)
+                    self.assertEqual(
+                        (root / refreshed.source_paths[new_url]).read_bytes(),
+                        b"old cover" if should_resume else b"new cover",
+                    )
+
     def test_one_failed_image_keeps_remote_url_and_does_not_block_other_outputs(self):
         failed_url = "https://pic.example/missing.png"
         downloaded_url = "https://pic.example/available.png"
