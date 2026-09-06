@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from types import TracebackType
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self, cast
 
 from .archive import ArchiveReceipt
 from .assets import MediaArchiveFailure
@@ -17,9 +18,10 @@ from .domain import (
     Article,
     ColumnArchive,
     ColumnRef,
+    CommentThread,
     QuestionArchive,
 )
-from .embedded_video import EmbeddedVideoWarning, resolve_embedded_videos
+from .embedded_video import EmbeddedVideoResolver, EmbeddedVideoWarning
 from .http import InvalidResponseError, TransportError, ZhihuHttpError
 from .normalize import (
     NormalizationError,
@@ -37,6 +39,46 @@ from .urls import TargetKind, ZhihuTarget, route_zhihu_url
 
 class ArchiveSink(Protocol):
     def archive(self, target: ArchiveTarget) -> ArchiveReceipt: ...
+
+    def begin_batch(self, target: ColumnArchive | QuestionArchive) -> BatchArchiveSink: ...
+
+
+class BatchArchiveSink(Protocol):
+    @property
+    def progress_path(self) -> Path: ...
+
+    def write_item(self, item: Article | Answer) -> ArchiveReceipt: ...
+
+    def finish(self, target: ColumnArchive | QuestionArchive) -> ArchiveReceipt: ...
+
+    def interrupt(self) -> ArchiveReceipt: ...
+
+
+@dataclass(frozen=True, slots=True)
+class BatchProgress:
+    stage: Literal["started", "saved", "completed", "interrupted"]
+    completed: int
+    total: int | None
+    current_title: str | None = None
+    progress_path: Path | None = None
+    media_failures: tuple[MediaArchiveFailure, ...] = ()
+
+
+class BatchArchiveInterruptedError(RuntimeError):
+    """A batch stopped after its completed items were saved to readable files."""
+
+    def __init__(
+        self, receipt: ArchiveReceipt, completed: int, *, progress_saved: bool = True
+    ) -> None:
+        self.receipt = receipt
+        self.completed = completed
+        self.progress_saved = progress_saved
+        progress_message = (
+            f"进度记录：{receipt.progress_path}"
+            if progress_saved
+            else "进度记录未能更新，已写入的文件仍保留在保存目录中"
+        )
+        super().__init__(f"本轮归档未完成，已保存 {completed} 项；{progress_message}")
 
 
 class PayloadSource(Protocol):
@@ -111,6 +153,7 @@ class ArchiveWorkflow:
         browser_cookie_sink: Callable[[Mapping[str, str]], None] | None = None,
         resource_closer: Callable[[], object] | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        progress: Callable[[BatchProgress], None] | None = None,
     ) -> None:
         self._source = source
         self._sink = sink
@@ -122,6 +165,11 @@ class ArchiveWorkflow:
         self._browser_cookie_sink = browser_cookie_sink
         self._resource_closer = resource_closer
         self._clock = clock
+        self._progress = progress
+        self._batch: BatchArchiveSink | None = None
+        self._batch_completed = 0
+        self._batch_total: int | None = None
+        self._video_resolver: EmbeddedVideoResolver | None = None
         self._used_browser = False
         self._closed = False
 
@@ -129,14 +177,49 @@ class ArchiveWorkflow:
         if self._closed:
             raise RuntimeError("Archive workflow is closed.")
         self._used_browser = False
+        self._batch = None
+        self._batch_completed = 0
+        self._batch_total = None
+        self._video_resolver = (
+            EmbeddedVideoResolver(self._embedded_video_fetcher)
+            if self._settings.media_download and self._embedded_video_fetcher is not None
+            else None
+        )
         routed = route_zhihu_url(raw_url)
-        target = self._collect(routed)
-        embedded_video_warnings: tuple[EmbeddedVideoWarning, ...] = ()
-        if self._settings.media_download and self._embedded_video_fetcher is not None:
-            resolution = resolve_embedded_videos(target, get_json=self._embedded_video_fetcher)
-            target = resolution.target
-            embedded_video_warnings = resolution.warnings
-        receipt = self._sink.archive(target)
+        try:
+            target = self._collect(routed)
+            if self._batch is not None:
+                if not isinstance(target, (ColumnArchive, QuestionArchive)):
+                    raise TypeError("batch archives must produce a collection target")
+                receipt = self._batch.finish(target)
+                self._emit_progress("completed")
+            else:
+                target = self._enrich(target)
+                receipt = self._sink.archive(target)
+        except BaseException as error:
+            if self._batch is None:
+                raise
+            progress_saved = True
+            try:
+                partial_receipt = self._batch.interrupt()
+            except BaseException:
+                # A secondary checkpoint failure must not replace the cause of interruption.
+                progress_saved = False
+                partial_receipt = ArchiveReceipt(
+                    self._batch.progress_path.parent,
+                    None,
+                    None,
+                    progress_path=self._batch.progress_path,
+                )
+            try:
+                self._emit_progress("interrupted")
+            except BaseException:
+                pass
+            if not isinstance(error, Exception):
+                raise
+            raise BatchArchiveInterruptedError(
+                partial_receipt, self._batch_completed, progress_saved=progress_saved
+            ) from error
         if not isinstance(receipt, ArchiveReceipt):
             raise TypeError("Archive sinks must return an ArchiveReceipt.")
         return ArchiveReport(
@@ -144,8 +227,50 @@ class ArchiveWorkflow:
             receipt=receipt,
             used_browser=self._used_browser,
             media_failures=receipt.media_failures,
-            embedded_video_warnings=embedded_video_warnings,
+            embedded_video_warnings=tuple(self._video_resolver.warnings.values())
+            if self._video_resolver is not None
+            else (),
         )
+
+    def _enrich[T: ArchiveTarget](self, target: T) -> T:
+        if self._video_resolver is None:
+            return target
+        return cast(T, self._video_resolver.resolve(target).target)
+
+    def _begin_batch(self, target: ColumnArchive | QuestionArchive, total: int) -> None:
+        self._batch = self._sink.begin_batch(target)
+        self._batch_total = total or None
+        self._emit_progress("started")
+
+    def _save_batch_item[T: (Article, Answer)](self, item: T) -> T:
+        if self._batch is None:
+            raise AssertionError("a batch must start before saving items")
+        enriched = self._enrich(item)
+        receipt = self._batch.write_item(enriched)
+        self._batch_completed += 1
+        self._emit_progress(
+            "saved", current_title=item.title, media_failures=receipt.media_failures
+        )
+        return enriched
+
+    def _emit_progress(
+        self,
+        stage: Literal["started", "saved", "completed", "interrupted"],
+        *,
+        current_title: str | None = None,
+        media_failures: tuple[MediaArchiveFailure, ...] = (),
+    ) -> None:
+        if self._progress is not None:
+            self._progress(
+                BatchProgress(
+                    stage,
+                    self._batch_completed,
+                    self._batch_total,
+                    current_title,
+                    self._batch.progress_path if self._batch is not None else None,
+                    media_failures,
+                )
+            )
 
     def close(self) -> None:
         if self._closed:
@@ -208,6 +333,10 @@ class ArchiveWorkflow:
                 question_payload,
                 source_url=target.canonical_url,
             )
+            batch_target = self._enrich(
+                QuestionArchive(question=question, answers=(), archived_at=self._clock())
+            )
+            self._begin_batch(batch_target, question.answer_count)
             answer_payloads = self._collection_payloads(
                 target,
                 collection="questions",
@@ -218,13 +347,10 @@ class ArchiveWorkflow:
                 validate=_validate_answer_payload,
             )
             answers = tuple(
-                self._with_answer_comments(normalize_answer(payload)) for payload in answer_payloads
+                self._save_batch_item(self._with_answer_comments(normalize_answer(payload)))
+                for payload in answer_payloads
             )
-            return QuestionArchive(
-                question=question,
-                answers=answers,
-                archived_at=self._clock(),
-            )
+            return replace(batch_target, answers=answers)
 
         if target.kind is TargetKind.COLUMN:
             column_payload = self._single_payload(
@@ -240,6 +366,8 @@ class ArchiveWorkflow:
                 column_payload,
                 source_url=target.canonical_url,
             )
+            column_batch = ColumnArchive(column=column, articles=(), archived_at=self._clock())
+            self._begin_batch(column_batch, column.item_count)
             origin = ColumnRef(
                 token=column.token,
                 title=column.title,
@@ -262,14 +390,10 @@ class ArchiveWorkflow:
                         article,
                         columns=(*article.columns, origin),
                     )
-                articles.append(self._with_article_comments(article))
+                articles.append(self._save_batch_item(self._with_article_comments(article)))
             if column.item_count == 0 and articles:
                 column = replace(column, item_count=len(articles))
-            return ColumnArchive(
-                column=column,
-                articles=tuple(articles),
-                archived_at=self._clock(),
-            )
+            return replace(column_batch, column=column, articles=tuple(articles))
 
         if target.kind is TargetKind.VIDEO:
             payload = self._single_payload(
@@ -304,18 +428,37 @@ class ArchiveWorkflow:
         mode = self._settings.browser_fallback
         if mode is BrowserFallbackMode.ALWAYS:
             return validated(self._browser_payload(target, collection=collection))
+        return next(
+            self._recover(
+                direct=lambda: iter((validated(direct()),)),
+                recovery=lambda: iter(
+                    (validated(self._browser_payload(target, collection=collection)),)
+                ),
+            )
+        )
+
+    def _recover[T](
+        self,
+        *,
+        direct: Callable[[], Iterator[T]],
+        recovery: Callable[[], Iterator[T]],
+    ) -> Iterator[T]:
+        """Apply one recovery policy to single payloads, streams, and comments."""
         try:
-            return validated(direct())
+            yield from direct()
         except (
             InvalidZhihuPayloadError,
+            InvalidCommentPayloadError,
             InvalidResponseError,
             NormalizationError,
             ZhihuHttpError,
             TransportError,
-        ):
-            if mode is BrowserFallbackMode.NEVER:
+        ) as error:
+            if self._settings.browser_fallback is BrowserFallbackMode.NEVER or (
+                isinstance(error, ZhihuHttpError) and error.status_code == 429
+            ):
                 raise
-            return validated(self._browser_payload(target, collection=collection))
+            yield from recovery()
 
     def _browser_payload(
         self,
@@ -348,26 +491,23 @@ class ArchiveWorkflow:
         collection: str,
         direct: Callable[[], Iterator[Mapping[str, object]]],
         validate: Callable[[Mapping[str, object]], object],
-    ) -> tuple[Mapping[str, object], ...]:
-        def collect_validated() -> tuple[Mapping[str, object], ...]:
-            payloads = tuple(direct())
-            for payload in payloads:
-                validate(payload)
-            return payloads
+    ) -> Iterator[Mapping[str, object]]:
+        seen: set[str] = set()
 
-        try:
-            return collect_validated()
-        except (
-            InvalidZhihuPayloadError,
-            InvalidResponseError,
-            NormalizationError,
-            ZhihuHttpError,
-            TransportError,
-        ):
-            if self._settings.browser_fallback is BrowserFallbackMode.NEVER:
-                raise
+        def collect_validated() -> Iterator[Mapping[str, object]]:
+            for payload in direct():
+                validate(payload)
+                identifier = str(payload["id"])
+                if identifier in seen:
+                    continue
+                seen.add(identifier)
+                yield payload
+
+        def refresh_and_collect() -> Iterator[Mapping[str, object]]:
             self._browser_payload(target, collection=collection)
-            return collect_validated()
+            yield from collect_validated()
+
+        yield from self._recover(direct=collect_validated, recovery=refresh_and_collect)
 
     def _with_article_comments(self, article: Article) -> Article:
         if not self._settings.comments:
@@ -385,29 +525,21 @@ class ArchiveWorkflow:
             comments=self._comments("answer", answer.id, answer.source_url),
         )
 
-    def _comments(self, target_kind: str, target_id: str, source_url: str):
-        if self._comment_client is None:
+    def _comments(self, target_kind: str, target_id: str, source_url: str) -> CommentThread:
+        client = self._comment_client
+        if client is None:
             raise RuntimeError("评论已启用，但没有可用的知乎请求客户端。")
 
-        def fetch():
+        def fetch() -> CommentThread:
             return fetch_comment_thread(
-                self._comment_client,
+                client,
                 target_kind=target_kind,
                 target_id=target_id,
                 root_limit=self._settings.comment_roots,
                 reply_limit=self._settings.comment_replies,
             )
 
-        try:
-            return fetch()
-        except (
-            InvalidCommentPayloadError,
-            InvalidResponseError,
-            ZhihuHttpError,
-            TransportError,
-        ):
-            if self._settings.browser_fallback is BrowserFallbackMode.NEVER:
-                raise
+        def refresh_and_fetch() -> Iterator[CommentThread]:
             collections = {
                 "article": "articles",
                 "answer": "answers",
@@ -417,7 +549,9 @@ class ArchiveWorkflow:
                 route_zhihu_url(source_url),
                 collection=collections[target_kind],
             )
-            return fetch()
+            yield fetch()
+
+        return next(self._recover(direct=lambda: iter((fetch(),)), recovery=refresh_and_fetch))
 
 
 def _validate_article_payload(

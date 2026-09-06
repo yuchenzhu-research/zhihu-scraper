@@ -6,9 +6,9 @@ import os
 import re
 from dataclasses import dataclass, replace
 from functools import partial
-from html import unescape
+from html import escape, unescape
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from .assets import AssetArchiveReceipt, AssetDownloader, MediaArchiveFailure, archive_assets
 from .domain import (
@@ -23,6 +23,7 @@ from .domain import (
 from .filenames import safe_filename
 from .media import MediaDownloadReceipt, download_media
 from .pdf_export import PdfDocument, PdfExporter, export_pdfs, pdf_source_url
+from .platform import RuntimePlatform
 from .render import (
     ColumnRenderContext,
     HtmlRenderer,
@@ -50,6 +51,7 @@ class ArchiveReceipt:
     media_failures: tuple[MediaArchiveFailure, ...] = ()
     pdf_path: Path | None = None
     child_pdf_paths: tuple[Path, ...] = ()
+    progress_path: Path | None = None
 
 
 class LocalArchive:
@@ -69,6 +71,10 @@ class LocalArchive:
         if not any((markdown, html, pdf)):
             raise ValueError("至少启用 Markdown 或 HTML 或 PDF 中的一种输出。")
         self._root = Path(root)
+        self._platform = RuntimePlatform.detect()
+        self._name_budget = self._platform.archive_name_budget(
+            self._root, media_download=media_download
+        )
         self._markdown = markdown
         self._html = html
         self._pdf = pdf
@@ -106,9 +112,16 @@ class LocalArchive:
             return self._archive_column(target)
         return self._archive_standalone(target)
 
+    def begin_batch(self, target: ColumnArchive | QuestionArchive) -> LocalArchiveBatch:
+        """Start a readable checkpoint session before enumerating collection items."""
+
+        return LocalArchiveBatch(self, target)
+
     def _archive_standalone(
         self,
         target: ArchiveTarget,
+        *,
+        assets: AssetArchiveReceipt | None = None,
     ) -> ArchiveReceipt:
         title = target.title
         entry_directory = self._entry_directory(
@@ -117,7 +130,7 @@ class LocalArchive:
             target_id=target.id,
             source_url=target.source_url,
         )
-        filename = _DocumentNames(entry_directory).name_for(
+        filename = self._document_names(entry_directory).name_for(
             title=title,
             source_url=target.source_url,
             target_type=_target_type(target),
@@ -125,7 +138,8 @@ class LocalArchive:
         )
         entry_directory.mkdir(parents=True, exist_ok=True)
 
-        assets = self._archive_media(target, entry_directory)
+        if assets is None:
+            assets = self._archive_media(target, entry_directory)
         render_paths = assets.source_paths
         markdown_path = entry_directory / f"{filename}.md" if self._markdown else None
         html_path = entry_directory / f"{filename}.html" if self._html else None
@@ -167,6 +181,8 @@ class LocalArchive:
     def _archive_column(
         self,
         archive: ColumnArchive,
+        *,
+        assets: AssetArchiveReceipt | None = None,
     ) -> ArchiveReceipt:
         column = archive.column
         entry_directory = self._entry_directory(
@@ -175,17 +191,23 @@ class LocalArchive:
             target_id=column.token,
             source_url=column.source_url,
         )
-        column_filename = _DocumentNames(entry_directory).name_for(
+        column_filename = self._document_names(entry_directory).name_for(
             title=column.title,
             source_url=column.source_url,
             target_type="column",
             target_id=column.token,
         )
+        article_names = _unique_article_names(
+            archive.articles,
+            entry_directory / "内容",
+            max_utf16=self._name_budget,
+            runtime=self._platform,
+        )
         entry_directory.mkdir(parents=True, exist_ok=True)
-        assets = self._archive_media(archive, entry_directory)
+        if assets is None:
+            assets = self._archive_media(archive, entry_directory)
         render_paths = assets.source_paths
 
-        article_names = _unique_article_names(archive.articles, entry_directory / "内容")
         directory_entries = {
             article.id: RenderNavigationItem(
                 title=article.title,
@@ -395,31 +417,293 @@ class LocalArchive:
         target_id: str,
         source_url: str,
     ) -> Path:
-        base = self._root / safe_filename(title)
+        base = self._root / safe_filename(title, max_utf16=self._name_budget)
         if _directory_belongs_to(
             base,
             source_url,
             target_type=target_type,
         ):
-            return base
+            return self._validate_entry_directory(base)
         for directory in sorted(self._root.iterdir()):
             if directory.is_dir() and _directory_belongs_to(
                 directory, source_url, target_type=target_type
             ):
-                return directory
+                return self._validate_entry_directory(directory)
         occupied = {entry.name.casefold() for entry in self._root.iterdir()}
         if base.name.casefold() not in occupied:
-            return base
-        suffix = safe_filename(f"{title}--{target_type}-{target_id}")
+            return self._validate_entry_directory(base)
+        suffix = safe_filename(f"{title}--{target_type}-{target_id}", max_utf16=self._name_budget)
         counter = 2
         while suffix.casefold() in occupied:
-            suffix = safe_filename(f"{title}--{target_type}-{target_id}-{counter}")
+            suffix = safe_filename(
+                f"{title}--{target_type}-{target_id}-{counter}", max_utf16=self._name_budget
+            )
             counter += 1
-        return self._root / suffix
+        return self._validate_entry_directory(self._root / suffix)
+
+    def _validate_entry_directory(self, directory: Path) -> Path:
+        self._platform.validate_archive_path(directory)
+        if self._media_download:
+            self._platform.validate_archive_path(directory / "media" / ("x" * 64), extra_units=16)
+        return directory
+
+    def _document_names(self, directory: Path) -> _DocumentNames:
+        return _DocumentNames(directory, max_utf16=self._name_budget, runtime=self._platform)
 
 
-def _unique_article_names(articles: tuple[Article, ...], directory: Path) -> tuple[str, ...]:
-    names = _DocumentNames(directory)
+class LocalArchiveBatch:
+    """Save each collection item once, then publish its complete catalog once."""
+
+    def __init__(self, archive: LocalArchive, target: ColumnArchive | QuestionArchive) -> None:
+        self._archive = archive
+        self._target = target
+        archive._root.mkdir(parents=True, exist_ok=True)
+        self._directory = archive._entry_directory(
+            title=target.title,
+            target_type=_target_type(target),
+            target_id=target.id,
+            source_url=target.source_url,
+        )
+        self._directory.mkdir(parents=True, exist_ok=True)
+        self.progress_path = _batch_progress_path(
+            self._directory, target, max_utf16=archive._name_budget
+        )
+        archive._platform.validate_archive_path(self.progress_path, extra_units=5)
+        self._rows = _read_progress_rows(self.progress_path, self._directory)
+        self._items: dict[str, Article | Answer] = {}
+        self._receipts: dict[str, ArchiveReceipt] = {}
+        self._temporary_paths: list[Path] = []
+        self._closed = False
+        if isinstance(target, QuestionArchive):
+            self._item_directory = self._directory / "回答片段"
+            self._temporary_fragments = True
+        elif archive._markdown or archive._html:
+            self._item_directory = self._directory / "内容"
+            self._temporary_fragments = False
+        else:
+            self._item_directory = self._directory / "归档片段"
+            self._temporary_fragments = True
+        self._names = archive._document_names(self._item_directory)
+        self._source_paths: dict[str, str] = {}
+        self._downloads: list[MediaDownloadReceipt] = []
+        self._failures: list[MediaArchiveFailure] = []
+        self._write_progress(complete=False, active=True)
+        self._remember_assets(archive._archive_media(target, self._directory))
+
+    def write_item(self, item: Article | Answer) -> ArchiveReceipt:
+        if self._closed:
+            raise RuntimeError("batch archive is closed")
+        if isinstance(self._target, ColumnArchive) != isinstance(item, Article):
+            raise TypeError("collection item type does not match its archive")
+        if item.id in self._receipts:
+            return self._receipts[item.id]
+        title = item.title if isinstance(item, Article) else f"{item.author.name}--回答-{item.id}"
+        name = self._names.name_for(
+            title=title,
+            source_url=item.source_url,
+            target_type=_target_type(item),
+            target_id=item.id,
+        )
+        assets = self._archive._archive_media(item, self._directory)
+        paths = {source: f"../{path}" for source, path in assets.source_paths.items()}
+        context = None
+        if isinstance(self._target, ColumnArchive):
+            column = self._target.column
+            progress_href = _relative_href(f"../{self.progress_path.name}")
+            context = ColumnRenderContext(
+                column=ColumnRef(column.token, column.title, column.source_url),
+                directory=RenderNavigationItem(column.title, progress_href, progress_href),
+                item_count=column.item_count,
+            )
+        markdown_path = None
+        html_path = None
+        if self._archive._markdown or self._temporary_fragments:
+            markdown_path = self._item_directory / f"{name}.md"
+            _atomic_write_text(
+                markdown_path,
+                MarkdownRenderer().render(item, media_paths=paths, column_context=context),
+            )
+        if self._archive._html and not self._temporary_fragments:
+            html_path = self._item_directory / f"{name}.html"
+            _atomic_write_text(
+                html_path, HtmlRenderer().render(item, media_paths=paths, column_context=context)
+            )
+            self._archive._write_html_assets(self._directory / "assets")
+        saved_path = markdown_path or html_path
+        if saved_path is None:
+            raise AssertionError("a checkpoint must produce a readable document")
+        receipt = ArchiveReceipt(
+            self._directory,
+            markdown_path,
+            html_path,
+            media_downloads=assets.downloads,
+            media_failures=assets.failures,
+            progress_path=self.progress_path,
+        )
+        row = _progress_row(item, saved_path.relative_to(self._directory))
+        if self._rows.get(item.source_url) != row:
+            with self.progress_path.open("a", encoding="utf-8", newline="\n") as output:
+                output.write(f"{row}\n")
+                output.flush()
+                os.fsync(output.fileno())
+        self._rows[item.source_url] = row
+        self._items[item.id] = item
+        self._receipts[item.id] = receipt
+        if self._temporary_fragments:
+            self._temporary_paths.append(saved_path)
+        self._remember_assets(assets)
+        return receipt
+
+    def finish(self, target: ColumnArchive | QuestionArchive) -> ArchiveReceipt:
+        if self._closed:
+            raise RuntimeError("batch archive is closed")
+        if (type(target), target.id) != (type(self._target), self._target.id):
+            raise ValueError("the final collection does not match its checkpoint session")
+        assets = AssetArchiveReceipt(
+            self._source_paths, tuple(self._downloads), tuple(self._failures)
+        )
+        if isinstance(target, ColumnArchive):
+            receipt = self._archive._archive_column(target, assets=assets)
+            final_paths = (
+                receipt.child_markdown_paths or receipt.child_html_paths or receipt.child_pdf_paths
+            )
+            for item, path in zip(target.articles, final_paths, strict=True):
+                self._rows[item.source_url] = _progress_row(item, path.relative_to(self._directory))
+        else:
+            receipt = self._archive._archive_standalone(target, assets=assets)
+            final_path = receipt.markdown_path or receipt.html_path or receipt.pdf_path
+            if final_path is None:
+                raise AssertionError("a complete question archive must have an output document")
+            # The complete question document replaces its earlier answer set, so old
+            # answer links no longer describe saved content in that document.
+            self._rows.clear()
+            for answer in target.answers:
+                self._rows[answer.source_url] = _progress_row(
+                    answer, final_path.relative_to(self._directory)
+                )
+        self._write_progress(complete=True)
+        self._closed = True
+        for path in self._temporary_paths:
+            path.unlink(missing_ok=True)
+        if self._temporary_fragments and self._item_directory.is_dir():
+            if not any(self._item_directory.iterdir()):
+                self._item_directory.rmdir()
+        return replace(receipt, progress_path=self.progress_path)
+
+    def interrupt(self) -> ArchiveReceipt:
+        self._write_progress(complete=False)
+        self._closed = True
+        return ArchiveReceipt(
+            self._directory,
+            None,
+            None,
+            child_markdown_paths=tuple(
+                receipt.markdown_path
+                for receipt in self._receipts.values()
+                if receipt.markdown_path
+            ),
+            child_html_paths=tuple(
+                receipt.html_path for receipt in self._receipts.values() if receipt.html_path
+            ),
+            media_downloads=tuple(self._downloads),
+            media_failures=tuple(self._failures),
+            progress_path=self.progress_path,
+        )
+
+    def _remember_assets(self, assets: AssetArchiveReceipt) -> None:
+        self._source_paths.update(assets.source_paths)
+        self._downloads.extend(assets.downloads)
+        self._failures.extend(assets.failures)
+
+    def _write_progress(self, *, complete: bool, active: bool = False) -> None:
+        status = "已完成" if complete else "未完成（进行中）" if active else "未完成"
+        source = self._target.source_url
+        label = _source_label(_target_type(self._target))
+        content = "\n".join(
+            (
+                "# 归档进度",
+                "",
+                f"> {label}：[{source}]({source})",
+                f"> 状态：{status}",
+                "> 保存进度：每个新增链接均已写入文件。"
+                if active
+                else f"> 本轮已保存：{len(self._items)} 项",
+                "",
+                "重新运行相同网址会重新读取列表、复用已有文件；旧的完整目录在本轮全部成功前保持不变。",
+                "下列链接仅包含已经保存的内容，也保留此前运行留下的可读文件。",
+                "",
+                "## 已保存内容",
+                "",
+                *self._rows.values(),
+                "",
+            )
+        )
+        _atomic_write_text(self.progress_path, content)
+
+
+def _batch_progress_path(
+    directory: Path, target: ColumnArchive | QuestionArchive, *, max_utf16: int | None = None
+) -> Path:
+    identity = _source_identity(target.source_url, _source_label(_target_type(target)))
+    for path in sorted(directory.glob("*.md")):
+        if _is_progress_document(path) and _document_identity(path) == identity:
+            return path
+    candidate = directory / "归档进度.md"
+    counter = 1
+    while candidate.exists():
+        suffix = f"归档进度--{_target_type(target)}-{target.id}"
+        if counter > 1:
+            suffix += f"-{counter}"
+        candidate = directory / f"{safe_filename(suffix, max_utf16=max_utf16)}.md"
+        counter += 1
+    return candidate
+
+
+def _is_progress_document(path: Path) -> bool:
+    if path.suffix.casefold() != ".md":
+        return False
+    try:
+        with path.open(encoding="utf-8") as source:
+            return source.readline().rstrip("\r\n") == "# 归档进度"
+    except (OSError, UnicodeError):
+        return False
+
+
+def _read_progress_rows(path: Path, directory: Path) -> dict[str, str]:
+    rows: dict[str, str] = {}
+    if not path.is_file():
+        return rows
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.fullmatch(r"- \[[^\n]*\]\(([^)]*)\) · \[知乎原文\]\(([^)]*)\)", line)
+        if match is None:
+            continue
+        relative_path, source_url = match.groups()
+        saved = (directory / unquote(relative_path)).resolve()
+        if saved.is_relative_to(directory.resolve()) and saved.is_file():
+            rows[source_url] = line
+    return rows
+
+
+def _progress_row(item: Article | Answer, path: Path) -> str:
+    title = item.title if isinstance(item, Article) else f"{item.author.name}的回答"
+    title = (
+        escape(" ".join(title.split()), quote=False)
+        .replace("\\", "\\\\")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+    )
+    source_url = quote(item.source_url, safe="/:?=&%#@+~")
+    return f"- [{title}]({_relative_href(path.as_posix())}) · [知乎原文]({source_url})"
+
+
+def _unique_article_names(
+    articles: tuple[Article, ...],
+    directory: Path,
+    *,
+    max_utf16: int | None = None,
+    runtime: RuntimePlatform | None = None,
+) -> tuple[str, ...]:
+    names = _DocumentNames(directory, max_utf16=max_utf16, runtime=runtime)
     return tuple(
         names.name_for(
             title=article.title,
@@ -482,11 +766,21 @@ def _directory_belongs_to(
 class _DocumentNames:
     """Recover reusable names from visible source links, never from hidden state."""
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(
+        self,
+        directory: Path,
+        *,
+        max_utf16: int | None = None,
+        runtime: RuntimePlatform | None = None,
+    ) -> None:
+        self._directory = directory
+        self._max_utf16 = max_utf16
+        self._runtime = runtime
         documents = sorted(directory.iterdir()) if directory.is_dir() else []
         groups: dict[str, list[tuple[Path, tuple[str, str] | None]]] = {}
         self.identities: set[tuple[str, str]] = set()
         self._existing: dict[tuple[str, str], str] = {}
+        progress_names: set[str] = set()
         for document in documents:
             if document.suffix.casefold() not in {".md", ".html", ".pdf"}:
                 continue
@@ -494,27 +788,41 @@ class _DocumentNames:
             groups.setdefault(document.stem.casefold(), []).append((document, identity))
             if identity is not None:
                 self.identities.add(identity)
+            if _is_progress_document(document):
+                progress_names.add(document.stem.casefold())
         self._used = set(groups)
         for group in groups.values():
             document, identity = group[0]
             # An unknown or differently owned sibling format must stay untouched.
-            if identity is not None and all(owner == identity for _, owner in group):
+            if (
+                identity is not None
+                and document.stem.casefold() not in progress_names
+                and all(owner == identity for _, owner in group)
+            ):
                 self._existing.setdefault(identity, document.stem)
 
     def name_for(self, *, title: str, source_url: str, target_type: str, target_id: str) -> str:
         identity = _source_identity(source_url, _source_label(target_type))
         if existing := self._existing.get(identity):
+            self._validate(existing)
             return existing
-        name = safe_filename(title)
+        name = safe_filename(title, max_utf16=self._max_utf16)
         if name.casefold() in self._used:
-            name = safe_filename(f"{title}--{target_type}-{target_id}")
+            name = safe_filename(f"{title}--{target_type}-{target_id}", max_utf16=self._max_utf16)
         counter = 2
         while name.casefold() in self._used:
-            name = safe_filename(f"{title}--{target_type}-{target_id}-{counter}")
+            name = safe_filename(
+                f"{title}--{target_type}-{target_id}-{counter}", max_utf16=self._max_utf16
+            )
             counter += 1
+        self._validate(name)
         self._used.add(name.casefold())
         self._existing[identity] = name
         return name
+
+    def _validate(self, name: str) -> None:
+        if self._runtime is not None:
+            self._runtime.validate_archive_path(self._directory / f"{name}.html", extra_units=5)
 
 
 def _source_label(target_type: str) -> str:
@@ -555,6 +863,7 @@ def _document_identity(document: Path) -> tuple[str, str] | None:
 
 
 def _atomic_write_text(path: Path, content: str) -> None:
+    RuntimePlatform.detect().validate_archive_path(path, extra_units=5)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name(f".{path.name}.tmp")
     try:

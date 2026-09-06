@@ -282,9 +282,11 @@ Media filenames distinguish actual source resources: replacing a cover or media 
 
 Column articles and styles are written before the directory is published. A document or stylesheet write failure leaves the previous directory in place. Each file is replaced atomically; already completed article updates are not rolled back.
 
+Questions and columns save items incrementally and produce a readable `归档进度.md` progress document (choosing another name on collision). The CLI advances progress only after an item is saved; source totals are estimates. Rerun the same command after interruption: it fetches the list again, reuses the directory, stable filenames and valid media, then publishes the complete column directory or merged question only after all items succeed. Unmerged question answers remain in `回答片段/`; PDF-only column checkpoints use `归档片段/`. Fragments from the completed run are cleaned after final output succeeds. Progress explicitly distinguishes incomplete and complete runs, and a failed run preserves the previous complete directory.
+
 Repeated archives reuse existing directories and document paths by Zhihu content ID. Titles and navigation update while filenames may retain an older title. Previously archived column articles that are no longer accessible remain on disk, but the current directory lists only articles fetched this time. Unknown or conflicting files and directories are preserved by choosing another name.
 
-The project deliberately maintains no database, search index, or knowledge graph. Markdown, media, and opt-in HTML are the complete archive, so users can read, move, back up, or delete it without hidden state.
+The project deliberately maintains no database, search index, or knowledge graph. Markdown, media, and opt-in HTML/PDF are the complete archive, so users can read, move, back up, or delete it without hidden state.
 
 ## Python API
 
@@ -304,9 +306,11 @@ print(report.receipt.entry_directory)
 
 `archive_url(URL, settings) -> ArchiveReport` is the shared synchronous entry point for the CLI, agents, and future interfaces. The source, browser, and archive boundaries are injectable through `build_workflow` for tests and extensions. Custom archive sinks must return a structured `ArchiveReceipt` with output paths and media failures; invalid receipts fail explicitly.
 
+Pass `progress=callback` to receive `BatchProgress` events for start, saved items, completion, and interruption. Batch failures raise `BatchArchiveInterruptedError`, whose `completed` and `receipt.progress_path` locate saved work; cancellation remains `KeyboardInterrupt`. Custom batch sinks implement `begin_batch`, returning a session with `write_item`, `finish`, and `interrupt`; see `ArchiveSink` / `BatchArchiveSink`.
+
 ## Three Platforms and Development
 
-On Windows, the output root is checked for sufficient path space before network requests start. If it is too deep, shorten `archive.output_dir` and retry.
+On Windows, the output root is checked for sufficient path space before network requests start. If it is too deep, shorten `archive.output_dir` and retry. New names account for the UTF-16 total path budget, including Chinese text, emoji, and temporary suffixes. Existing overlong files are preserved with a prompt to move the archive to a shorter root.
 
 Fetching, normalization, rendering, and media behavior are shared across Windows, macOS, and Linux. The platform adapter contains real differences such as browser locations, application-data directories, and safe filenames. CI tests locked dependencies with Python 3.12, 3.13, and 3.14 on all three operating systems, and separately checks allowed dependency versions and browser startup on Ubuntu. Zhihu endpoints and anti-bot behavior can change at any time, so a green test suite cannot guarantee that every future URL will remain fetchable.
 

@@ -10,6 +10,7 @@ from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path
 
+from .application import BatchProgress
 from .facade import ArchiveReport, archive_url, check_session, login_session
 from .settings import (
     ArchiveSettings,
@@ -162,7 +163,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         if arguments.cdp is not None:
             settings = replace(settings, cdp_url=arguments.cdp)
 
-        report = archive_url(arguments.url, settings)
+        report = archive_url(arguments.url, settings, progress=_print_batch_progress)
         _print_archive_report(report)
         return 0
     except KeyboardInterrupt:
@@ -214,6 +215,24 @@ def _run_check(settings: ArchiveSettings) -> int:
         return 0
     print("知乎登录状态无效或已过期。")
     return 1
+
+
+def _print_batch_progress(progress: BatchProgress) -> None:
+    if progress.stage == "started":
+        print("开始批量归档，内容将逐项保存。", file=sys.stderr, flush=True)
+    elif progress.stage == "saved":
+        count = f"已保存 {progress.completed} 项"
+        if progress.total is not None:
+            count += f"（来源计数 {progress.total}）"
+        print(f"{count}：{progress.current_title}", file=sys.stderr, flush=True)
+        for failure in progress.media_failures:
+            print(f"- {failure.display_message}", file=sys.stderr, flush=True)
+    elif progress.stage == "interrupted":
+        print(
+            f"归档中断，已保存 {progress.completed} 项；进度记录：{progress.progress_path}",
+            file=sys.stderr,
+            flush=True,
+        )
 
 
 def _print_archive_report(report: ArchiveReport) -> None:

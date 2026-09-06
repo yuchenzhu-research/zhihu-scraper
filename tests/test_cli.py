@@ -326,3 +326,23 @@ def test_no_pdf_overrides_persistent_pdf_choice(tmp_path):
             == 0
         )
     assert archive.call_args.args[1].pdf is False
+
+
+def test_batch_cli_prints_saved_progress_before_a_later_failure(capsys, tmp_path):
+    from zhihu_scraper.application import BatchProgress
+
+    def archive(_url, _settings, *, progress):
+        progress(BatchProgress("started", 0, 2, progress_path=tmp_path / "归档进度.md"))
+        progress(BatchProgress("saved", 1, 2, current_title="已经完成的文章"))
+        progress(BatchProgress("interrupted", 1, 2, progress_path=tmp_path / "归档进度.md"))
+        raise RuntimeError("分页暂时不可用")
+
+    with patch("zhihu_scraper.cli.archive_url", side_effect=archive):
+        assert run_cli(["fetch", "https://www.zhihu.com/column/example"]) == 1
+
+    output = capsys.readouterr()
+    assert "归档完成" not in output.out
+    assert "已保存 1 项" in output.err
+    assert "已经完成的文章" in output.err
+    assert "归档进度.md" in output.err
+    assert "分页暂时不可用" in output.err

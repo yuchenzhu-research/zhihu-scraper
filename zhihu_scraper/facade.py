@@ -8,7 +8,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from .application import ArchiveReport, ArchiveSink, ArchiveWorkflow, BrowserReader
+from .application import ArchiveReport, ArchiveSink, ArchiveWorkflow, BatchProgress, BrowserReader
 from .archive import LocalArchive
 from .browser import BrowserFallback
 from .http import (
@@ -109,11 +109,13 @@ def login_session(
 def archive_url(
     raw_url: str,
     settings: ArchiveSettings | None = None,
+    *,
+    progress: Callable[[BatchProgress], None] | None = None,
 ) -> ArchiveReport:
     """Archive one supported Zhihu URL using validated local settings."""
 
     effective_settings = settings or ArchiveSettings()
-    workflow = build_workflow(effective_settings)
+    workflow = build_workflow(effective_settings, progress=progress)
     try:
         return workflow.run(raw_url)
     finally:
@@ -127,6 +129,7 @@ def build_workflow(
     sink: ArchiveSink | None = None,
     browser_factory: Callable[[], BrowserReader] | None = None,
     cookies: Mapping[str, str] | None = None,
+    progress: Callable[[BatchProgress], None] | None = None,
 ) -> ArchiveWorkflow:
     """Compose the public workflow while keeping every boundary injectable."""
 
@@ -160,6 +163,7 @@ def build_workflow(
         settings=settings,
         comment_client=http_client,
         embedded_video_fetcher=http_client.get_json,
+        progress=progress,
         browser_factory=browser_factory,
         browser_cookies=configured_cookies,
         browser_cookie_sink=getattr(http_client, "update_cookies", None),

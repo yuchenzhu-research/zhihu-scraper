@@ -78,6 +78,27 @@ class FakeSink:
         self.targets.append(target)
         return ArchiveReceipt(Path(f"receipt-{target.id}"), None, None)
 
+    def begin_batch(self, target):
+        return FakeBatchSink(self, target)
+
+
+class FakeBatchSink:
+    def __init__(self, sink, target):
+        self.sink = sink
+        self.target = target
+        self.progress_path = Path(f"receipt-{target.id}/归档进度.md")
+
+    def write_item(self, item):
+        return ArchiveReceipt(Path(f"receipt-{self.target.id}"), None, None)
+
+    def finish(self, target):
+        return self.sink.archive(target)
+
+    def interrupt(self):
+        return ArchiveReceipt(
+            Path(f"receipt-{self.target.id}"), None, None, progress_path=self.progress_path
+        )
+
 
 class FakeCommentClient:
     def __init__(self):

@@ -69,9 +69,7 @@ def resolve_embedded_videos(
     is queried; denied access and rate limits stop further optional requests.
     """
 
-    resolver = _EmbeddedVideoResolver(get_json)
-    resolved = resolver.resolve_target(target)
-    return EmbeddedVideoResolution(resolved, tuple(resolver.warnings.values()))
+    return EmbeddedVideoResolver(get_json).resolve(target)
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,12 +78,17 @@ class _UnavailableVideo:
     error_type: str
 
 
-class _EmbeddedVideoResolver:
+class EmbeddedVideoResolver:
+    """Keep one batch's resolved IDs and access restrictions across its items."""
+
     def __init__(self, get_json: Callable[[str], object]) -> None:
         self._get_json = get_json
         self._resolved: dict[str, MediaAsset | _UnavailableVideo] = {}
         self._blocked: _UnavailableVideo | None = None
         self.warnings: dict[str, EmbeddedVideoWarning] = {}
+
+    def resolve(self, target: ArchiveTarget) -> EmbeddedVideoResolution:
+        return EmbeddedVideoResolution(self.resolve_target(target), tuple(self.warnings.values()))
 
     def resolve_target(self, target: ArchiveTarget) -> ArchiveTarget:
         if isinstance(target, Article):

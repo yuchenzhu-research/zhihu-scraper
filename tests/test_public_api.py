@@ -362,3 +362,12 @@ def test_overdeep_windows_archive_path_fails_before_opening_http_resources(tmp_p
             ArchiveSettings(output_dir=tmp_path / ("deep" * 60)),
         )
     create_client.assert_not_called()
+
+
+def test_public_archive_api_passes_the_progress_callback_and_closes_workflow():
+    events = []
+    workflow = Mock()
+    with patch("zhihu_scraper.facade.build_workflow", return_value=workflow) as build:
+        archive_url("https://zhuanlan.zhihu.com/p/1", progress=events.append)
+    assert build.call_args.kwargs["progress"] == events.append
+    workflow.close.assert_called_once_with()

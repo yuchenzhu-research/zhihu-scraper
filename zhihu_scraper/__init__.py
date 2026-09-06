@@ -1,6 +1,6 @@
 """Local-first Zhihu archiving with one stable public interface."""
 
-from .application import ArchiveReport
+from .application import ArchiveReport, BatchArchiveInterruptedError, BatchProgress
 from .facade import (
     LoginReport,
     LoginTimeoutError,
@@ -14,6 +14,8 @@ from .settings import ArchiveSettings, BrowserFallback, load_settings
 
 __all__ = [
     "ArchiveReport",
+    "BatchArchiveInterruptedError",
+    "BatchProgress",
     "ArchiveSettings",
     "BrowserFallback",
     "SessionReport",
