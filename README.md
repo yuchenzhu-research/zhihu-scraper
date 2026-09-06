@@ -245,7 +245,7 @@ headless = false
 
 未配置 CDP 时，程序优先启动系统 Chrome，并在不可用时使用项目管理的 Chromium；两者共用项目自己的持久化浏览器目录。配置 `cdp_url` 后，可连接已经登录的本机 Chrome。出于凭证安全，CDP 只接受 `localhost`、`127.0.0.1` 或 `[::1]` 的 HTTP/WebSocket 地址。
 
-`network.proxy` 会统一应用于 HTTP/API 请求、项目管理的浏览器和媒体下载；连接外部 CDP 时则沿用该浏览器自身的代理设置。请求和媒体下载共用 `timeout` 与有界重试策略，日志会隐藏 Cookie 和代理凭证。
+`network.proxy` 会统一应用于 HTTP/API 请求、项目管理的浏览器和媒体下载；连接外部 CDP 时则沿用该浏览器自身的代理设置。请求和媒体下载共用 `timeout` 与有界重试策略，日志会隐藏 Cookie 和代理凭证。HTTP 有效超时最小为 1 毫秒，极小的正值不会关闭请求截止时间。
 
 ## 本地输出
 

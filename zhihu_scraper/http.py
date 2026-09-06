@@ -124,6 +124,13 @@ class ZhihuHttpClient:
         monotonic: Callable[[], float] = time.monotonic,
         random: Callable[[], float] = random.random,
     ) -> None:
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or not math.isfinite(timeout)
+            or timeout <= 0
+        ):
+            raise ValueError("timeout must be a finite positive number of seconds.")
         for name, value in (
             ("request_interval", request_interval),
             ("request_jitter", request_jitter),
@@ -141,7 +148,8 @@ class ZhihuHttpClient:
             requests.Session(impersonate="chrome"),
         )
         self._max_retries = max_retries
-        self._timeout = timeout
+        # curl truncates timeout to milliseconds; zero would disable its deadline.
+        self._timeout = max(0.001, timeout)
         self._sleep = sleep
         self._clock = clock
         self._request_interval = float(request_interval)

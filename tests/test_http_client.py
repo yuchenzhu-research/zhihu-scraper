@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from email.utils import formatdate
 from pathlib import Path
+from unittest.mock import patch
 
 from zhihu_scraper.http import (
     AccessDeniedError,
@@ -171,6 +172,30 @@ class CookieLoadingTests(unittest.TestCase):
 
 
 class ZhihuHttpClientTests(unittest.TestCase):
+    def test_submillisecond_timeout_remains_a_bounded_transport_request(self):
+        for configured, effective in ((0.0001, 0.001), (0.001, 0.001), (2.5, 2.5)):
+            with self.subTest(timeout=configured):
+                session = FakeSession([FakeResponse(json_data={"ok": True})])
+                client = ZhihuHttpClient(session=session, timeout=configured)
+
+                self.assertEqual({"ok": True}, client.get_json("/api/v4/me"))
+
+                timeout = session.calls[0][1]["timeout"]
+                self.assertEqual(effective, timeout)
+                # curl converts seconds to integer milliseconds; zero disables
+                # its deadline rather than representing a very short timeout.
+                self.assertGreaterEqual(int(timeout * 1000), 1)
+
+    def test_invalid_timeout_is_rejected_before_creating_transport_resources(self):
+        for timeout in (0, -1, float("inf"), float("nan"), True, "1", None):
+            with (
+                self.subTest(timeout=timeout),
+                patch("zhihu_scraper.http.requests.Session") as create_session,
+                self.assertRaisesRegex(ValueError, "timeout"),
+            ):
+                ZhihuHttpClient(timeout=timeout)
+            create_session.assert_not_called()
+
     def test_shared_client_spaces_json_html_and_comment_requests_with_jitter(self):
         timer = VirtualTime()
         random_values = iter((0.0, 1.0, 0.5, 0.0))

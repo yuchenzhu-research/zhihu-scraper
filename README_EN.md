@@ -245,7 +245,7 @@ Markdown and media downloads are enabled by default. HTML, PDF, comments, and pr
 
 Without CDP, the project tries system Chrome first and falls back to its managed Chromium; both use a project-owned persistent browser directory. With `cdp_url`, it can attach to an already signed-in local Chrome session. To protect the authenticated control channel, only HTTP/WebSocket endpoints on `localhost`, `127.0.0.1`, or `[::1]` are accepted.
 
-`network.proxy` applies consistently to HTTP/API requests, the project-managed browser, and media downloads. An external CDP browser keeps its own proxy configuration. Requests and media downloads share the configured timeout and bounded retry policy, and logs redact cookies and proxy credentials.
+`network.proxy` applies consistently to HTTP/API requests, the project-managed browser, and media downloads. An external CDP browser keeps its own proxy configuration. Requests and media downloads share the configured timeout and bounded retry policy, and logs redact cookies and proxy credentials. Effective HTTP timeouts are at least 1 millisecond, so very small positive values cannot disable the request deadline.
 
 ## Local Output
 
