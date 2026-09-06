@@ -6,6 +6,30 @@ from zhihu_scraper.filenames import safe_filename
 
 
 class CrossPlatformFilenameTests(unittest.TestCase):
+    def test_windows_utf16_budget_keeps_whole_characters_and_stable_distinct_names(self):
+        first = "🧠标题" * 30 + ".html"
+        second = "🧠标题" * 30 + "different.html"
+
+        name = safe_filename(first, max_utf16=24)
+
+        self.assertLessEqual(len(name.encode("utf-16-le")) // 2, 24)
+        self.assertLessEqual(len(name.encode("utf-8")), 240)
+        self.assertTrue(name.endswith(".html"))
+        self.assertEqual(name, safe_filename(first, max_utf16=24))
+        self.assertNotEqual(name, safe_filename(second, max_utf16=24))
+        self.assertIn("🧠", name)
+
+    def test_tight_budgets_drop_long_unicode_suffixes_instead_of_overflowing(self):
+        for suffix in (".longsuffix", ".🧠🧠🧠🧠🧠🧠", ".html"):
+            with self.subTest(suffix=suffix):
+                value = "🧠标题" * 50 + suffix
+                name = safe_filename(value, max_length=16, max_utf16=16)
+
+                self.assertLessEqual(len(name), 16)
+                self.assertLessEqual(len(name.encode("utf-16-le")) // 2, 16)
+                self.assertLessEqual(len(name.encode("utf-8")), 240)
+                self.assertEqual(name, safe_filename(value, max_length=16, max_utf16=16))
+
     def test_replaces_reserved_characters_and_trailing_dots(self):
         self.assertEqual("问题_答案", safe_filename('问题:/\\*?"<>|答案. '))
 

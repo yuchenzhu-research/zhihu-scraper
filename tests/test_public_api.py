@@ -340,3 +340,25 @@ class PublicApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_overdeep_windows_archive_path_fails_before_opening_http_resources(tmp_path):
+    from pathlib import PureWindowsPath
+
+    import pytest
+
+    from zhihu_scraper.platform import ArchivePathError, RuntimePlatform
+
+    runtime = RuntimePlatform.for_system(
+        "Windows", home_directory=PureWindowsPath("C:/Users/test"), environment={}
+    )
+    with (
+        patch("zhihu_scraper.facade.RuntimePlatform.detect", return_value=runtime),
+        patch("zhihu_scraper.facade.ZhihuHttpClient") as create_client,
+        pytest.raises(ArchivePathError),
+    ):
+        archive_url(
+            "https://zhuanlan.zhihu.com/p/1",
+            ArchiveSettings(output_dir=tmp_path / ("deep" * 60)),
+        )
+    create_client.assert_not_called()

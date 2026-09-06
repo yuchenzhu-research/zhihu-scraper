@@ -306,6 +306,8 @@ print(report.receipt.entry_directory)
 
 ## 三平台与开发验证
 
+Windows 会在网络请求前检查输出目录的路径余量；根目录过深时明确报错，请缩短 `archive.output_dir` 后重试。
+
 核心抓取、归一化、渲染和媒体逻辑在 Windows、macOS、Linux 共用；平台 Adapter 只处理浏览器位置、应用数据目录和安全文件名等真实差异。CI 在三个系统上使用锁定依赖覆盖 Python 3.12、3.13 和 3.14，并在 Ubuntu 单独验证允许范围内的新依赖与浏览器启动。知乎接口和反爬策略可能随时变化，自动测试通过不等于任意链接永远可抓。
 
 开发环境：

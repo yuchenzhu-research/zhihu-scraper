@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ntpath
 import os
 import platform as system_platform
 import re
@@ -17,6 +18,10 @@ class UnsupportedPlatformError(RuntimeError):
     """Raised when the runtime cannot provide a supported platform adapter."""
 
 
+class ArchivePathError(ValueError):
+    """An archive cannot fit within portable Windows path limits."""
+
+
 class OperatingSystem(StrEnum):
     WINDOWS = "windows"
     MACOS = "macos"
@@ -28,6 +33,37 @@ class RuntimePlatform:
     operating_system: OperatingSystem
     user_data_directory: PurePath
     browser_candidates: tuple[PurePath, ...]
+
+    def archive_name_budget(self, root: PurePath, *, media_download: bool = True) -> int | None:
+        """Reserve enough absolute-path space for generated titles and temporary files."""
+
+        if self.operating_system is not OperatingSystem.WINDOWS:
+            return None
+        remaining = 259 - _windows_path_units(root)
+        # Two title components, /回答片段/ (the deepest recovery directory),
+        # and .html's atomic-write suffix; /内容/ is shorter.
+        budget = (remaining - 17) // 2
+        if media_download:
+            # Keep existing media identities: 64 ASCII filename characters,
+            # /media/, and the longest .part.resume.tmp suffix.
+            budget = min(budget, remaining - 88)
+        if budget < 16:
+            raise ArchivePathError(
+                "Windows 保存目录过深，无法为正文和媒体预留安全路径；"
+                "请缩短 archive.output_dir 后重试。"
+            )
+        return budget
+
+    def validate_archive_path(self, path: PurePath, *, extra_units: int = 0) -> None:
+        """Check existing names without renaming files or changing their identity."""
+
+        if self.operating_system is not OperatingSystem.WINDOWS:
+            return
+        if _windows_path_units(path) + extra_units > 259:
+            raise ArchivePathError(
+                "Windows 归档路径过长，无法安全写入正文、媒体或临时文件；"
+                "请将现有归档移到更短的保存目录后重试。"
+            )
 
     def secure_private_file(self, path: Path) -> None:
         """Restrict a newly created temporary credential file before writing secrets."""
@@ -138,3 +174,8 @@ class RuntimePlatform:
                 local_app_data / "Chromium" / "Application" / "chrome.exe",
             ),
         )
+
+
+def _windows_path_units(path: PurePath) -> int:
+    absolute = path if path.is_absolute() else Path(path).expanduser().resolve()
+    return len(ntpath.normpath(str(absolute)).encode("utf-16-le")) // 2

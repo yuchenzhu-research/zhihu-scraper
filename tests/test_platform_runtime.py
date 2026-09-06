@@ -1,10 +1,12 @@
 import tempfile
 import unittest
+from contextlib import chdir
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from zhihu_scraper.platform import (
+    ArchivePathError,
     OperatingSystem,
     RuntimePlatform,
     UnsupportedPlatformError,
@@ -12,6 +14,74 @@ from zhihu_scraper.platform import (
 
 
 class RuntimePlatformTests(unittest.TestCase):
+    def test_windows_archive_budget_covers_utf16_titles_and_media_resume_files(self):
+        runtime = RuntimePlatform.for_system(
+            "Windows", home_directory=PureWindowsPath("C:/Users/Ada"), environment={}
+        )
+        root = PureWindowsPath("C:/") / ("🧠" * 40)
+
+        budget = runtime.archive_name_budget(root)
+
+        self.assertGreaterEqual(budget, 16)
+        title = "🧠" * (budget // 2)
+        document = root / title / "内容" / f".{title}.html.tmp"
+        media = root / title / "media" / ("a" * 48 + "-" + "f" * 10 + ".webm.part.resume.tmp")
+        for path in (document, media):
+            self.assertLessEqual(len(str(path).encode("utf-16-le")) // 2, 259)
+
+    def test_windows_budget_also_covers_the_longer_recovery_fragment_directory(self):
+        runtime = RuntimePlatform.for_system(
+            "Windows", home_directory=PureWindowsPath("C:/Users/Ada"), environment={}
+        )
+        root = PureWindowsPath("C:/archives")
+        budget = runtime.archive_name_budget(root, media_download=False)
+        title = "🧠" * (budget // 2)
+        temporary_document = root / title / "回答片段" / f".{title}.html.tmp"
+
+        self.assertLessEqual(len(str(temporary_document).encode("utf-16-le")) // 2, 259)
+
+    def test_existing_windows_paths_are_checked_with_temporary_suffix_space(self):
+        runtime = RuntimePlatform.for_system(
+            "Windows", home_directory=PureWindowsPath("C:/Users/Ada"), environment={}
+        )
+        runtime.validate_archive_path(PureWindowsPath("C:/") / ("🧠" * 120), extra_units=10)
+
+        with self.assertRaisesRegex(ArchivePathError, "Windows.*路径"):
+            runtime.validate_archive_path(PureWindowsPath("C:/") / ("🧠" * 124), extra_units=10)
+
+    def test_deep_windows_roots_fail_but_no_media_can_use_the_released_space(self):
+        runtime = RuntimePlatform.for_system(
+            "Windows", home_directory=PureWindowsPath("C:/Users/Ada"), environment={}
+        )
+        root = PureWindowsPath("C:/") / ("🧠" * 90)
+        with self.assertRaisesRegex(ArchivePathError, "archive.output_dir"):
+            runtime.archive_name_budget(root)
+        self.assertGreaterEqual(runtime.archive_name_budget(root, media_download=False), 16)
+
+    def test_relative_windows_output_counts_the_absolute_working_directory(self):
+        runtime = RuntimePlatform.for_system(
+            "Windows", home_directory=PureWindowsPath("C:/Users/Ada"), environment={}
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            working_directory = Path(directory) / ("nested-" * 20)
+            working_directory.mkdir()
+            with chdir(working_directory):
+                with self.assertRaisesRegex(ArchivePathError, "Windows 保存目录过深"):
+                    runtime.archive_name_budget(Path("output"))
+                self.assertFalse(Path("output").exists())
+
+    def test_posix_archive_paths_keep_existing_naming_without_windows_total_limits(self):
+        root = PurePosixPath("/tmp")
+        for _ in range(60):
+            root /= "directory"
+        for system in ("Linux", "Darwin"):
+            with self.subTest(system=system):
+                runtime = RuntimePlatform.for_system(
+                    system, home_directory=PurePosixPath("/home/ada"), environment={}
+                )
+                self.assertIsNone(runtime.archive_name_budget(root))
+                runtime.validate_archive_path(root / "existing.md", extra_units=10)
+
     def test_private_files_are_owner_only_on_posix(self):
         for system in ("Linux", "Darwin"):
             runtime = RuntimePlatform.for_system(

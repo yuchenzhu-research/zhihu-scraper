@@ -19,6 +19,7 @@ from .http import (
     load_cookies,
     save_cookies,
 )
+from .platform import RuntimePlatform
 from .settings import ArchiveSettings
 from .settings import BrowserFallback as BrowserFallbackMode
 from .source import ZhihuSource
@@ -129,6 +130,9 @@ def build_workflow(
 ) -> ArchiveWorkflow:
     """Compose the public workflow while keeping every boundary injectable."""
 
+    RuntimePlatform.detect().archive_name_budget(
+        settings.output_dir, media_download=settings.media_download
+    )
     archive_sink = sink if sink is not None else LocalArchive.from_settings(settings)
     configured_cookies = dict(cookies) if cookies is not None else _configured_cookies(settings)
     http_client = client or ZhihuHttpClient(
