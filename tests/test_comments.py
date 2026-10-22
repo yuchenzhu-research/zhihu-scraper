@@ -310,3 +310,97 @@ def _comment_payload(comment_id, content):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_overlapping_comment_pages_count_unique_comments_toward_the_limit():
+    root = "/api/v4/comment_v5/articles/123/root_comment?limit=3&offset="
+    second = "/api/v4/comment_v5/articles/123/root_comment?limit=3&offset=next"
+    payloads = [{**_comment_payload(i, str(i)), "child_comment_count": 0} for i in (1, 2, 3)]
+    client = FakeClient(
+        {
+            root: {"data": payloads[:2], "paging": {"is_end": False, "next": second}},
+            second: {"data": payloads[1:], "paging": {"is_end": True, "next": ""}},
+        }
+    )
+
+    thread = fetch_comment_thread(client, target_kind="article", target_id="123", root_limit=3)
+
+    assert [comment.id for comment in thread.comments] == ["1", "2", "3"]
+    assert thread.roots_complete
+    assert client.calls == [root, second]
+
+
+def test_changing_comment_cursors_stop_when_two_pages_add_no_content():
+    import pytest
+
+    root = "/api/v4/comment_v5/articles/123/root_comment?limit=10&offset="
+    pages = [root, *(root + str(i) for i in range(1, 4))]
+    item = {**_comment_payload(1, "重复"), "child_comment_count": 0}
+    client = FakeClient(
+        {
+            url: {"data": [item], "paging": {"is_end": False, "next": following}}
+            for url, following in zip(pages, pages[1:])
+        }
+    )
+
+    with pytest.raises(InvalidCommentPayloadError, match="progress"):
+        fetch_comment_thread(client, target_kind="article", target_id="123")
+    assert client.calls == pages[:3]
+
+
+def test_overlapping_replies_are_deduplicated_independently():
+    root = "/api/v4/comment_v5/articles/123/root_comment?limit=10&offset="
+    first = "/api/v4/comment_v5/comment/10/child_comment?limit=3&offset="
+    second = first + "next"
+    replies = [_comment_payload(i, str(i)) for i in (11, 12, 13)]
+    client = FakeClient(
+        {
+            root: {"data": [_comment_payload(10, "根评论")], "paging": {"is_end": True}},
+            first: {"data": replies[:2], "paging": {"is_end": False, "next": second}},
+            second: {"data": replies[1:], "paging": {"is_end": True}},
+        }
+    )
+
+    thread = fetch_comment_thread(client, target_kind="article", target_id="123", reply_limit=3)
+
+    assert [reply.id for reply in thread.comments[0].replies] == ["11", "12", "13"]
+    assert thread.comments[0].replies_complete
+
+
+def test_boolean_comment_identifiers_are_rejected():
+    import pytest
+
+    root = "/api/v4/comment_v5/articles/123/root_comment?limit=10&offset="
+    client = FakeClient(
+        {
+            root: {
+                "data": [{**_comment_payload(True, "无效 ID"), "child_comment_count": 0}],
+                "paging": {"is_end": True},
+            }
+        }
+    )
+    with pytest.raises(InvalidCommentPayloadError, match="id"):
+        fetch_comment_thread(client, target_kind="article", target_id="123")
+
+
+def test_comment_paging_never_requests_a_different_thread_or_origin():
+    import pytest
+
+    root = "/api/v4/comment_v5/articles/123/root_comment?limit=10&offset="
+    for next_url in (
+        "https://attacker.example/api/v4/comment_v5/articles/123/root_comment",
+        "/api/v4/comment_v5/articles/456/root_comment?offset=other",
+        "http://www.zhihu.com/api/v4/comment_v5/articles/123/root_comment",
+        "https://www.zhihu.com:444/api/v4/comment_v5/articles/123/root_comment",
+    ):
+        client = FakeClient(
+            {
+                root: {
+                    "data": [_comment_payload(1, "正文")],
+                    "paging": {"is_end": False, "next": next_url},
+                }
+            }
+        )
+        with pytest.raises(InvalidCommentPayloadError, match="endpoint"):
+            fetch_comment_thread(client, target_kind="article", target_id="123")
+        assert client.calls == [root]

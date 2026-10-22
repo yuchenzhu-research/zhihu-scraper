@@ -38,6 +38,8 @@ HTTP/API, pagination, and comments share request pacing: by default, request sta
 
 Each HTTP request has a 60-second cumulative retry-wait budget. Excessive or invalid server wait instructions stop explicitly with a suggestion to retry later, without an early retry or browser fallback.
 
+Comments and replies are deduplicated by ID before applying their limits. Two consecutive pages without new comments stop explicitly, and paging links must stay within the current thread.
+
 Question and column pagination tolerates one fully overlapping page. Two consecutive unfinished pages with no new content stop with an explicit error; normal archives have no total page limit.
 
 ## What a default fetch saves

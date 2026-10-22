@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Protocol
+from urllib.parse import quote, urljoin, urlsplit
 
 from .content import parse_rich_text
 from .domain import Author, Comment, CommentThread
@@ -58,7 +59,8 @@ def fetch_comment_thread(
             replies_complete = True
         else:
             reply_url = (
-                f"/api/v4/comment_v5/comment/{root.id}/child_comment?limit={reply_limit}&offset="
+                f"/api/v4/comment_v5/comment/{quote(root.id, safe='')}/child_comment"
+                f"?limit={reply_limit}&offset="
             )
             reply_items, replies_complete = _fetch_bounded_pages(
                 client,
@@ -95,21 +97,63 @@ def _fetch_bounded_pages(
     items: list[object] = []
     next_url = first_url
     visited: set[str] = set()
+    seen_ids: set[str] = set()
+    stagnant_pages = 0
     while next_url:
         if next_url in visited:
             raise InvalidCommentPayloadError("Zhihu comment paging contains a loop.")
         visited.add(next_url)
         data, is_end, following_url = _page(client.get_json(next_url))
+        unique: list[object] = []
+        for item in data:
+            identifier = _comment_id(item)
+            if identifier not in seen_ids:
+                seen_ids.add(identifier)
+                unique.append(item)
         remaining = limit - len(items)
-        items.extend(data[:remaining])
-        if len(data) > remaining:
+        items.extend(unique[:remaining])
+        if len(unique) > remaining:
             return items, False
         if len(items) == limit:
             return items, is_end
         if is_end:
             return items, True
-        next_url = following_url
+        stagnant_pages = stagnant_pages + 1 if not unique else 0
+        if stagnant_pages >= 2:
+            raise InvalidCommentPayloadError("Zhihu comment paging made no progress for two pages.")
+        next_url = _next_comment_page(following_url, first_url)
     return items, False
+
+
+def _comment_id(payload: object) -> str:
+    if not isinstance(payload, Mapping):
+        raise InvalidCommentPayloadError("Zhihu comment must be an object.")
+    identifier = payload.get("id")
+    if (
+        isinstance(identifier, bool)
+        or not isinstance(identifier, (str, int))
+        or not str(identifier).strip()
+    ):
+        raise InvalidCommentPayloadError("Zhihu comment is missing a valid id.")
+    return str(identifier).strip()
+
+
+def _next_comment_page(url: str, first_url: str) -> str:
+    try:
+        parsed = urlsplit(urljoin("https://www.zhihu.com/", url))
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname == "www.zhihu.com"
+            and parsed.port in {None, 443}
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.fragment
+            and parsed.path == urlsplit(first_url).path
+        ):
+            return url
+    except ValueError:
+        pass
+    raise InvalidCommentPayloadError("Zhihu comment paging returned a different endpoint.")
 
 
 def _page(payload: object) -> tuple[list[object], bool, str]:
@@ -135,9 +179,7 @@ def _page(payload: object) -> tuple[list[object], bool, str]:
 def _normalize_comment(payload: object) -> Comment:
     if not isinstance(payload, Mapping):
         raise InvalidCommentPayloadError("Zhihu comment must be an object.")
-    raw_id = payload.get("id")
-    if not isinstance(raw_id, (str, int)) or not str(raw_id).strip():
-        raise InvalidCommentPayloadError("Zhihu comment is missing an id.")
+    identifier = _comment_id(payload)
     content = payload.get("content")
     if not isinstance(content, str):
         raise InvalidCommentPayloadError("Zhihu comment is missing content.")
@@ -160,7 +202,7 @@ def _normalize_comment(payload: object) -> Comment:
         raise InvalidCommentPayloadError("Zhihu comment has an invalid like_count.")
     like_count = raw_like_count
     return Comment(
-        id=str(raw_id),
+        id=identifier,
         author=_normalize_author(payload.get("author")),
         blocks=parse_rich_text(content),
         created_at=created_at,
