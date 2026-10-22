@@ -1,6 +1,6 @@
 # 架构说明
 
-> 状态：2026-09-06 文件优先架构。本文描述已经落地的模块职责和稳定 seam；延期能力见 `FEATURE_TODO.md`。
+> 状态：2026-10-23 文件优先架构。本文描述已经落地的模块职责和稳定 seam；延期能力见 `FEATURE_TODO.md`。
 
 ## 1. 外部 interface
 
@@ -103,7 +103,7 @@ Markdown、媒体和按需生成的 HTML/PDF 就是完整归档；目录可以�
 
 独立视频和已解析内嵌视频固定选择已知尺寸最大的清晰度。图片、动图、公式、断点续传、原始链接和日志脱敏属于固定可靠行为，不制造多余开关。
 
-`network.proxy` 贯穿 HTTP/API、项目管理浏览器和媒体下载。外部 CDP 浏览器的代理由该浏览器自己管理。单篇、分页和评论共用一次浏览器恢复策略；耗尽 429 或 Retry-After 等待预算时直接停止。HTTP 重试解析 Retry-After 的秒数和日期，累计等待超过 60 秒或非法等待值会明确停止；连续分页无新增 ID 时停止，即使游标不断变化。认证 HTTP 请求不跨域自动重定向；媒体初始地址、DNS 和每一跳重定向分别校验。HTTP 客户端、浏览器上下文和工作流都具有明确的关闭 seam。
+`network.proxy` 贯穿 HTTP/API、项目管理浏览器和媒体下载。外部 CDP 浏览器的代理由该浏览器自己管理。单篇、分页和评论共用一次浏览器恢复策略；耗尽 429 或 Retry-After 等待预算时直接停止。`retry.py` 为 HTTP 与媒体提供同一套 Retry-After 秒数/日期解析和 60 秒累计等待预算；每个请求或媒体文件独立计量，非法或超额等待明确停止，媒体错误响应在等待前关闭；连续分页无新增 ID 时停止，即使游标不断变化。认证 HTTP 请求不跨域自动重定向；媒体初始地址、DNS 和每一跳重定向分别校验。HTTP 客户端、浏览器上下文和工作流都具有明确的关闭 seam。
 
 `login_session`/`zhihu login` 允许用户手动登录，经身份接口验证后原子保存独立 Cookie 文件；默认 180 秒截止，取消或失败保留旧文件。CDP 登录只读取当前知乎 Cookie，不操作用户已有页面。文件权限通过平台 Adapter 限制为当前用户，但不提供加密存储。普通抓取的会话回流只更新本次 HTTP 客户端，不自动覆盖磁盘 Cookie。
 
@@ -150,6 +150,28 @@ URL、内容模型、渲染、媒体和知乎字段解析保持共用，业务�
 | `WechatSogou` | [chyroc/WechatSogou](https://github.com/chyroc/WechatSogou) | `6a7e08caa82dd7cf47331d7c303f578a4b325360` | 其他平台抓取设计对照 |
 | `weiboSpider` | [dataabc/weiboSpider](https://github.com/dataabc/weiboSpider) | `720d52a58aeff3bdafdc552b90443842ebb94ba7` | 其他平台归档与评论处理 |
 
-核对日期：2026-09-05。MediaCrawler、Scrapy、yt-dlp 的本地研究基线分别落后本次核对的上游 15、254、104 个提交；其他七个有效参考一致。MediaCrawler 这批差异没有修改 `media_platform/zhihu/`。
+历史核对（2026-09-05）：MediaCrawler、Scrapy、yt-dlp 的固定研究版本分别落后当时上游 15、254、104 个提交；其他七个有效参考一致。MediaCrawler 当时的差异没有修改 `media_platform/zhihu/`。
 
 `references/external/openclaw` 只有 Git 目录，无有效 HEAD，不属于可用的研究基线；项目不依赖它。
+
+
+### 2026-10-23 上游复核与本轮升级
+
+本轮直接查询 GitHub 默认分支及比较接口。下表的新增提交数相对于上面的固定研究版本，查询到的最新提交仅用于核对；没有修改参考仓库的本地检出。
+
+| 项目 | 核对到的上游提交 | 新增提交数 | 与本项目的关系 |
+| --- | --- | --- | --- |
+| [NanmiCoder/MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) | [`8f583999006d`](https://github.com/NanmiCoder/MediaCrawler/commit/8f583999006d5b692272c608440e193ca282e73b) | 35 | 主要新增五平台媒体下载器；`media_platform/zhihu/` 无变化。借鉴其下载完整性与可控失败的方向，按本项目内容模型实现。 |
+| [Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper) | [`6c7730a63620`](https://github.com/Ther-nullptr/zhihu-scraper/commit/6c7730a6362096d12c8fb97b421a1b6768fed813) | 0 | 与固定版本一致，无新增源码可同步。 |
+| [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download) | [`0c4fa675ccda`](https://github.com/chenluda/zhihu-download/commit/0c4fa675ccdaadb6cf322620adb7a409282fbb1c) | 0 | 与固定版本一致，无新增源码可同步。 |
+| [yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) | [`43a45ae37419`](https://github.com/yt-dlp/yt-dlp/commit/43a45ae37419b2a90db710c9fd06cd250ef524d3) | 129 | 对照 HTTP 下载器的完整性、续传和重试处理；不作为运行依赖。 |
+| [scrapy/scrapy](https://github.com/scrapy/scrapy) | [`4d372f0275c3`](https://github.com/scrapy/scrapy/commit/4d372f0275c315dd7b0eb2fc9c514951c0085e0a) | 534 | 复核分页与生命周期设计，保留现有同步归档入口。 |
+
+本轮落地：
+
+- 一级评论与二级回复按稳定 ID 去重；上限按唯一评论计数，连续两页没有新增条目则报错，分页链接限制为原评论线程。
+- HTTP 和媒体共用重试等待模块；媒体也遵守服务器指定的 `Retry-After`，响应在重试等待前关闭。
+- 将 [Playwright 升至 1.64.1](https://github.com/microsoft/playwright-python/releases/tag/v1.64.1)、[pypdf 升至 6.21.2](https://github.com/py-pdf/pypdf/releases/tag/6.21.2)，证书包锁定为 certifi 2026.10.19。curl_cffi 保持稳定版 0.16.3，0.17.0b2 属于测试版。
+- 新环境已通过 PDF 真实导出：中文、公式、表格、本地图片、移动后的相对导航；普通测试无需浏览器或知乎 Cookie。
+
+[MediaCrawler 的媒体重构](https://github.com/NanmiCoder/MediaCrawler/commit/0ca7b29)支持的五个平台不包含知乎，因此本轮依据具体缺口升级已有实现，没有将其媒体模块作为知乎新功能引入。

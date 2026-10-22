@@ -12,7 +12,7 @@
 
 </div>
 
-Zhihu-Scraper is a local-first Zhihu archiver. Give it an article, answer, question, column, or standalone-video URL. It tries the lightweight HTTP/API path first, optionally falls back to a browser, normalizes the result, and writes Markdown and local media; offline HTML is opt-in.
+Zhihu-Scraper is a local-first Zhihu archiver. Give it an article, answer, question, column, or standalone-video URL. It tries the lightweight HTTP/API path first, optionally falls back to a browser, normalizes the result, and writes Markdown and local media; offline HTML and PDF are opt-in.
 
 The project serves developers studying an engineered crawler as well as non-technical users who let an agent such as Codex run the command. There is no TUI, cloud account, or frontend build system: the public surface is one CLI and one Python function.
 
