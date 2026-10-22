@@ -21,6 +21,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
+from .retry import RetryBudget, RetryWaitError
+
 
 @dataclass(frozen=True, slots=True)
 class MediaCandidate:
@@ -47,6 +49,10 @@ class MediaDownloadError(RuntimeError):
 
 class _RetryableMediaError(MediaDownloadError):
     """Internal signal for a bounded retry."""
+
+    def __init__(self, message: str, headers: Mapping[str, str] | None = None) -> None:
+        super().__init__(message)
+        self.headers = dict(headers or {})
 
 
 class _SafeMediaRedirectHandler(HTTPRedirectHandler):
@@ -188,7 +194,9 @@ def download_media(
         handlers.append(_SafeMediaRedirectHandler())
         opener = build_opener(*handlers)
 
+    budget = RetryBudget(sleep=sleep, clock=lambda: time.time())
     for retry_number in range(max_retries + 1):
+        retry_headers: Mapping[str, str] = {}
         partial_size = partial_path.stat().st_size if partial_path.is_file() else 0
         state = _read_resume_state(state_path, resource=resource)
         if (
@@ -231,7 +239,7 @@ def download_media(
                         "the media transport returned an unhandled HTTP redirect"
                     )
                 if status == 429 or 500 <= status <= 599:
-                    raise _RetryableMediaError(f"temporary HTTP {status}")
+                    raise _RetryableMediaError(f"temporary HTTP {status}", response.headers)
                 plan = _response_plan(
                     status=status,
                     headers=response.headers,
@@ -300,16 +308,25 @@ def download_media(
                 bytes_total=bytes_total,
             )
         except HTTPError as error:
-            if error.code != 429 and not 500 <= error.code <= 599:
-                raise MediaDownloadError(f"unexpected HTTP status {error.code}") from None
-            retry_error: BaseException = error
+            try:
+                status = error.code
+                retry_headers = dict(error.headers or {})
+            finally:
+                error.close()
+            if status != 429 and not 500 <= status <= 599:
+                raise MediaDownloadError(f"unexpected HTTP status {status}") from None
+            retry_error: BaseException = _RetryableMediaError(f"temporary HTTP {status}")
         except _RetryableMediaError as error:
             retry_error = error
+            retry_headers = error.headers
         except (ConnectionError, TimeoutError, URLError) as error:
             retry_error = error
 
         if retry_number < max_retries:
-            sleep(min(float(2**retry_number), 8.0))
+            try:
+                budget.retry(retry_headers, retry_number)
+            except RetryWaitError as error:
+                raise MediaDownloadError(str(error)) from None
             continue
         if isinstance(retry_error, _RetryableMediaError):
             raise MediaDownloadError(str(retry_error)) from None

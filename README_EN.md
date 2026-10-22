@@ -36,7 +36,7 @@ Zhihu video cards embedded in articles and answers can resolve to downloadable d
 
 HTTP/API, pagination, and comments share request pacing: by default, request starts are spaced by 0.5 seconds plus a random 0–0.5 seconds. Configure `network.request_interval` and `network.request_jitter`; setting both to 0 disables pacing. The first request does not wait.
 
-Each HTTP request has a 60-second cumulative retry-wait budget. Excessive or invalid server wait instructions stop explicitly with a suggestion to retry later, without an early retry or browser fallback.
+Each HTTP request and each media download has its own 60-second cumulative retry-wait budget. Excessive or invalid server wait instructions stop explicitly with a suggestion to retry later, without an early retry or browser fallback. Media downloads also honor `Retry-After` seconds or dates; optional images retain their links and report a failure when the budget is exceeded, while failure of a standalone video’s main file is an error.
 
 Comments and replies are deduplicated by ID before applying their limits. Two consecutive pages without new comments stop explicitly, and paging links must stay within the current thread.
 

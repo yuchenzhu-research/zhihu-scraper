@@ -11,8 +11,6 @@ import time
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
-from datetime import UTC
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Protocol, Self, cast
@@ -21,6 +19,8 @@ from urllib.parse import urljoin, urlparse
 from curl_cffi import requests
 
 from .platform import RuntimePlatform
+from .retry import RetryBudget
+from .retry import RetryWaitError as RetryWaitError
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,14 +88,6 @@ class TransportError(RuntimeError):
 
 class InvalidResponseError(RuntimeError):
     """Zhihu returned a response that could not be decoded safely."""
-
-
-class RetryWaitError(RuntimeError):
-    """Stop when retry timing cannot be honored within a bounded wait.
-
-    This is deliberately not a transport or HTTP failure eligible for browser
-    fallback, which would bypass the server's requested waiting period.
-    """
 
 
 class CookieFileError(ValueError):
@@ -258,24 +250,14 @@ class ZhihuHttpClient:
         if self._proxy:
             request_options["proxy"] = self._proxy
 
-        waited = 0.0
-
-        def wait_before_retry(delay: float) -> None:
-            nonlocal waited
-            if delay > 60.0 - waited:
-                raise RetryWaitError(
-                    "Zhihu retry would exceed the 60-second total waiting budget; "
-                    "no early retry was sent, try again later."
-                ) from None
-            self._sleep(delay)
-            waited += delay
+        budget = RetryBudget(sleep=self._sleep, clock=self._clock)
 
         for retry_number in range(self._max_retries + 1):
             if self._next_request_at is not None:
                 remaining = self._next_request_at - self._monotonic()
                 if remaining > 0:
                     if retry_number:
-                        wait_before_retry(remaining)
+                        budget.wait(remaining)
                     else:
                         self._sleep(remaining)
             jitter = self._random() * self._request_jitter if self._request_jitter else 0.0
@@ -284,14 +266,14 @@ class ZhihuHttpClient:
                 response = self._session.get(url, **request_options)
             except Exception:
                 if retry_number < self._max_retries:
-                    wait_before_retry(_retry_delay({}, retry_number, now=self._clock()))
+                    budget.retry({}, retry_number)
                     continue
                 raise TransportError(
                     "Zhihu request failed after limited retries; check the network or proxy."
                 ) from None
             should_retry = response.status_code == 429 or 500 <= response.status_code <= 599
             if should_retry and retry_number < self._max_retries:
-                wait_before_retry(_retry_delay(response.headers, retry_number, now=self._clock()))
+                budget.retry(response.headers, retry_number)
                 continue
             if response.status_code == 401:
                 raise AuthenticationError(
@@ -426,30 +408,3 @@ def _absolute_zhihu_url(url_or_path: str) -> str:
             "Refusing to send authenticated Zhihu request outside trusted HTTPS origins."
         )
     return url
-
-
-def _retry_delay(headers: Mapping[str, str], retry_number: int, *, now: float) -> float:
-    retry_after = next(
-        (value for name, value in headers.items() if name.casefold() == "retry-after"),
-        None,
-    )
-    if retry_after is not None:
-        try:
-            delay = float(retry_after)
-        except (TypeError, ValueError):
-            try:
-                retry_at = parsedate_to_datetime(retry_after)
-                if retry_at.tzinfo is None:
-                    retry_at = retry_at.replace(tzinfo=UTC)
-                delay = max(0.0, retry_at.timestamp() - now)
-            except (TypeError, ValueError, OverflowError, OSError):
-                raise RetryWaitError(
-                    "Zhihu returned an invalid Retry-After value; "
-                    "no retry was sent, try again later."
-                ) from None
-        if not math.isfinite(delay) or delay < 0:
-            raise RetryWaitError(
-                "Zhihu returned an invalid Retry-After value; no retry was sent, try again later."
-            )
-        return delay
-    return min(float(2**retry_number), 8.0)

@@ -834,3 +834,107 @@ class ResumableMediaDownloadTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MediaRetryTimingTests(unittest.TestCase):
+    def setUp(self):
+        resolver = patch(
+            "zhihu_scraper.media.getaddrinfo",
+            return_value=[(AF_INET, SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+        )
+        resolver.start()
+        self.addCleanup(resolver.stop)
+
+    def test_retry_after_seconds_dates_and_header_case_are_honored(self):
+        from email.utils import formatdate
+
+        for retry_after in ("3", formatdate(1_700_000_003, usegmt=True)):
+            with self.subTest(retry_after=retry_after), tempfile.TemporaryDirectory() as directory:
+                transport = SequencedTransport(
+                    FakeHttpResponse(status=429, body=b"", headers={"retry-after": retry_after}),
+                    FakeHttpResponse(status=200, body=b"ok", headers={"Content-Length": "2"}),
+                )
+                delays = []
+                with patch("zhihu_scraper.media.time.time", return_value=1_700_000_000):
+                    receipt = download_media(
+                        "https://media.example/a.jpg",
+                        Path(directory) / "a.jpg",
+                        transport=transport,
+                        sleep=delays.append,
+                    )
+                self.assertEqual(delays, [3.0])
+                self.assertEqual(receipt.bytes_total, 2)
+
+    def test_invalid_or_excessive_wait_does_not_send_an_early_request(self):
+        for wait in ("86400", "nan", "-1", "not-a-date"):
+            with self.subTest(wait=wait), tempfile.TemporaryDirectory() as directory:
+                transport = SequencedTransport(
+                    FakeHttpResponse(status=503, body=b"", headers={"Retry-After": wait})
+                )
+                delays = []
+                with self.assertRaises(MediaDownloadError):
+                    download_media(
+                        "https://media.example/a.jpg",
+                        Path(directory) / "a.jpg",
+                        transport=transport,
+                        sleep=delays.append,
+                    )
+                self.assertEqual(delays, [])
+                self.assertEqual(len(transport.requests), 1)
+
+    def test_retry_budget_covers_all_media_attempts(self):
+        transport = SequencedTransport(
+            FakeHttpResponse(status=429, body=b"", headers={"Retry-After": "40"}),
+            FakeHttpResponse(status=503, body=b"", headers={"Retry-After": "30"}),
+        )
+        delays = []
+        with tempfile.TemporaryDirectory() as directory, self.assertRaises(MediaDownloadError):
+            download_media(
+                "https://media.example/a.jpg",
+                Path(directory) / "a.jpg",
+                transport=transport,
+                max_retries=3,
+                sleep=delays.append,
+            )
+        self.assertEqual(delays, [40.0])
+        self.assertEqual(len(transport.requests), 2)
+
+    def test_urllib_http_errors_close_before_retry_or_final_failure(self):
+        from urllib.error import HTTPError
+
+        for status in (404, 429, 503):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
+                body = io.BytesIO(b"upstream error body")
+                error = HTTPError(
+                    "https://media.example/a.jpg", status, "failure", {"Retry-After": "2"}, body
+                )
+                delays = []
+                transport = unittest.mock.Mock(
+                    side_effect=[
+                        error,
+                        FakeHttpResponse(status=200, body=b"ok", headers={"Content-Length": "2"}),
+                    ]
+                )
+                if status == 404:
+                    with self.assertRaises(MediaDownloadError):
+                        download_media(
+                            "https://media.example/a.jpg",
+                            Path(directory) / "a.jpg",
+                            transport=transport,
+                            sleep=delays.append,
+                        )
+                    self.assertEqual(transport.call_count, 1)
+                else:
+
+                    def sleep(delay):
+                        self.assertTrue(body.closed)
+                        delays.append(delay)
+
+                    download_media(
+                        "https://media.example/a.jpg",
+                        Path(directory) / "a.jpg",
+                        transport=transport,
+                        sleep=sleep,
+                    )
+                    self.assertEqual(delays, [2.0])
+                self.assertTrue(body.closed)
