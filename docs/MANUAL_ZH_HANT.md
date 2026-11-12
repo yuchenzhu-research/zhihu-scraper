@@ -104,7 +104,7 @@ cookie_file = ".local/cookies.json"
 
 ```bash
 uv run zhihu check -s settings.toml
-uv run zhihu fetch -s settings.toml "https://zhuanlan.zhihu.com/p/357892158"
+uv run zhihu fetch --html -s settings.toml "https://zhuanlan.zhihu.com/p/108271985"
 ```
 
 瀏覽器登入最多等待 180 秒。按 Ctrl+C 取消、逾時或儲存失敗時，原有的 Cookie 檔會保留。如果本機 Chrome 已開啟遠端偵錯並登入知乎，也可以用 `uv run zhihu login --cdp http://127.0.0.1:9222` 讀取知乎 Cookie。這個指令會保留目前開啟的頁面。

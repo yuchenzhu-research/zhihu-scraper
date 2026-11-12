@@ -104,7 +104,7 @@ cookie_file = ".local/cookies.json"
 
 ```bash
 uv run zhihu check -s settings.toml
-uv run zhihu fetch -s settings.toml "https://zhuanlan.zhihu.com/p/357892158"
+uv run zhihu fetch --html -s settings.toml "https://zhuanlan.zhihu.com/p/108271985"
 ```
 
 已有启用本机远程调试（CDP）的 Chrome 时，可运行 `uv run zhihu login --cdp http://127.0.0.1:9222` 读取该浏览器的知乎 Cookie。

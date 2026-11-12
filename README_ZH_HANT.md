@@ -17,10 +17,10 @@ git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 uv sync --locked
 uv run playwright install chromium
-uv run zhihu fetch "https://zhuanlan.zhihu.com/p/357892158"
+uv run zhihu fetch --html "https://zhuanlan.zhihu.com/p/108271985"
 ```
 
-完成後，在目前目錄的 `知乎归档/` 下開啟產生的 Markdown。全新的 Linux 環境可能還需要瀏覽器的系統相依套件。安裝指令碼、pip 和瀏覽器設定請見[安裝與更新](docs/MANUAL_ZH_HANT.md#install)。
+完成後，在目前目錄的 `知乎归档/` 下開啟產生的 HTML 或 Markdown。如果知乎要求登入，請依照[登入手冊](docs/MANUAL_ZH_HANT.md#login)設定後再試。全新的 Linux 環境可能還需要瀏覽器的系統相依套件。安裝指令碼、pip 和瀏覽器設定請見[安裝與更新](docs/MANUAL_ZH_HANT.md#install)。
 
 ## 支援的知乎連結
 
@@ -36,19 +36,21 @@ uv run zhihu fetch "https://zhuanlan.zhihu.com/p/357892158"
 
 ## 封存結果
 
-標題、作者、來源連結、圖片、表格、程式碼區塊和數學公式會隨內文保留。單篇文章的預設封存結構如下，成功下載媒體時會建立 `media/`。
+標題、作者、來源連結、圖片、表格、程式碼區塊和數學公式會隨內文保留。執行快速開始的指令後，資料夾結構如下，成功下載媒體時會建立 `media/`。
 
 ```text
 知乎归档/
 └── 文章標題/
     ├── 文章標題.md
+    ├── 文章標題.html
+    ├── assets/
     └── media/
         └── 圖片檔案
 ```
 
-啟用 HTML 後可以用瀏覽器離線閱讀，也會保留表格和公式。下圖是工具使用示範內容實際產生的 HTML。
+用瀏覽器開啟本機 HTML，就能離線查看原文插圖和公式。下圖截自 tetradecane 的《积分变换（2）——傅里叶变换》的本機 HTML 封存。[知乎原文](https://zhuanlan.zhihu.com/p/108271985)
 
-![離線 HTML 範例，頁面包含內文、公式和複習計畫表格](docs/images/offline-html-preview.png)
+![傅立葉變換文章的離線 HTML 截圖，顯示頻譜圖和數學公式](docs/images/fourier-transform-html.png)
 
 ## 常用操作
 

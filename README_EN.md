@@ -17,10 +17,10 @@ git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 uv sync --locked
 uv run playwright install chromium
-uv run zhihu fetch "https://zhuanlan.zhihu.com/p/357892158"
+uv run zhihu fetch --html "https://zhuanlan.zhihu.com/p/108271985"
 ```
 
-Open the generated Markdown under `知乎归档/` in your current directory. A fresh Linux setup may also need browser system libraries. See [Installation and updates](docs/MANUAL_EN.md#install) for install scripts, pip, and browser setup.
+Open the generated HTML or Markdown under `知乎归档/` in your current directory. If Zhihu requires sign-in, follow the [sign-in instructions](docs/MANUAL_EN.md#login) and retry. A fresh Linux setup may also need browser system libraries. See [Installation and updates](docs/MANUAL_EN.md#install) for install scripts, pip, and browser setup.
 
 ## Supported Zhihu links
 
@@ -36,19 +36,21 @@ Short answer links such as `zhihu.com/answer/<answer ID>` also work. Embedded Zh
 
 ## What the archive looks like
 
-The archive preserves the title, author, source link, images, tables, code blocks, and formulas alongside the text. A single article uses this layout by default. The `media/` folder is created when a download succeeds.
+The archive preserves the title, author, source link, images, tables, code blocks, and formulas alongside the text. The quick start produces the following layout for the example article. The `media/` folder is created when a download succeeds.
 
 ```text
 知乎归档/
 └── Article title/
     ├── Article title.md
+    ├── Article title.html
+    ├── assets/
     └── media/
         └── image file
 ```
 
-With HTML enabled, open the archive in a browser to read it offline with its tables and formulas. This screenshot shows actual output generated from sample content.
+Open the local HTML file in a browser to see the original illustrations and formulas offline. The preview below shows the local HTML archive of “Integral Transforms (2): The Fourier Transform” by tetradecane. [Original on Zhihu](https://zhuanlan.zhihu.com/p/108271985)
 
-![Offline HTML archive showing text, a formula, and a study schedule table](docs/images/offline-html-preview.png)
+![Offline HTML archive of the Fourier transform article showing a spectrum diagram and mathematical formulas](docs/images/fourier-transform-html.png)
 
 ## Common tasks
 

@@ -12,7 +12,7 @@ from pathlib import Path
 from zhihu_scraper import ArchiveSettings, archive_url
 
 report = archive_url(
-    "https://zhuanlan.zhihu.com/p/357892158",
+    "https://zhuanlan.zhihu.com/p/108271985",
     ArchiveSettings(output_dir=Path("知乎归档"), html=True),
 )
 

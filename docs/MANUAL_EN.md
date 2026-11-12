@@ -104,7 +104,7 @@ cookie_file = ".local/cookies.json"
 
 ```bash
 uv run zhihu check -s settings.toml
-uv run zhihu fetch -s settings.toml "https://zhuanlan.zhihu.com/p/357892158"
+uv run zhihu fetch --html -s settings.toml "https://zhuanlan.zhihu.com/p/108271985"
 ```
 
 If you already have a signed-in local Chrome with remote debugging (CDP) enabled, use `uv run zhihu login --cdp http://127.0.0.1:9222` to read its Zhihu cookies.

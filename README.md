@@ -17,10 +17,10 @@ git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 uv sync --locked
 uv run playwright install chromium
-uv run zhihu fetch "https://zhuanlan.zhihu.com/p/357892158"
+uv run zhihu fetch --html "https://zhuanlan.zhihu.com/p/108271985"
 ```
 
-完成后，在当前目录的 `知乎归档/` 下打开生成的 Markdown。全新的 Linux 环境可能还需要浏览器系统依赖。安装脚本、pip 和浏览器设置见[安装与更新](docs/MANUAL.md#install)。
+完成后，在当前目录的 `知乎归档/` 下打开生成的 HTML 或 Markdown。如果知乎要求登录，请按[登录手册](docs/MANUAL.md#login)配置后重试。全新的 Linux 环境可能还需要浏览器系统依赖。安装脚本、pip 和浏览器设置见[安装与更新](docs/MANUAL.md#install)。
 
 ## 支持的知乎链接
 
@@ -36,19 +36,21 @@ uv run zhihu fetch "https://zhuanlan.zhihu.com/p/357892158"
 
 ## 归档结果
 
-标题、作者、来源链接、图片、表格、代码块和数学公式会随正文保留。默认的单篇文章归档类似下面这样，有成功下载的媒体时会生成 `media/`。
+标题、作者、来源链接、图片、表格、代码块和数学公式会随正文保留。按快速开始的命令归档后，目录类似下面这样，有成功下载的媒体时会生成 `media/`。
 
 ```text
 知乎归档/
 └── 文章标题/
     ├── 文章标题.md
+    ├── 文章标题.html
+    ├── assets/
     └── media/
         └── 图片文件
 ```
 
-启用 HTML 后可以用浏览器离线阅读，表格和公式也会保留。下图是工具用示例内容实际生成的 HTML。
+在浏览器中打开本地 HTML，就能离线查看原文插图和公式。下图截自 tetradecane 的《积分变换（2）——傅里叶变换》的本地 HTML 归档。[知乎原文](https://zhuanlan.zhihu.com/p/108271985)
 
-![离线 HTML 示例，页面包含正文、公式和复习计划表格](docs/images/offline-html-preview.png)
+![傅里叶变换文章的离线 HTML 截图，显示频谱图和数学公式](docs/images/fourier-transform-html.png)
 
 ## 常用操作
 
