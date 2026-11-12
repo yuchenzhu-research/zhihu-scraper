@@ -1,6 +1,6 @@
 # 架构说明
 
-> 状态：2026-10-23 文件优先架构。本文描述已经落地的模块职责和稳定 seam；延期能力见 `FEATURE_TODO.md`。
+> 状态：2026-11-12 文件优先架构。本文描述已经落地的模块职责和稳定 seam；延期能力见 `FEATURE_TODO.md`。
 
 ## 1. 外部 interface
 
@@ -175,3 +175,7 @@ URL、内容模型、渲染、媒体和知乎字段解析保持共用，业务�
 - 新环境已通过 PDF 真实导出：中文、公式、表格、本地图片、移动后的相对导航；普通测试无需浏览器或知乎 Cookie。
 
 [MediaCrawler 的媒体重构](https://github.com/NanmiCoder/MediaCrawler/commit/0ca7b29)支持的五个平台不包含知乎，因此本轮依据具体缺口升级已有实现，没有将其媒体模块作为知乎新功能引入。
+
+### 2026-11-12 依赖核查
+
+锁文件更新到 [curl_cffi 0.17.0](https://github.com/lexiforest/curl_cffi/releases/tag/v0.17.0)、[Playwright 1.65.1](https://github.com/microsoft/playwright-python/releases/tag/v1.65.1) 和 [pypdf 7.0.1](https://github.com/py-pdf/pypdf/releases/tag/7.0.1)，纳入上游安全修复，同时更新证书、公式解析和开发依赖。用锁定版本验证了内容抓取的本地测试和真实 Chrome PDF 导出。

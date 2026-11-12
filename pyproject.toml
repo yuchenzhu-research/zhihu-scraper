@@ -11,11 +11,11 @@ authors = [
 keywords = ["zhihu", "scraper", "crawler"]
 
 dependencies = [
-    "curl_cffi>=0.16.3,<0.17",
+    "curl_cffi>=0.17.0,<0.18",
     "beautifulsoup4>=4.12.3",
     "latex2mathml>=3.81.0,<4",
-    "playwright>=1.64.1,<2",
-    "pypdf>=6.21.2,<7",
+    "playwright>=1.65.1,<2",
+    "pypdf>=7.0.1,<8",
 ]
 
 [project.scripts]
