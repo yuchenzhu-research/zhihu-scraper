@@ -10,14 +10,26 @@ from dataclasses import replace
 from importlib.metadata import version
 from pathlib import Path
 
-from .application import BatchProgress
+from .application import (
+    BatchArchiveInterruptedError,
+    BatchProgress,
+    BrowserFallbackUnavailableError,
+)
+from .browser import BrowserFallbackError
+from .comments import InvalidCommentPayloadError
 from .facade import ArchiveReport, archive_url, check_session, login_session
+from .http import InvalidResponseError, TransportError, ZhihuHttpError
+from .normalize import NormalizationError
+from .pdf_export import PdfExportError
+from .platform import ArchivePathError
+from .retry import RetryWaitError
 from .settings import (
     ArchiveSettings,
     BrowserFallback,
     generate_default_settings,
     load_settings,
 )
+from .source import InvalidZhihuPayloadError
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -169,6 +181,11 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("已取消。", file=sys.stderr)
         return 130
+    except BatchArchiveInterruptedError as error:
+        print(f"错误：{error}", file=sys.stderr)
+        if error.__cause__ is not None:
+            print(f"中断原因：{_describe_batch_cause(error.__cause__)}", file=sys.stderr)
+        return 1
     except Exception as error:
         print(f"错误：{error}", file=sys.stderr)
         return 1
@@ -176,6 +193,41 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
 
 def main() -> None:
     raise SystemExit(run_cli())
+
+
+def _describe_batch_cause(cause: BaseException) -> str:
+    """Report controlled messages and error codes, never raw transport or system errors."""
+    name = type(cause).__name__
+    if isinstance(cause, ZhihuHttpError):
+        return f"{name}：知乎返回 HTTP {cause.status_code}。"
+    if isinstance(cause, TransportError):
+        return f"{name}：知乎网络请求失败，请检查网络或代理。"
+    if isinstance(cause, OSError):
+        codes = [
+            f"{label}={value}"
+            for label, value in (
+                ("errno", cause.errno),
+                ("WinError", getattr(cause, "winerror", None)),
+            )
+            if isinstance(value, int)
+        ]
+        return "，".join([name, *codes])
+    if isinstance(
+        cause,
+        (
+            ArchivePathError,
+            BrowserFallbackError,
+            BrowserFallbackUnavailableError,
+            InvalidCommentPayloadError,
+            InvalidResponseError,
+            InvalidZhihuPayloadError,
+            NormalizationError,
+            PdfExportError,
+            RetryWaitError,
+        ),
+    ):
+        return f"{name}：{cause}"
+    return name
 
 
 def _configure_standard_streams() -> None:

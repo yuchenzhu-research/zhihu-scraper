@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from html import unescape
 from html.parser import HTMLParser
 from typing import Protocol
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from zhihu_scraper.urls import TargetKind, ZhihuTarget, route_zhihu_url
 
@@ -87,15 +87,13 @@ class ZhihuSource:
             safe="",
         )
 
-        def page_url(offset: int) -> str:
-            return (
-                f"{endpoint}?limit={page_size}&offset={offset}"
-                f"&platform=desktop&sort_by=default&include={include}"
-            )
-
+        first_url = (
+            f"{endpoint}?limit={page_size}&offset=0"
+            f"&platform=desktop&sort_by=default&include={include}"
+        )
         yield from self._iter_payloads(
             endpoint=endpoint,
-            page_url=page_url,
+            first_url=first_url,
             page_size=page_size,
             payload_label="问题回答列表",
         )
@@ -119,12 +117,9 @@ class ZhihuSource:
         column_token = _resolve_reference(column, TargetKind.COLUMN)
         endpoint = f"/api/v4/columns/{column_token}/items"
 
-        def page_url(offset: int) -> str:
-            return f"{endpoint}?limit={page_size}&offset={offset}"
-
         yield from self._iter_payloads(
             endpoint=endpoint,
-            page_url=page_url,
+            first_url=f"{endpoint}?limit={page_size}&offset=0",
             page_size=page_size,
             payload_label="专栏文章列表",
         )
@@ -143,15 +138,14 @@ class ZhihuSource:
         self,
         *,
         endpoint: str,
-        page_url: Callable[[int], str],
+        first_url: str,
         page_size: int,
         payload_label: str,
     ) -> Iterator[Mapping[str, object]]:
         if not 1 <= page_size <= 100:
             raise ValueError("分页大小必须在 1 到 100 之间。")
 
-        offset = 0
-        current_url = page_url(offset)
+        current_url = first_url
         visited_urls: set[str] = set()
         seen_item_ids: set[str] = set()
         stagnant_pages = 0
@@ -198,8 +192,14 @@ class ZhihuSource:
                 raise InvalidZhihuPayloadError(
                     f"{payload_label}的 paging.is_end 字段必须是布尔值。"
                 )
-            is_end = raw_is_end if isinstance(raw_is_end, bool) else len(raw_data) < page_size
-            if is_end:
+            if raw_is_end is True:
+                return
+
+            raw_next = raw_paging.get("next")
+            if raw_next is not None and not isinstance(raw_next, str):
+                raise InvalidZhihuPayloadError(f"{payload_label}的 paging.next 字段必须是链接。")
+            next_url = raw_next.strip() if isinstance(raw_next, str) else ""
+            if raw_is_end is None and not next_url and len(raw_data) < page_size:
                 return
 
             # A shifting feed can overlap one whole page. Persistent lack of
@@ -210,11 +210,6 @@ class ZhihuSource:
                     f"{payload_label}连续两页没有新增内容，已停止以避免无限循环。"
                 )
 
-            offset += len(raw_data)
-            raw_next = raw_paging.get("next")
-            if raw_next is not None and not isinstance(raw_next, str):
-                raise InvalidZhihuPayloadError(f"{payload_label}的 paging.next 字段必须是链接。")
-            next_url = raw_next.strip() if isinstance(raw_next, str) else ""
             if next_url:
                 current_url = _validate_next_url(next_url, endpoint)
                 continue
@@ -223,7 +218,7 @@ class ZhihuSource:
                 raise PaginationLoopError(
                     f"{payload_label}返回空页但仍标记为未结束，无法继续分页。"
                 )
-            current_url = page_url(offset)
+            current_url = _advance_numeric_offset(current_url, len(raw_data), payload_label)
 
 
 def extract_article_payload(
@@ -342,6 +337,26 @@ def _is_article_parameter_error(payload: object) -> bool:
     message = error.get("message")
     return code == 10003 or (
         isinstance(message, str) and "请求参数异常" in message and "升级客户端" in message
+    )
+
+
+def _advance_numeric_offset(current_url: str, page_length: int, payload_label: str) -> str:
+    parsed = urlsplit(current_url)
+    params = parse_qsl(parsed.query, keep_blank_values=True)
+    offsets = [value for name, value in params if name == "offset"]
+    if len(offsets) == 1 and re.fullmatch(r"[0-9]+", offsets[0]):
+        try:
+            next_offset = str(int(offsets[0]) + page_length)
+        except ValueError:
+            pass
+        else:
+            return parsed._replace(
+                query=urlencode(
+                    [(name, next_offset if name == "offset" else value) for name, value in params]
+                )
+            ).geturl()
+    raise PaginationLoopError(
+        f"{payload_label}未结束且未提供 next，当前请求没有可安全递增的数字 offset。"
     )
 
 

@@ -1,6 +1,8 @@
 import json
 import unittest
 
+import pytest
+
 from zhihu_scraper.source import (
     InvalidZhihuPayloadError,
     PaginationLoopError,
@@ -517,3 +519,79 @@ class PaginationSourceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_question_pagination_follows_unique_answers_beyond_ten_thousand():
+    endpoint = "/api/v4/questions/100/answers"
+    total, limit = 10040, 20
+    client = FakeClient(
+        json_responses=[
+            {
+                "data": [
+                    {"id": identifier} for identifier in range(offset + 1, offset + limit + 1)
+                ],
+                "paging": {
+                    "is_end": offset + limit == total,
+                    "next": f"https://www.zhihu.com{endpoint}?limit={limit}&offset={offset + limit}",
+                },
+            }
+            for offset in range(0, total, limit)
+        ]
+    )
+    answers = ZhihuSource(client).iter_question_answer_payloads("100", page_size=limit)
+
+    assert [answer["id"] for answer in answers] == list(range(1, total + 1))
+    assert len(client.json_calls) == total // limit
+    assert client.json_calls[-1].endswith("offset=10020")
+
+
+def test_short_page_with_next_link_is_not_treated_as_the_end():
+    next_url = "/api/v4/questions/100/answers?limit=20&offset=19"
+    client = FakeClient(
+        json_responses=[
+            {"data": [{"id": 1}], "paging": {"next": next_url}},
+            {"data": [{"id": 2}], "paging": {"is_end": True}},
+        ]
+    )
+
+    answers = list(ZhihuSource(client).iter_question_answer_payloads("100"))
+
+    assert [answer["id"] for answer in answers] == [1, 2]
+    assert client.json_calls[-1] == next_url
+
+
+def test_missing_next_advances_from_server_offset_and_preserves_query_parameters():
+    next_url = (
+        "https://www.zhihu.com/api/v4/questions/100/answers?limit=20&offset=9980&sort_by=updated"
+    )
+    client = FakeClient(
+        json_responses=[
+            {"data": [{"id": 1}], "paging": {"is_end": False, "next": next_url}},
+            {
+                "data": [{"id": item_id} for item_id in range(9981, 10001)],
+                "paging": {"is_end": False},
+            },
+            {"data": [{"id": 10001}], "paging": {"is_end": True}},
+        ]
+    )
+
+    answers = list(ZhihuSource(client).iter_question_answer_payloads("100"))
+
+    assert answers[-1]["id"] == 10001
+    assert client.json_calls[-1] == next_url.replace("offset=9980", "offset=10000")
+
+
+def test_missing_next_after_an_opaque_cursor_does_not_guess_an_offset():
+    next_url = "/api/v4/questions/100/answers?limit=20&cursor=next-page"
+    client = FakeClient(
+        json_responses=[
+            {"data": [{"id": 1}], "paging": {"is_end": False, "next": next_url}},
+            {"data": [{"id": 2}], "paging": {"is_end": False}},
+            {"data": [{"id": 3}], "paging": {"is_end": True}},
+        ]
+    )
+
+    with pytest.raises(PaginationLoopError, match="offset"):
+        list(ZhihuSource(client).iter_question_answer_payloads("100"))
+
+    assert len(client.json_calls) == 2

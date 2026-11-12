@@ -5,7 +5,7 @@ import unittest
 from contextlib import chdir, redirect_stderr, redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from zhihu_scraper.application import ArchiveReport
 from zhihu_scraper.archive import ArchiveReceipt
@@ -346,3 +346,67 @@ def test_batch_cli_prints_saved_progress_before_a_later_failure(capsys, tmp_path
     assert "已经完成的文章" in output.err
     assert "归档进度.md" in output.err
     assert "分页暂时不可用" in output.err
+
+
+def test_batch_cli_reports_why_pagination_stopped_after_saving_a_fragment(capsys, tmp_path):
+    question = {"id": 200, "title": "分页测试", "answer_count": 10020}
+    answer = {"id": 301, "content": "<p>已保存</p>", "question": question}
+    client = Mock()
+    client.get_json.side_effect = [
+        question,
+        {
+            "data": [answer],
+            "paging": {
+                "is_end": False,
+                "next": "/api/v4/questions/999/answers?offset=20&token=private-page-token",
+            },
+        },
+    ]
+
+    with patch("zhihu_scraper.facade.ZhihuHttpClient", return_value=client):
+        result = run_cli(
+            [
+                "fetch",
+                "https://www.zhihu.com/question/200",
+                "-o",
+                str(tmp_path),
+                "--no-media",
+                "--browser",
+                "never",
+            ],
+        )
+
+    assert result == 1
+    assert client.get_json.call_count == 2
+    assert len(list(tmp_path.glob("*/回答片段/*.md"))) == 1
+    stderr = capsys.readouterr().err
+    assert "本轮归档未完成，已保存 1 项" in stderr
+    assert "分页 next 地址不是预期的知乎 API 端点" in stderr
+    assert "private-page-token" not in stderr
+
+
+def test_batch_cli_reports_http_status_and_windows_error_codes_without_raw_details(
+    capsys, tmp_path
+):
+    from zhihu_scraper.application import BatchArchiveInterruptedError
+    from zhihu_scraper.http import RateLimitError
+
+    local_failure = PermissionError(13, "private-system-message", "private-path")
+    local_failure.winerror = 32
+    cases = (
+        (RateLimitError(429, "private-http-body"), ("RateLimitError", "HTTP 429")),
+        (local_failure, ("PermissionError", "errno=13", "WinError=32")),
+        (RuntimeError("private-unexpected-message"), ("RuntimeError",)),
+    )
+    for cause, expected in cases:
+
+        def archive(*args, **kwargs):
+            receipt = ArchiveReceipt(tmp_path, None, None, progress_path=tmp_path / "归档进度.md")
+            raise BatchArchiveInterruptedError(receipt, 1) from cause
+
+        with patch("zhihu_scraper.cli.archive_url", side_effect=archive):
+            assert run_cli(["fetch", "https://www.zhihu.com/question/200"]) == 1
+        stderr = capsys.readouterr().err
+        assert "中断原因：" in stderr
+        assert all(item in stderr for item in expected)
+        assert "private-" not in stderr

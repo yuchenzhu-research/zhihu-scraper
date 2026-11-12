@@ -40,7 +40,7 @@ Each HTTP request and each media download has its own 60-second cumulative retry
 
 Comments and replies are deduplicated by ID before applying their limits. Two consecutive pages without new comments stop explicitly, and paging links must stay within the current thread.
 
-Question and column pagination tolerates one fully overlapping page. Two consecutive unfinished pages with no new content stop with an explicit error; normal archives have no total page limit.
+Question and column pagination tolerates one fully overlapping page. Two consecutive unfinished pages with no new content stop with an explicit error. Unless the source explicitly marks the end, a valid next link is followed even after a short page. When a next page must be computed, it advances the current request's numeric offset. Normal archives have no total page limit.
 
 ## What a default fetch saves
 
@@ -284,7 +284,7 @@ Media filenames distinguish actual source resources: replacing a cover or media 
 
 Column articles and styles are written before the directory is published. A document or stylesheet write failure leaves the previous directory in place. Each file is replaced atomically; already completed article updates are not rolled back.
 
-Questions and columns save items incrementally and produce a readable `归档进度.md` progress document (choosing another name on collision). The CLI advances progress only after an item is saved; source totals are estimates. Rerun the same command after interruption: it fetches the list again, reuses the directory, stable filenames and valid media, then publishes the complete column directory or merged question only after all items succeed. Unmerged question answers remain in `回答片段/`; PDF-only column checkpoints use `归档片段/`. Fragments from the completed run are cleaned after final output succeeds. Progress explicitly distinguishes incomplete and complete runs, and a failed run preserves the previous complete directory.
+Questions and columns save items incrementally and produce a readable `归档进度.md` progress document (choosing another name on collision). The CLI advances progress only after an item is saved; source totals are estimates. Rerun the same command after interruption: it fetches the list again, reuses the directory, stable filenames and valid media, then publishes the complete column directory or merged question only after all items succeed. Unmerged question answers remain in `回答片段/`; PDF-only column checkpoints use `归档片段/`. Fragments from the completed run are cleaned after final output succeeds. Progress explicitly distinguishes incomplete and complete runs, and a failed run preserves the previous complete directory. The CLI reports a safe interruption reason or error code to help distinguish pagination, network, and write failures. Reruns fetch the list from the beginning; starting at a supplied offset is not supported.
 
 Repeated archives reuse existing directories and document paths by Zhihu content ID. Titles and navigation update while filenames may retain an older title. Previously archived column articles that are no longer accessible remain on disk, but the current directory lists only articles fetched this time. Unknown or conflicting files and directories are preserved by choosing another name.
 
