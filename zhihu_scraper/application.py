@@ -40,12 +40,17 @@ from .urls import TargetKind, ZhihuTarget, route_zhihu_url
 class ArchiveSink(Protocol):
     def archive(self, target: ArchiveTarget) -> ArchiveReceipt: ...
 
-    def begin_batch(self, target: ColumnArchive | QuestionArchive) -> BatchArchiveSink: ...
+    def begin_batch(
+        self, target: ColumnArchive | QuestionArchive, *, offset: int = 0
+    ) -> BatchArchiveSink: ...
 
 
 class BatchArchiveSink(Protocol):
     @property
     def progress_path(self) -> Path: ...
+
+    @property
+    def saved_item_ids(self) -> frozenset[str]: ...
 
     def write_item(self, item: Article | Answer) -> ArchiveReceipt: ...
 
@@ -93,6 +98,7 @@ class PayloadSource(Protocol):
         target: ZhihuTarget,
         *,
         page_size: int,
+        offset: int = 0,
     ) -> Iterator[Mapping[str, object]]: ...
 
     def fetch_column_payload(self, target: ZhihuTarget) -> Mapping[str, object]: ...
@@ -173,7 +179,7 @@ class ArchiveWorkflow:
         self._used_browser = False
         self._closed = False
 
-    def run(self, raw_url: str) -> ArchiveReport:
+    def run(self, raw_url: str, *, offset: int = 0) -> ArchiveReport:
         if self._closed:
             raise RuntimeError("Archive workflow is closed.")
         self._used_browser = False
@@ -186,8 +192,15 @@ class ArchiveWorkflow:
             else None
         )
         routed = route_zhihu_url(raw_url)
+        if type(offset) is not int or offset < 0:
+            raise ValueError("offset 必须为非负整数。")
+        if offset:
+            if routed.kind is not TargetKind.QUESTION:
+                raise ValueError("非零 offset 仅支持问题链接。")
+            if not self._settings.markdown or self._settings.html or self._settings.pdf:
+                raise ValueError("非零 offset 只支持 Markdown 片段，请关闭 HTML 和 PDF。")
         try:
-            target = self._collect(routed)
+            target = self._collect(routed, offset=offset)
             if self._batch is not None:
                 if not isinstance(target, (ColumnArchive, QuestionArchive)):
                     raise TypeError("batch archives must produce a collection target")
@@ -210,6 +223,7 @@ class ArchiveWorkflow:
                     None,
                     None,
                     progress_path=self._batch.progress_path,
+                    offset=offset,
                 )
             try:
                 self._emit_progress("interrupted")
@@ -237,10 +251,14 @@ class ArchiveWorkflow:
             return target
         return cast(T, self._video_resolver.resolve(target).target)
 
-    def _begin_batch(self, target: ColumnArchive | QuestionArchive, total: int) -> None:
-        self._batch = self._sink.begin_batch(target)
-        self._batch_total = total or None
+    def _begin_batch(
+        self, target: ColumnArchive | QuestionArchive, total: int, *, offset: int = 0
+    ) -> BatchArchiveSink:
+        batch = self._sink.begin_batch(target, offset=offset)
+        self._batch = batch
+        self._batch_total = None if offset else total or None
         self._emit_progress("started")
+        return batch
 
     def _save_batch_item[T: (Article, Answer)](self, item: T) -> T:
         if self._batch is None:
@@ -292,7 +310,7 @@ class ArchiveWorkflow:
     ) -> None:
         self.close()
 
-    def _collect(self, target: ZhihuTarget) -> ArchiveTarget:
+    def _collect(self, target: ZhihuTarget, *, offset: int) -> ArchiveTarget:
         if target.kind is TargetKind.ARTICLE:
             payload = self._single_payload(
                 target,
@@ -336,15 +354,17 @@ class ArchiveWorkflow:
             batch_target = self._enrich(
                 QuestionArchive(question=question, answers=(), archived_at=self._clock())
             )
-            self._begin_batch(batch_target, question.answer_count)
+            batch = self._begin_batch(batch_target, question.answer_count, offset=offset)
             answer_payloads = self._collection_payloads(
                 target,
                 collection="questions",
                 direct=lambda: self._source.iter_question_answer_payloads(
                     target,
                     page_size=self._settings.page_size,
+                    offset=offset,
                 ),
                 validate=_validate_answer_payload,
+                saved_ids=batch.saved_item_ids if offset else frozenset(),
             )
             answers = tuple(
                 self._save_batch_item(self._with_answer_comments(normalize_answer(payload)))
@@ -491,15 +511,16 @@ class ArchiveWorkflow:
         collection: str,
         direct: Callable[[], Iterator[Mapping[str, object]]],
         validate: Callable[[Mapping[str, object]], object],
+        saved_ids: frozenset[str] = frozenset(),
     ) -> Iterator[Mapping[str, object]]:
-        seen: set[str] = set()
+        seen = set(saved_ids)
 
         def collect_validated() -> Iterator[Mapping[str, object]]:
             for payload in direct():
-                validate(payload)
-                identifier = str(payload["id"])
+                identifier = str(payload.get("id")).strip()
                 if identifier in seen:
                     continue
+                validate(payload)
                 seen.add(identifier)
                 yield payload
 

@@ -111,13 +111,14 @@ def archive_url(
     settings: ArchiveSettings | None = None,
     *,
     progress: Callable[[BatchProgress], None] | None = None,
+    offset: int = 0,
 ) -> ArchiveReport:
     """Archive one supported Zhihu URL using validated local settings."""
 
     effective_settings = settings or ArchiveSettings()
     workflow = build_workflow(effective_settings, progress=progress)
     try:
-        return workflow.run(raw_url)
+        return workflow.run(raw_url, offset=offset)
     finally:
         workflow.close()
 

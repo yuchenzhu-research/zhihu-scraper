@@ -79,7 +79,10 @@ class ZhihuSource:
         question: str | ZhihuTarget,
         *,
         page_size: int = 20,
+        offset: int = 0,
     ) -> Iterator[Mapping[str, object]]:
+        if type(offset) is not int or offset < 0:
+            raise ValueError("offset 必须为非负整数。")
         question_id = _resolve_reference(question, TargetKind.QUESTION)
         endpoint = f"/api/v4/questions/{question_id}/answers"
         include = quote(
@@ -88,7 +91,7 @@ class ZhihuSource:
         )
 
         first_url = (
-            f"{endpoint}?limit={page_size}&offset=0"
+            f"{endpoint}?limit={page_size}&offset={offset}"
             f"&platform=desktop&sort_by=default&include={include}"
         )
         yield from self._iter_payloads(

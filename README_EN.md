@@ -284,7 +284,15 @@ Media filenames distinguish actual source resources: replacing a cover or media 
 
 Column articles and styles are written before the directory is published. A document or stylesheet write failure leaves the previous directory in place. Each file is replaced atomically; already completed article updates are not rolled back.
 
-Questions and columns save items incrementally and produce a readable `归档进度.md` progress document (choosing another name on collision). The CLI advances progress only after an item is saved; source totals are estimates. Rerun the same command after interruption: it fetches the list again, reuses the directory, stable filenames and valid media, then publishes the complete column directory or merged question only after all items succeed. Unmerged question answers remain in `回答片段/`; PDF-only column checkpoints use `归档片段/`. Fragments from the completed run are cleaned after final output succeeds. Progress explicitly distinguishes incomplete and complete runs, and a failed run preserves the previous complete directory. The CLI reports a safe interruption reason or error code to help distinguish pagination, network, and write failures. Reruns fetch the list from the beginning; starting at a supplied offset is not supported.
+Questions and columns save items incrementally and produce a readable `归档进度.md` progress document (choosing another name on collision). The CLI advances progress only after an item is saved; source totals are estimates. Rerun the same command after interruption: it fetches the list again, reuses the directory, stable filenames and valid media, then publishes the complete column directory or merged question only after all items succeed. Unmerged question answers remain in `回答片段/`; PDF-only column checkpoints use `归档片段/`. Fragments from the completed run are cleaned after final output succeeds. Progress explicitly distinguishes incomplete and complete runs, and a failed run preserves the previous complete directory. The CLI reports a safe interruption reason or error code to help distinguish pagination, network, and write failures. Reruns without `--offset` fetch from the beginning and produce the complete archive on success.
+
+To continue a question archive from a known API offset, reuse its original output directory:
+
+```bash
+zhihu fetch "https://www.zhihu.com/question/1976120753834443272" --offset 9980 -s settings.toml
+```
+
+A positive `--offset` supports question URLs and Markdown output only. If the settings enable HTML or PDF, pass `--no-html --no-pdf`. Existing complete documents and answer fragments are preserved. Overlapping answers are skipped by ID; new answers are saved under `回答片段/`, with a local fragment index in `续抓进度.md`. Reaching the last page completes the resumed run, not a complete archive. Omit `--offset` to rebuild the full document. Use the actual API offset, not the number of saved answers.
 
 Repeated archives reuse existing directories and document paths by Zhihu content ID. Titles and navigation update while filenames may retain an older title. Previously archived column articles that are no longer accessible remain on disk, but the current directory lists only articles fetched this time. Unknown or conflicting files and directories are preserved by choosing another name.
 
@@ -308,7 +316,7 @@ print(report.receipt.entry_directory)
 
 `archive_url(URL, settings) -> ArchiveReport` is the shared synchronous entry point for the CLI, agents, and future interfaces. The source, browser, and archive boundaries are injectable through `build_workflow` for tests and extensions. Custom archive sinks must return a structured `ArchiveReceipt` with output paths and media failures; invalid receipts fail explicitly.
 
-Pass `progress=callback` to receive `BatchProgress` events for start, saved items, completion, and interruption. Batch failures raise `BatchArchiveInterruptedError`, whose `completed` and `receipt.progress_path` locate saved work; cancellation remains `KeyboardInterrupt`. Custom batch sinks implement `begin_batch`, returning a session with `write_item`, `finish`, and `interrupt`; see `ArchiveSink` / `BatchArchiveSink`.
+Pass `progress=callback` to receive `BatchProgress` events for start, saved items, completion, and interruption. Batch failures raise `BatchArchiveInterruptedError`, whose `completed` and `receipt.progress_path` locate saved work; cancellation remains `KeyboardInterrupt`. Custom batch sinks implement `begin_batch(target, offset=0)`, returning a session with `write_item`, `finish`, and `interrupt`; see `ArchiveSink` / `BatchArchiveSink`.
 
 ## Three Platforms and Development
 

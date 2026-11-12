@@ -93,6 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="覆盖浏览器回退策略：auto、never 或 always",
     )
     fetch_path.add_argument("--cdp", help="连接本机已登录 Chrome 的 CDP 地址")
+    fetch_path.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="从指定分页位置续抓问题（非零时只保存 Markdown 片段，不生成完整归档）",
+    )
 
     login = subcommands.add_parser("login", help="手动登录知乎并安全保存已验证的 Cookie")
     _settings_argument(login)
@@ -175,7 +181,9 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         if arguments.cdp is not None:
             settings = replace(settings, cdp_url=arguments.cdp)
 
-        report = archive_url(arguments.url, settings, progress=_print_batch_progress)
+        report = archive_url(
+            arguments.url, settings, progress=_print_batch_progress, offset=arguments.offset
+        )
         _print_archive_report(report)
         return 0
     except KeyboardInterrupt:
@@ -290,7 +298,11 @@ def _print_batch_progress(progress: BatchProgress) -> None:
 def _print_archive_report(report: ArchiveReport) -> None:
     target = report.target
     receipt = report.receipt
-    print(f"归档完成：{target.title}")
+    if receipt.offset:
+        print(f"续抓结束：{target.title}（起始 offset={receipt.offset}，不代表完整归档）")
+        print(f"续抓索引：{receipt.progress_path}")
+    else:
+        print(f"归档完成：{target.title}")
     print(f"目录：{receipt.entry_directory}")
     if receipt.markdown_path is not None:
         print(f"Markdown：{receipt.markdown_path}")

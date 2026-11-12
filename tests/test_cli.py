@@ -331,7 +331,7 @@ def test_no_pdf_overrides_persistent_pdf_choice(tmp_path):
 def test_batch_cli_prints_saved_progress_before_a_later_failure(capsys, tmp_path):
     from zhihu_scraper.application import BatchProgress
 
-    def archive(_url, _settings, *, progress):
+    def archive(_url, _settings, *, progress, offset=0):
         progress(BatchProgress("started", 0, 2, progress_path=tmp_path / "归档进度.md"))
         progress(BatchProgress("saved", 1, 2, current_title="已经完成的文章"))
         progress(BatchProgress("interrupted", 1, 2, progress_path=tmp_path / "归档进度.md"))

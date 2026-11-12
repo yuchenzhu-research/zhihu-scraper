@@ -31,7 +31,7 @@ from .render import (
     RenderNavigationItem,
 )
 from .settings import ArchiveSettings
-from .urls import UnsupportedZhihuUrlError, route_zhihu_url
+from .urls import TargetKind, UnsupportedZhihuUrlError, route_zhihu_url
 
 MediaDownloader = AssetDownloader
 _MARKDOWN_SOURCE = re.compile(
@@ -52,6 +52,7 @@ class ArchiveReceipt:
     pdf_path: Path | None = None
     child_pdf_paths: tuple[Path, ...] = ()
     progress_path: Path | None = None
+    offset: int = 0
 
 
 class LocalArchive:
@@ -112,10 +113,19 @@ class LocalArchive:
             return self._archive_column(target)
         return self._archive_standalone(target)
 
-    def begin_batch(self, target: ColumnArchive | QuestionArchive) -> LocalArchiveBatch:
+    def begin_batch(
+        self, target: ColumnArchive | QuestionArchive, *, offset: int = 0
+    ) -> LocalArchiveBatch:
         """Start a readable checkpoint session before enumerating collection items."""
 
-        return LocalArchiveBatch(self, target)
+        if type(offset) is not int or offset < 0:
+            raise ValueError("offset 必须为非负整数。")
+        if offset:
+            if not isinstance(target, QuestionArchive):
+                raise ValueError("非零 offset 仅支持问题链接。")
+            if not self._markdown or self._html or self._pdf:
+                raise ValueError("非零 offset 只支持 Markdown 片段，请关闭 HTML 和 PDF。")
+        return LocalArchiveBatch(self, target, offset=offset)
 
     def _archive_standalone(
         self,
@@ -447,16 +457,21 @@ class LocalArchive:
             self._platform.validate_archive_path(directory / "media" / ("x" * 64), extra_units=16)
         return directory
 
-    def _document_names(self, directory: Path) -> _DocumentNames:
-        return _DocumentNames(directory, max_utf16=self._name_budget, runtime=self._platform)
+    def _document_names(self, directory: Path, *, question_id: str | None = None) -> _DocumentNames:
+        return _DocumentNames(
+            directory, max_utf16=self._name_budget, runtime=self._platform, question_id=question_id
+        )
 
 
 class LocalArchiveBatch:
     """Save each collection item once, then publish its complete catalog once."""
 
-    def __init__(self, archive: LocalArchive, target: ColumnArchive | QuestionArchive) -> None:
+    def __init__(
+        self, archive: LocalArchive, target: ColumnArchive | QuestionArchive, *, offset: int = 0
+    ) -> None:
         self._archive = archive
         self._target = target
+        self._offset = offset
         archive._root.mkdir(parents=True, exist_ok=True)
         self._directory = archive._entry_directory(
             title=target.title,
@@ -466,10 +481,12 @@ class LocalArchiveBatch:
         )
         self._directory.mkdir(parents=True, exist_ok=True)
         self.progress_path = _batch_progress_path(
-            self._directory, target, max_utf16=archive._name_budget
+            self._directory,
+            target,
+            max_utf16=archive._name_budget,
+            title="续抓进度" if offset else "归档进度",
         )
         archive._platform.validate_archive_path(self.progress_path, extra_units=5)
-        self._rows = _read_progress_rows(self.progress_path, self._directory)
         self._items: dict[str, Article | Answer] = {}
         self._receipts: dict[str, ArchiveReceipt] = {}
         self._temporary_paths: list[Path] = []
@@ -483,12 +500,32 @@ class LocalArchiveBatch:
         else:
             self._item_directory = self._directory / "归档片段"
             self._temporary_fragments = True
-        self._names = archive._document_names(self._item_directory)
+        if offset and self._item_directory.is_symlink():
+            raise ValueError("续抓要求回答片段目录为本地目录，不能使用符号链接。")
+        self._names = archive._document_names(
+            self._item_directory, question_id=target.id if offset else None
+        )
+        fragments = self._names.answer_fragments
+        self._saved_item_ids = frozenset(fragments)
+        self._resume_paths = [path for _, path in fragments.values()]
+        self._rows = (
+            {
+                source_url: _progress_link(path.stem, source_url, path.relative_to(self._directory))
+                for source_url, path in fragments.values()
+            }
+            if offset
+            else _read_progress_rows(self.progress_path, self._directory)
+        )
         self._source_paths: dict[str, str] = {}
         self._downloads: list[MediaDownloadReceipt] = []
         self._failures: list[MediaArchiveFailure] = []
         self._write_progress(complete=False, active=True)
-        self._remember_assets(archive._archive_media(target, self._directory))
+        if not offset:
+            self._remember_assets(archive._archive_media(target, self._directory))
+
+    @property
+    def saved_item_ids(self) -> frozenset[str]:
+        return self._saved_item_ids
 
     def write_item(self, item: Article | Answer) -> ArchiveReceipt:
         if self._closed:
@@ -497,6 +534,14 @@ class LocalArchiveBatch:
             raise TypeError("collection item type does not match its archive")
         if item.id in self._receipts:
             return self._receipts[item.id]
+        if fragment := self._names.answer_fragments.get(item.id):
+            return ArchiveReceipt(
+                self._directory,
+                fragment[1],
+                None,
+                progress_path=self.progress_path,
+                offset=self._offset,
+            )
         title = item.title if isinstance(item, Article) else f"{item.author.name}--回答-{item.id}"
         name = self._names.name_for(
             title=title,
@@ -539,6 +584,7 @@ class LocalArchiveBatch:
             media_downloads=assets.downloads,
             media_failures=assets.failures,
             progress_path=self.progress_path,
+            offset=self._offset,
         )
         row = _progress_row(item, saved_path.relative_to(self._directory))
         if self._rows.get(item.source_url) != row:
@@ -549,7 +595,9 @@ class LocalArchiveBatch:
         self._rows[item.source_url] = row
         self._items[item.id] = item
         self._receipts[item.id] = receipt
-        if self._temporary_fragments:
+        if self._offset:
+            self._resume_paths.append(saved_path)
+        elif self._temporary_fragments:
             self._temporary_paths.append(saved_path)
         self._remember_assets(assets)
         return receipt
@@ -559,6 +607,10 @@ class LocalArchiveBatch:
             raise RuntimeError("batch archive is closed")
         if (type(target), target.id) != (type(self._target), self._target.id):
             raise ValueError("the final collection does not match its checkpoint session")
+        if self._offset:
+            self._write_progress(complete=True)
+            self._closed = True
+            return self._fragment_receipt()
         assets = AssetArchiveReceipt(
             self._source_paths, tuple(self._downloads), tuple(self._failures)
         )
@@ -593,14 +645,21 @@ class LocalArchiveBatch:
     def interrupt(self) -> ArchiveReceipt:
         self._write_progress(complete=False)
         self._closed = True
+        return self._fragment_receipt()
+
+    def _fragment_receipt(self) -> ArchiveReceipt:
         return ArchiveReceipt(
             self._directory,
             None,
             None,
-            child_markdown_paths=tuple(
-                receipt.markdown_path
-                for receipt in self._receipts.values()
-                if receipt.markdown_path
+            child_markdown_paths=(
+                tuple(self._resume_paths)
+                if self._offset
+                else tuple(
+                    receipt.markdown_path
+                    for receipt in self._receipts.values()
+                    if receipt.markdown_path
+                )
             ),
             child_html_paths=tuple(
                 receipt.html_path for receipt in self._receipts.values() if receipt.html_path
@@ -608,6 +667,7 @@ class LocalArchiveBatch:
             media_downloads=tuple(self._downloads),
             media_failures=tuple(self._failures),
             progress_path=self.progress_path,
+            offset=self._offset,
         )
 
     def _remember_assets(self, assets: AssetArchiveReceipt) -> None:
@@ -617,11 +677,24 @@ class LocalArchiveBatch:
 
     def _write_progress(self, *, complete: bool, active: bool = False) -> None:
         status = "已完成" if complete else "未完成（进行中）" if active else "未完成"
+        title = "归档进度"
+        details: tuple[str, ...] = (
+            "重新运行相同网址会重新读取列表、复用已有文件；旧的完整目录在本轮全部成功前保持不变。",
+        )
+        if self._offset:
+            title = "续抓进度"
+            stage = "结束" if complete else "进行中" if active else "中断"
+            status = f"续抓{stage}（不代表完整归档）"
+            details = (
+                f"> 起始位置：offset={self._offset}",
+                "",
+                "本轮从指定位置读取问题回答。保留已有片段与完整文档，以下索引只链接片段。",
+            )
         source = self._target.source_url
         label = _source_label(_target_type(self._target))
         content = "\n".join(
             (
-                "# 归档进度",
+                f"# {title}",
                 "",
                 f"> {label}：[{source}]({source})",
                 f"> 状态：{status}",
@@ -629,7 +702,7 @@ class LocalArchiveBatch:
                 if active
                 else f"> 本轮已保存：{len(self._items)} 项",
                 "",
-                "重新运行相同网址会重新读取列表、复用已有文件；旧的完整目录在本轮全部成功前保持不变。",
+                *details,
                 "下列链接仅包含已经保存的内容，也保留此前运行留下的可读文件。",
                 "",
                 "## 已保存内容",
@@ -642,16 +715,20 @@ class LocalArchiveBatch:
 
 
 def _batch_progress_path(
-    directory: Path, target: ColumnArchive | QuestionArchive, *, max_utf16: int | None = None
+    directory: Path,
+    target: ColumnArchive | QuestionArchive,
+    *,
+    max_utf16: int | None = None,
+    title: str = "归档进度",
 ) -> Path:
     identity = _source_identity(target.source_url, _source_label(_target_type(target)))
     for path in sorted(directory.glob("*.md")):
-        if _is_progress_document(path) and _document_identity(path) == identity:
+        if _is_progress_document(path, title=title) and _document_identity(path) == identity:
             return path
-    candidate = directory / "归档进度.md"
+    candidate = directory / f"{title}.md"
     counter = 1
     while candidate.exists():
-        suffix = f"归档进度--{_target_type(target)}-{target.id}"
+        suffix = f"{title}--{_target_type(target)}-{target.id}"
         if counter > 1:
             suffix += f"-{counter}"
         candidate = directory / f"{safe_filename(suffix, max_utf16=max_utf16)}.md"
@@ -659,12 +736,15 @@ def _batch_progress_path(
     return candidate
 
 
-def _is_progress_document(path: Path) -> bool:
-    if path.suffix.casefold() != ".md":
+def _is_progress_document(path: Path, *, title: str | None = None) -> bool:
+    if path.suffix.casefold() != ".md" or path.is_symlink():
         return False
     try:
         with path.open(encoding="utf-8") as source:
-            return source.readline().rstrip("\r\n") == "# 归档进度"
+            heading = source.readline().rstrip("\r\n")
+            if title is not None:
+                return heading == f"# {title}"
+            return heading in {"# 归档进度", "# 续抓进度"}
     except (OSError, UnicodeError):
         return False
 
@@ -686,13 +766,17 @@ def _read_progress_rows(path: Path, directory: Path) -> dict[str, str]:
 
 def _progress_row(item: Article | Answer, path: Path) -> str:
     title = item.title if isinstance(item, Article) else f"{item.author.name}的回答"
+    return _progress_link(title, item.source_url, path)
+
+
+def _progress_link(title: str, source_url: str, path: Path) -> str:
     title = (
         escape(" ".join(title.split()), quote=False)
         .replace("\\", "\\\\")
         .replace("[", "\\[")
         .replace("]", "\\]")
     )
-    source_url = quote(item.source_url, safe="/:?=&%#@+~")
+    source_url = quote(source_url, safe="/:?=&%#@+~")
     return f"- [{title}]({_relative_href(path.as_posix())}) · [知乎原文]({source_url})"
 
 
@@ -772,6 +856,7 @@ class _DocumentNames:
         *,
         max_utf16: int | None = None,
         runtime: RuntimePlatform | None = None,
+        question_id: str | None = None,
     ) -> None:
         self._directory = directory
         self._max_utf16 = max_utf16
@@ -780,11 +865,29 @@ class _DocumentNames:
         groups: dict[str, list[tuple[Path, tuple[str, str] | None]]] = {}
         self.identities: set[tuple[str, str]] = set()
         self._existing: dict[tuple[str, str], str] = {}
+        self.answer_fragments: dict[str, tuple[str, Path]] = {}
         progress_names: set[str] = set()
         for document in documents:
             if document.suffix.casefold() not in {".md", ".html", ".pdf"}:
                 continue
-            identity = _document_identity(document)
+            reference = _document_reference(document)
+            identity = _source_identity(reference[1], reference[0]) if reference else None
+            if (
+                question_id is not None
+                and reference is not None
+                and reference[0] == "知乎原文"
+                and document.suffix.casefold() == ".md"
+                and not document.is_symlink()
+            ):
+                try:
+                    answer = route_zhihu_url(reference[1])
+                except UnsupportedZhihuUrlError:
+                    pass
+                else:
+                    if answer.kind is TargetKind.ANSWER and answer.question_id == question_id:
+                        self.answer_fragments.setdefault(
+                            answer.content_id, (answer.canonical_url, document)
+                        )
             groups.setdefault(document.stem.casefold(), []).append((document, identity))
             if identity is not None:
                 self.identities.add(identity)
@@ -841,9 +944,14 @@ def _source_identity(source_url: str, label: str) -> tuple[str, str]:
 
 
 def _document_identity(document: Path) -> tuple[str, str] | None:
+    reference = _document_reference(document)
+    return _source_identity(reference[1], reference[0]) if reference else None
+
+
+def _document_reference(document: Path) -> tuple[str, str] | None:
     if document.suffix.casefold() == ".pdf":
         source_url = pdf_source_url(document)
-        return _source_identity(source_url, "知乎原文") if source_url is not None else None
+        return ("知乎原文", source_url) if source_url is not None else None
     try:
         with document.open(encoding="utf-8") as source:
             prefix = source.read(16_384)
@@ -853,12 +961,12 @@ def _document_identity(document: Path) -> tuple[str, str] | None:
         match = _MARKDOWN_SOURCE.search(prefix)
         if match is not None:
             label, source_url = match.groups()
-            return _source_identity(source_url, label)
+            return label, source_url
     else:
         match = _HTML_SOURCE.search(prefix)
         if match is not None:
             source_url, label = match.groups()
-            return _source_identity(unescape(source_url), label)
+            return label, unescape(source_url)
     return None
 
 

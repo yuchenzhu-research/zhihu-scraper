@@ -30,7 +30,7 @@ class BatchSource:
                 raise TransportError("request failed, secret must stay private")
             yield {"id": str(index + 1), "title": f"文章{index + 1}", "content": content}
 
-    def iter_question_answer_payloads(self, _target, *, page_size):
+    def iter_question_answer_payloads(self, _target, *, page_size, offset=0):
         for index, content in enumerate(self.contents):
             if self.fail_after == index:
                 raise TransportError("request failed, secret must stay private")

@@ -57,7 +57,7 @@ class FakeSource:
     def fetch_question_payload(self, target):
         return self.question
 
-    def iter_question_answer_payloads(self, target, *, page_size):
+    def iter_question_answer_payloads(self, target, *, page_size, offset=0):
         yield from self.answers
 
     def fetch_column_payload(self, target):
@@ -78,7 +78,7 @@ class FakeSink:
         self.targets.append(target)
         return ArchiveReceipt(Path(f"receipt-{target.id}"), None, None)
 
-    def begin_batch(self, target):
+    def begin_batch(self, target, *, offset=0):
         return FakeBatchSink(self, target)
 
 
@@ -381,7 +381,7 @@ class ArchiveWorkflowTests(unittest.TestCase):
         def fail_question(target):
             raise InvalidZhihuPayloadError("blocked")
 
-        def gated_answers(target, *, page_size):
+        def gated_answers(target, *, page_size, offset=0):
             if not source.session_ready:
                 raise InvalidZhihuPayloadError("missing browser session")
             yield source.answer
