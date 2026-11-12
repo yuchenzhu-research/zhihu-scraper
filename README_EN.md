@@ -1,8 +1,10 @@
 # Zhihu-Scraper
 
-**Save the Zhihu content you want to revisit in your own offline archive.**
+<p align="center">
+  <a href="README.md">简体中文</a> · <a href="README_ZH_HANT.md">繁體中文</a> · <strong>English</strong>
+</p>
 
-[简体中文](README.md) · [繁體中文](README_ZH_HANT.md) · **English**
+<p align="center"><strong>Save what you see. Record what you think.</strong></p>
 
 Zhihu-Scraper is a local archiving tool for Zhihu. Give it a link to an article, answer, question, column, or standalone video. It saves **Markdown and local media** by default, with optional **offline HTML, PDF, and comments**.
 

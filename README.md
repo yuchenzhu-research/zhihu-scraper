@@ -1,8 +1,10 @@
 # Zhihu-Scraper
 
-**把值得回看的知乎内容，存进自己的离线档案。**
+<p align="center">
+  <strong>简体中文</strong> · <a href="README_ZH_HANT.md">繁體中文</a> · <a href="README_EN.md">English</a>
+</p>
 
-**简体中文** · [繁體中文](README_ZH_HANT.md) · [English](README_EN.md)
+<p align="center"><strong>所见皆可藏，所思皆有迹</strong></p>
 
 Zhihu-Scraper 是一个知乎本地归档工具。输入文章、回答、问题、专栏或独立视频的链接，默认保存为 **Markdown 和本地媒体**，可按需导出**离线 HTML 和 PDF**，也可以一并保存评论。
 
