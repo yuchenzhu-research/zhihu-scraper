@@ -1,359 +1,75 @@
-<div align="center">
-
 # Zhihu-Scraper
 
-**Turn one Zhihu URL into a readable, portable local archive**
+**Save Zhihu content on your computer and read it offline.**
 
 [![CI](https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
-![License](https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB)](pyproject.toml)
+[![MIT License](https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper)](LICENSE)
 
-[简体中文](README.md) · **English**
+[简体中文](README.md) · [繁體中文](README_ZH_HANT.md) · **English**
 
-</div>
+Zhihu-Scraper is a local archiving tool for Zhihu. Give it a link to an article, answer, question, column, or standalone video. It saves **Markdown and local media** by default, with optional **offline HTML, PDF, and comments**.
 
-Zhihu-Scraper is a local-first Zhihu archiver. Give it an article, answer, question, column, or standalone-video URL. It tries the lightweight HTTP/API path first, optionally falls back to a browser, normalizes the result, and writes Markdown and local media; offline HTML and PDF are opt-in.
+[Quick start](#quick-start) · [Example output](#what-the-archive-looks-like) · [User manual](docs/MANUAL_EN.md)
 
-The project serves developers studying an engineered crawler as well as non-technical users who let an agent such as Codex run the command. There is no TUI, cloud account, or frontend build system: the public surface is one CLI and one Python function.
+## Quick start
 
-> [!CAUTION]
-> Use this project only for learning, research, and lawful personal archiving. Follow Zhihu's terms, robots rules, copyright and privacy obligations, and applicable law. Do not bypass paid, private, or unauthorized content; do not overload the service; and do not republish archives containing personal information without permission.
-
-## Supported Targets
-
-| Input URL | Archive behavior |
-| --- | --- |
-| `https://zhuanlan.zhihu.com/p/<article ID>` | One article, including its column references |
-| `https://www.zhihu.com/question/<question ID>/answer/<answer ID>` | The specified answer |
-| `https://www.zhihu.com/answer/<answer ID>` | The specified answer |
-| `https://www.zhihu.com/question/<question ID>` | Paginated answers merged into one question document |
-| `https://www.zhihu.com/column/<column token>` | A column directory and its articles |
-| `https://www.zhihu.com/zvideo/<video ID>` | A standalone Zhihu video |
-
-The content parser covers paragraphs, headings, lists, quotes, tables, code, links, images, animations, and TeX formulas. For a standalone video, it selects the rendition with the largest known dimensions. Interrupted downloads retain a `.part` file; archiving the same target again uses HTTP Range when reliable validators permit resuming, or safely restarts otherwise and checks the final byte count when the server provides a length. A stale body image, animation, or cover does not destroy the text archive: remaining assets continue and structured warnings identify failures. Undownloaded remote media is shown as an ordinary link rather than an automatic browser request. Failure of a standalone video's primary file remains explicit and fatal.
-
-Zhihu video cards embedded in articles and answers can resolve to downloadable direct media such as MP4. Unavailable videos keep their original page links and produce a warning. Disabling media downloads also skips embedded-video requests. Column collections, author profiles, search results, pins, favorites, and Yanxuan content are not supported.
-
-HTTP/API, pagination, and comments share request pacing: by default, request starts are spaced by 0.5 seconds plus a random 0–0.5 seconds. Configure `network.request_interval` and `network.request_jitter`; setting both to 0 disables pacing. The first request does not wait.
-
-Each HTTP request and each media download has its own 60-second cumulative retry-wait budget. Excessive or invalid server wait instructions stop explicitly with a suggestion to retry later, without an early retry or browser fallback. Media downloads also honor `Retry-After` seconds or dates; optional images retain their links and report a failure when the budget is exceeded, while failure of a standalone video’s main file is an error.
-
-Comments and replies are deduplicated by ID before applying their limits. Two consecutive pages without new comments stop explicitly, and paging links must stay within the current thread.
-
-Question and column pagination tolerates one fully overlapping page. Two consecutive unfinished pages with no new content stop with an explicit error. Unless the source explicitly marks the end, a valid next link is followed even after a short page. When a next page must be computed, it advances the current request's numeric offset. Normal archives have no total page limit.
-
-## What a default fetch saves
-
-Without extra flags, a normal fetch saves:
-
-- The title, author, source URL, publication time, and any available vote count.
-- Paragraphs, headings, lists, quotes, tables, code, links, and TeX mathematics.
-- Body images, animations, and covers; a standalone `zvideo` also keeps its description, original link, and largest known rendition.
-- An article's column memberships, an answer's question, a question's detail and all accessible answers, or a column's description, directory, and all accessible articles.
-- Readable `.md` and successfully downloaded files under `media/`.
-
-HTML is **not generated by default**, and comments are **not fetched by default**. Pass `--html` for directly openable offline `.html` plus local styles, and pass `--comments` for up to 10 root comments and up to 10 replies per root. Either option can also be enabled persistently in the settings file. The project creates no SQLite database, raw JSON archive, search index, or knowledge graph; pass `--pdf` to additionally generate PDF.
-
-## Installation
-
-Python 3.12 or newer is required. Keep the project-specific `.venv` to avoid changing the system Python environment.
-
-### macOS / Linux script
-
-```bash
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-./scripts/install.sh
-source .venv/bin/activate
-```
-
-The script installs both project dependencies and the managed Chromium browser. On Linux it also installs the browser's system libraries and may ask for a `sudo` password.
-
-### Windows PowerShell script
-
-```powershell
-git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
-cd zhihu-scraper
-.\scripts\install.ps1
-.\.venv\Scripts\Activate.ps1
-```
-
-The PowerShell script also installs the managed Chromium browser.
-
-### uv
+Runs on Windows, macOS, and Linux. You need Git, Python 3.12 or later, and [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```bash
 git clone https://github.com/yuchenzhu-research/zhihu-scraper.git
 cd zhihu-scraper
 uv sync --locked
 uv run playwright install chromium
-uv run zhihu --help
+uv run zhihu fetch "https://zhuanlan.zhihu.com/p/357892158"
 ```
 
-On a fresh Linux system, use `uv run playwright install --with-deps chromium` so that browser system libraries are installed as well.
+Open the generated Markdown under `知乎归档/` in your current directory. A fresh Linux setup may also need browser system libraries. See [Installation and updates](docs/MANUAL_EN.md#install) for install scripts, pip, and browser setup.
 
-### Manual pip workflow
+## Supported Zhihu links
 
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .\.venv\Scripts\Activate.ps1
-python -m pip install -e .
-python -m playwright install chromium
-```
-
-Playwright is a core runtime dependency because browser fallback is part of the reliable fetch path; the Chromium binary still needs a one-time installation command. A project-local virtual environment isolates dependencies and command entry points; it does not mean the crawler must run in a container.
-
-On a fresh Linux system, use `python -m playwright install --with-deps chromium`.
-
-## Choosing a Command
-
-Every feature is reached through the single `zhihu` command. The common choices are grouped here:
-
-| Goal | Command | Result |
+| Type | Example link | What gets saved |
 | --- | --- | --- |
-| Show the current version | `zhihu --version` | Confirms which project version is active |
-| Normal archive | `zhihu fetch URL` | Markdown + downloaded media |
-| Also create a webpage | `zhihu fetch --html URL` | Markdown + offline HTML + media |
-| Generate PDF | `zhihu fetch --pdf URL` | Markdown + media + PDF |
-| Also fetch comments | `zhihu fetch --comments URL` | Markdown + media + 10×10 comments |
-| HTML and comments | `zhihu fetch --html --comments URL` | Enables both optional capabilities |
-| Do not download media | `zhihu fetch --no-media URL` | Keeps remote media links in Markdown |
-| Choose an output folder | `zhihu fetch -o "/path/to/archive" URL` | Overrides this run's destination |
-| Force browser fetching | `zhihu fetch --browser always URL` | Skips the HTTP content path |
+| Article | `zhuanlan.zhihu.com/p/<article ID>` | Body, author, media, and column information |
+| Single answer | `zhihu.com/question/<question ID>/answer/<answer ID>` | The selected answer and its question information |
+| Whole question | `zhihu.com/question/<question ID>` | The question and accessible answers, combined in one document after a complete run |
+| Column | `zhihu.com/column/<column token>` | An index, accessible articles, and article navigation |
+| Standalone video | `zhihu.com/zvideo/<video ID>` | The video file, title, and description when available |
 
-Generate a settings file only when you need cookies or persistent choices:
+Short answer links such as `zhihu.com/answer/<answer ID>` also work. Embedded Zhihu video cards are saved when the media is downloadable and kept as links otherwise. Author profiles, collections, search results, short posts, column collections, and paid Yanxuan content are currently outside the supported scope.
 
-```bash
-zhihu init
-```
+## What the archive looks like
 
-`init` creates `./settings.toml` by default and never overwrites an existing file. Other commands do **not** discover this file automatically, so pass it explicitly:
-
-```bash
-zhihu check -s settings.toml
-zhihu fetch -s settings.toml "https://zhuanlan.zhihu.com/p/357892158"
-```
-
-You can skip the file entirely and use built-in defaults:
-
-```bash
-zhihu fetch "https://www.zhihu.com/zvideo/1666569497233207296"
-```
-
-Settings can still be overridden for one run:
-
-```bash
-zhihu fetch -s settings.toml --html URL
-zhihu fetch -s settings.toml --comments URL
-zhihu fetch -s settings.toml --no-html URL
-zhihu fetch -s settings.toml --no-media URL
-zhihu fetch -s settings.toml --browser always URL
-zhihu fetch -s settings.toml --cdp http://127.0.0.1:9222 URL
-zhihu fetch -s settings.toml -o "/path/to/archive" URL
-```
-
-Command reference:
-
-```bash
-zhihu --version
-zhihu --help
-zhihu fetch --help
-zhihu login --help
-zhihu check --help
-zhihu init --help
-```
-
-PDF is disabled by default; enable it with `--pdf` or `archive.pdf = true`. Install Chrome or run `playwright install chromium`. An isolated browser without login state prints local content without remote resource requests, supporting Chinese text, formulas, tables, and downloaded images. Videos retain their source links rather than becoming playable PDF attachments. Columns generate separate index and article PDFs, with relative navigation preserved when the folder moves (subject to the reader’s local-link policy). For PDF-only output, set `markdown = false`, `html = false`, and `pdf = true`; no intermediate HTML or styles remain.
-
-## Configure Cookies Safely
-
-Run `zhihu login` and sign in through the opened browser. The command waits up to 180 seconds and atomically saves cookies only after verification against Zhihu’s identity endpoint, defaulting to `.local/cookies.json`. Cancellation, timeout, or save failure preserves the previous file. Follow the printed instructions to set `network.cookie_file`, then explicitly pass `-s settings.toml`. Use `zhihu login -s settings.toml` to update the configured file; ordinary archive runs do not overwrite saved cookies.
-
-For an existing signed-in browser with local CDP enabled, use `zhihu login --cdp http://127.0.0.1:9222`; it reads only Zhihu cookies and leaves existing pages untouched. Saved files are restricted to the current user, but their contents are not encrypted. Manual imports remain supported:
-
-Public content may work without authentication, but some endpoints require a valid session. The project reads JSON exported from a browser, either a simple object or a common list of `name` / `value` records. To avoid leaking unrelated credentials, list records are accepted only when their domain is explicitly `zhihu.com` or a subdomain; object form should contain Zhihu cookies only.
-
-1. Export cookies only from your own signed-in Zhihu session, using a browser tool you trust.
-2. Store the file somewhere that is neither synced nor committed. Inside this repository, `.local/cookies.json` is recommended; `.local/` is ignored by Git.
-3. Put only the file path in `settings.toml`. Never put cookie values there.
-
-Minimal object form (replace the angle-bracket placeholders locally, and never post the real values in an issue, chat, or log):
-
-```json
-{
-  "z_c0": "<your z_c0 value>",
-  "d_c0": "<your d_c0 value>"
-}
-```
-
-Reference the file from `settings.toml`:
-
-```toml
-[network]
-cookie_file = ".local/cookies.json"
-```
-
-Then verify both the required fields and the real session:
-
-```bash
-zhihu check -s settings.toml
-```
-
-To check a different file once:
-
-```bash
-zhihu check --cookie-file /private/path/cookies.json
-```
-
-On macOS/Linux, you can additionally run `chmod 600 .local/cookies.json`. Cookies are login credentials; if exposure is suspected, sign out the relevant Zhihu session and sign in again. `check` reports only field completeness and authentication status, never cookie values.
-
-## `settings.toml`
-
-`zhihu init` generates these defaults:
-
-```toml
-[archive]
-output_dir = "知乎归档"
-markdown = true
-html = false
-pdf = false
-comments = false
-comment_roots = 10
-comment_replies = 10
-media_download = true
-
-[network]
-# cookie_file = ".local/cookies.json"
-# proxy = "http://127.0.0.1:7890"
-timeout = 30.0
-retries = 3
-page_size = 20
-request_interval = 0.5
-request_jitter = 0.5
-
-[browser]
-fallback = "auto"
-headless = false
-# cdp_url = "http://127.0.0.1:9222"
-```
-
-Markdown and media downloads are enabled by default. HTML, PDF, comments, and proxy use are disabled. `--html` enables offline HTML for one run, while `html = true` enables it persistently. When comments are enabled, each content item stores up to 10 root comments in API return order and up to 10 replies for each root; smaller threads are kept in full. The 10/10 limits are configurable, and `--comments` enables them for one run. Disabling comments means that the current run does not request comments, so a repeated archive reflects only the current result. Disabling media downloads does not download new files and leaves remote media as ordinary links.
-
-`browser.fallback` accepts:
-
-- `auto`: HTTP/API first, then browser when the request is blocked or the payload is invalid.
-- `never`: HTTP/API only.
-- `always`: use browser page state for the single target immediately.
-
-Without CDP, the project tries system Chrome first and falls back to its managed Chromium; both use a project-owned persistent browser directory. With `cdp_url`, it can attach to an already signed-in local Chrome session. To protect the authenticated control channel, only HTTP/WebSocket endpoints on `localhost`, `127.0.0.1`, or `[::1]` are accepted.
-
-`network.proxy` applies consistently to HTTP/API requests, the project-managed browser, and media downloads. An external CDP browser keeps its own proxy configuration. Requests and media downloads share the configured timeout and bounded retry policy, and logs redact cookies and proxy credentials. Effective HTTP timeouts are at least 1 millisecond, so very small positive values cannot disable the request deadline.
-
-## Local Output
-
-Only a whole column creates `内容/`. Its default layout is:
+The archive preserves the title, author, source link, images, tables, code blocks, and formulas alongside the text. A single article uses this layout by default. The `media/` folder is created when a download succeeds.
 
 ```text
 知乎归档/
-└── 机器学习/
-    ├── 机器学习.md
-    ├── 内容/
-    │   ├── 一文归纳AI数据增强之法.md
-    │   └── RNN_LSTM_BPTT详细推导.md
+└── Article title/
+    ├── Article title.md
     └── media/
+        └── image file
 ```
 
-The column-named files are complete, year-grouped directories and show `本栏目共 N 篇`. Each article page records its column membership, current archive origin, a directory link, and previous/next navigation.
+With HTML enabled, open the archive in a browser to read it offline with its tables and formulas. This screenshot shows actual output generated from sample content.
 
-A single article, answer, whole question, or standalone video uses this compact default layout:
+![Offline HTML archive showing text, a formula, and a study schedule table](docs/images/offline-html-preview.png)
 
-```text
-知乎归档/
-└── Title/
-    ├── Title.md
-    └── media/
-```
+## Common tasks
 
-With `--html` or `html = true`, a same-name `.html` and an `assets/` folder containing local reading styles are added; each article under a column's `内容/` also gets HTML. Answers under a question become sections in one question document and do not create `内容/`. `media/` is created only when downloadable media exists. HTML is regenerated from the normalized model and does not copy Zhihu's HTML, CSS, or JavaScript.
+| I want to… | See the manual |
+| --- | --- |
+| Export HTML or PDF, or save comments | [Choose output formats and comments](docs/MANUAL_EN.md#commands) |
+| Archive content that requires sign-in | [Sign in and check your session](docs/MANUAL_EN.md#login) |
+| Recover after an interruption or start at a known offset | [Check progress and resume](docs/MANUAL_EN.md#resume) |
+| Change the output directory, proxy, or browser behavior | [Settings file](docs/MANUAL_EN.md#settings) |
+| Fix an access, browser, or file path error | [Troubleshooting](docs/MANUAL_EN.md#troubleshooting) |
 
-Original TeX is retained: Markdown uses `$…$` / `$$…$$`; HTML converts it to locally generated, browser-native MathML while keeping a safe trace expression in `data-tex`. No network-loaded KaTeX or MathJax is required. Generated MathML is stripped of link, event, and style attributes; malformed expressions safely fall back to readable TeX.
+Question and column archives save progress item by item. For a long question, you can also fetch additional answer fragments from a known Zhihu pagination offset. The manual explains how the two recovery options work and what each one saves.
 
-Interrupted downloads retain `.part` and temporary `.part.resume` files containing only a resource fingerprint, validators, and total length; resume state is removed on success. `If-Range` confirms the resource version before resuming; downloads restart when reliable validators are unavailable. Known media lengths validate cached files and trigger replacement of damaged files. Existing files of unknown length are not remotely revalidated.
+## Development and feedback
 
-Media filenames distinguish actual source resources: replacing a cover or media source downloads a new file, while changes only to the known `pkey` / `expiration` signature parameters reuse the resource. Repeated signed Zhihu CDN links in the same item also share an existing successful download. Old media files are preserved; the first archive after upgrading may download them again.
+- [Development guide](docs/DEVELOPMENT.md) · Python API, local tests, and CI (Simplified Chinese)
+- [Architecture and references](docs/ARCHITECTURE.md) · [Feature scope and roadmap](docs/FEATURE_TODO.md) (Simplified Chinese)
+- [Report an issue](https://github.com/yuchenzhu-research/zhihu-scraper/issues) · Include the version, the command you ran, and the error with sensitive information removed
 
-Column articles and styles are written before the directory is published. A document or stylesheet write failure leaves the previous directory in place. Each file is replaced atomically; already completed article updates are not rolled back.
-
-Questions and columns save items incrementally and produce a readable `归档进度.md` progress document (choosing another name on collision). The CLI advances progress only after an item is saved; source totals are estimates. Rerun the same command after interruption: it fetches the list again, reuses the directory, stable filenames and valid media, then publishes the complete column directory or merged question only after all items succeed. Unmerged question answers remain in `回答片段/`; PDF-only column checkpoints use `归档片段/`. Fragments from the completed run are cleaned after final output succeeds. Progress explicitly distinguishes incomplete and complete runs, and a failed run preserves the previous complete directory. The CLI reports a safe interruption reason or error code to help distinguish pagination, network, and write failures. Reruns without `--offset` fetch from the beginning and produce the complete archive on success.
-
-To continue a question archive from a known API offset, reuse its original output directory:
-
-```bash
-zhihu fetch "https://www.zhihu.com/question/1976120753834443272" --offset 9980 -s settings.toml
-```
-
-A positive `--offset` supports question URLs and Markdown output only. If the settings enable HTML or PDF, pass `--no-html --no-pdf`. Existing complete documents and answer fragments are preserved. Overlapping answers are skipped by ID; new answers are saved under `回答片段/`, with a local fragment index in `续抓进度.md`. Reaching the last page completes the resumed run, not a complete archive. Omit `--offset` to rebuild the full document. Use the actual API offset, not the number of saved answers.
-
-Repeated archives reuse existing directories and document paths by Zhihu content ID. Titles and navigation update while filenames may retain an older title. Previously archived column articles that are no longer accessible remain on disk, but the current directory lists only articles fetched this time. Unknown or conflicting files and directories are preserved by choosing another name.
-
-The project deliberately maintains no database, search index, or knowledge graph. Markdown, media, and opt-in HTML/PDF are the complete archive, so users can read, move, back up, or delete it without hidden state.
-
-## Python API
-
-```python
-from pathlib import Path
-
-from zhihu_scraper import ArchiveSettings, archive_url
-
-report = archive_url(
-    "https://zhuanlan.zhihu.com/p/357892158",
-    ArchiveSettings(output_dir=Path("知乎归档"), html=True),
-)
-
-print(report.target.title)
-print(report.receipt.entry_directory)
-```
-
-`archive_url(URL, settings) -> ArchiveReport` is the shared synchronous entry point for the CLI, agents, and future interfaces. The source, browser, and archive boundaries are injectable through `build_workflow` for tests and extensions. Custom archive sinks must return a structured `ArchiveReceipt` with output paths and media failures; invalid receipts fail explicitly.
-
-Pass `progress=callback` to receive `BatchProgress` events for start, saved items, completion, and interruption. Batch failures raise `BatchArchiveInterruptedError`, whose `completed` and `receipt.progress_path` locate saved work; cancellation remains `KeyboardInterrupt`. Custom batch sinks implement `begin_batch(target, offset=0)`, returning a session with `write_item`, `finish`, and `interrupt`; see `ArchiveSink` / `BatchArchiveSink`.
-
-## Three Platforms and Development
-
-On Windows, the output root is checked for sufficient path space before network requests start. If it is too deep, shorten `archive.output_dir` and retry. New names account for the UTF-16 total path budget, including Chinese text, emoji, and temporary suffixes. Existing overlong files are preserved with a prompt to move the archive to a shorter root.
-
-Fetching, normalization, rendering, and media behavior are shared across Windows, macOS, and Linux. The platform adapter contains real differences such as browser locations, application-data directories, and safe filenames. CI tests locked dependencies with Python 3.12, 3.13, and 3.14 on all three operating systems, and separately checks allowed dependency versions and browser startup on Ubuntu. Zhihu endpoints and anti-bot behavior can change at any time, so a green test suite cannot guarantee that every future URL will remain fetchable.
-
-Set up a development environment:
-
-```bash
-uv sync --locked --extra dev
-uv run playwright install chromium
-```
-
-Run the complete local quality gate:
-
-```bash
-PYTHONWARNINGS=error::ResourceWarning uv run pytest
-uv run ruff check zhihu_scraper tests
-uv run ruff format --check zhihu_scraper tests
-uv run mypy zhihu_scraper
-uv run python -m compileall -q zhihu_scraper
-uv lock --check
-uv run zhihu --help
-```
-
-Live Zhihu smoke tests are a separate explicit suite, so the normal deterministic test run has no skipped network tests:
-
-```bash
-ZHIHU_LIVE=1 ZHIHU_COOKIE_FILE=/private/path/cookies.json \
-  uv run pytest tests/live/live_archive.py
-```
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module boundaries. The feature roadmap is tracked in [docs/FEATURE_TODO.md](docs/FEATURE_TODO.md). Database and raw JSON archives are not provided.
-
-## References and License
-
-The rebuild compared ideas from [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler), [CrawlerTutorial](https://github.com/NanmiCoder/CrawlerTutorial), [Ther-nullptr/zhihu-scraper](https://github.com/Ther-nullptr/zhihu-scraper), and [chenluda/zhihu-download](https://github.com/chenluda/zhihu-download). This repository independently maintains its implementation and tests; it does not vendor source from those projects. Pinned research revisions and their purposes are recorded in the [architecture reference inventory](docs/ARCHITECTURE.md#8-外部参考版本).
-
-Licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE). Archive content you have permission to access and respect platform rules, copyright, and privacy.

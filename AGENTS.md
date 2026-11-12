@@ -7,7 +7,9 @@
 1. 阅读本文件。
 2. 检查 `git status`，保留无关的用户改动。
 3. 按任务读取：
-   - `README.md` 与 `README_EN.md`：对外功能和安装入口
+   - `README.md`、`README_ZH_HANT.md`、`README_EN.md`：对外功能和快速开始
+   - `docs/MANUAL.md`、`docs/MANUAL_ZH_HANT.md`、`docs/MANUAL_EN.md`：安装、命令、配置与排错
+   - `docs/DEVELOPMENT.md`：Python API 和开发验证
    - `pyproject.toml`：依赖与命令入口
    - `docs/ARCHITECTURE.md`：目标架构和稳定模块 seam
    - `docs/FEATURE_TODO.md`：已确认范围与延期功能
@@ -37,11 +39,13 @@
 - 不新增 `helper.py`、`misc.py`、`temp.py` 等无明确职责的模块。
 - `pyproject.toml` 是主项目依赖的唯一声明来源；不新增根目录 `requirements*.txt`。
 - 不修改 `references/external/` 中的参考仓库。
-- 对外行为变化时同步更新中英文 README，避免命令、默认值与实现漂移。
+- 对外行为变化时同步更新受影响的简体中文、繁体中文和英文文档，保持命令和默认值一致。
 
 ## 文档职责
 
-- `README.md` / `README_EN.md`：对外介绍、安装和最小使用方式
+- 三语 README：对外介绍、支持范围、归档示例和快速开始
+- 三语 MANUAL：安装与更新、命令、登录、配置、续抓和排错
+- `docs/DEVELOPMENT.md`：Python API、测试和 CI
 - `docs/ARCHITECTURE.md`：已经对齐的架构、目录和模块 seam
 - `docs/FEATURE_TODO.md`：功能路线、默认值和延期范围
 - `AGENTS.md`：代理执行规则
