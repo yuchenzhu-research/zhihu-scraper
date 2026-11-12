@@ -280,7 +280,7 @@ Original TeX is retained: Markdown uses `$…$` / `$$…$$`; HTML converts it to
 
 Interrupted downloads retain `.part` and temporary `.part.resume` files containing only a resource fingerprint, validators, and total length; resume state is removed on success. `If-Range` confirms the resource version before resuming; downloads restart when reliable validators are unavailable. Known media lengths validate cached files and trigger replacement of damaged files. Existing files of unknown length are not remotely revalidated.
 
-Media filenames distinguish actual source resources: replacing a cover or media source downloads a new file, while changes only to the known `pkey` / `expiration` signature parameters reuse the resource. Old media files are preserved; the first archive after upgrading may download them again.
+Media filenames distinguish actual source resources: replacing a cover or media source downloads a new file, while changes only to the known `pkey` / `expiration` signature parameters reuse the resource. Repeated signed Zhihu CDN links in the same item also share an existing successful download. Old media files are preserved; the first archive after upgrading may download them again.
 
 Column articles and styles are written before the directory is published. A document or stylesheet write failure leaves the previous directory in place. Each file is replaced atomically; already completed article updates are not rolled back.
 

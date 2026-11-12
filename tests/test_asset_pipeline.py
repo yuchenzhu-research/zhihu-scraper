@@ -74,6 +74,75 @@ def image(
 
 
 class AssetPipelineTests(unittest.TestCase):
+    def test_same_media_with_refreshed_signatures_is_downloaded_once(self):
+        body_url = "https://pic1.zhimg.com/shared.jpg?width=800&pkey=old&expiration=1"
+        cover_url = "https://pic1.zhimg.com/shared.jpg?width=800&pkey=new&expiration=2"
+        other_size = "https://pic1.zhimg.com/shared.jpg?width=400&pkey=new&expiration=2"
+        article = Article(
+            "1",
+            "共享媒体",
+            "https://zhuanlan.zhihu.com/p/1",
+            AUTHOR,
+            NOW,
+            (MediaBlock(image("body", body_url)), MediaBlock(image("small", other_size))),
+            cover_url=cover_url,
+        )
+        downloader = RecordingDownloader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            media = Path(directory) / "media"
+            result = archive_assets(article, media, downloader=downloader)
+            self.assertEqual(2, len(list(media.iterdir())))
+
+        self.assertEqual([body_url, other_size], [url for url, _ in downloader.calls])
+        self.assertEqual(2, len(result.downloads))
+        self.assertEqual(result.source_paths[body_url], result.source_paths[cover_url])
+        self.assertNotEqual(result.source_paths[body_url], result.source_paths[other_size])
+
+    def test_same_media_identity_does_not_reuse_a_file_of_the_wrong_length(self):
+        body_url = "https://pic1.zhimg.com/shared.jpg?pkey=old"
+        updated_url = "https://pic1.zhimg.com/shared.jpg?pkey=renewed"
+        updated = MediaAsset(
+            "updated",
+            MediaKind.IMAGE,
+            (MediaRendition(updated_url, size_bytes=len(updated_url.encode())),),
+        )
+        article = Article(
+            "1",
+            "媒体大小变化",
+            "https://zhuanlan.zhihu.com/p/1",
+            AUTHOR,
+            NOW,
+            (MediaBlock(image("original", body_url)), MediaBlock(updated)),
+        )
+        downloader = RecordingDownloader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = archive_assets(article, Path(directory) / "media", downloader=downloader)
+
+        self.assertEqual([body_url, updated_url], [url for url, _ in downloader.calls])
+        self.assertNotEqual(result.source_paths[body_url], result.source_paths[updated_url])
+
+    def test_third_party_query_parameters_are_not_treated_as_signatures(self):
+        body_url = "https://zhimg.com.pic.example/shared.jpg?pkey=first"
+        cover_url = "https://zhimg.com.pic.example/shared.jpg?pkey=second"
+        article = Article(
+            "1",
+            "第三方媒体",
+            "https://zhuanlan.zhihu.com/p/1",
+            AUTHOR,
+            NOW,
+            (MediaBlock(image("body", body_url)),),
+            cover_url=cover_url,
+        )
+        downloader = RecordingDownloader()
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = archive_assets(article, Path(directory) / "media", downloader=downloader)
+
+        self.assertEqual([body_url, cover_url], [url for url, _ in downloader.calls])
+        self.assertNotEqual(result.source_paths[body_url], result.source_paths[cover_url])
+
     def test_known_asset_length_repairs_a_truncated_cached_file(self):
         from unittest.mock import patch
 

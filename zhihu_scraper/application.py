@@ -312,50 +312,44 @@ class ArchiveWorkflow:
 
     def _collect(self, target: ZhihuTarget, *, offset: int) -> ArchiveTarget:
         if target.kind is TargetKind.ARTICLE:
-            payload = self._single_payload(
+            article = self._single_item(
                 target,
                 direct=lambda: self._source.fetch_article_payload(target),
                 collection="articles",
-                validate=lambda candidate: _validate_article_payload(
+                normalize=lambda candidate: _normalize_full_article(
                     candidate,
                     source_url=target.canonical_url,
                 ),
             )
-            article = normalize_article(payload, source_url=target.canonical_url)
             return self._with_article_comments(article)
 
         if target.kind is TargetKind.ANSWER:
-            payload = self._single_payload(
+            answer = self._single_item(
                 target,
                 direct=lambda: self._source.fetch_answer_payload(target),
                 collection="answers",
-                validate=lambda candidate: _validate_answer_payload(
+                normalize=lambda candidate: _normalize_full_answer(
                     candidate,
                     source_url=target.canonical_url,
                 ),
             )
-            answer = normalize_answer(payload, source_url=target.canonical_url)
             return self._with_answer_comments(answer)
 
         if target.kind is TargetKind.QUESTION:
-            question_payload = self._single_payload(
+            question = self._single_item(
                 target,
                 direct=lambda: self._source.fetch_question_payload(target),
                 collection="questions",
-                validate=lambda candidate: normalize_question(
+                normalize=lambda candidate: normalize_question(
                     candidate,
                     source_url=target.canonical_url,
                 ),
-            )
-            question = normalize_question(
-                question_payload,
-                source_url=target.canonical_url,
             )
             batch_target = self._enrich(
                 QuestionArchive(question=question, answers=(), archived_at=self._clock())
             )
             batch = self._begin_batch(batch_target, question.answer_count, offset=offset)
-            answer_payloads = self._collection_payloads(
+            answer_items = self._collection_items(
                 target,
                 collection="questions",
                 direct=lambda: self._source.iter_question_answer_payloads(
@@ -363,28 +357,23 @@ class ArchiveWorkflow:
                     page_size=self._settings.page_size,
                     offset=offset,
                 ),
-                validate=_validate_answer_payload,
+                normalize=_normalize_full_answer,
                 saved_ids=batch.saved_item_ids if offset else frozenset(),
             )
             answers = tuple(
-                self._save_batch_item(self._with_answer_comments(normalize_answer(payload)))
-                for payload in answer_payloads
+                self._save_batch_item(self._with_answer_comments(answer)) for answer in answer_items
             )
             return replace(batch_target, answers=answers)
 
         if target.kind is TargetKind.COLUMN:
-            column_payload = self._single_payload(
+            column = self._single_item(
                 target,
                 direct=lambda: self._source.fetch_column_payload(target),
                 collection="columns",
-                validate=lambda candidate: normalize_column(
+                normalize=lambda candidate: normalize_column(
                     candidate,
                     source_url=target.canonical_url,
                 ),
-            )
-            column = normalize_column(
-                column_payload,
-                source_url=target.canonical_url,
             )
             column_batch = ColumnArchive(column=column, articles=(), archived_at=self._clock())
             self._begin_batch(column_batch, column.item_count)
@@ -394,17 +383,16 @@ class ArchiveWorkflow:
                 url=column.source_url,
             )
             articles: list[Article] = []
-            article_payloads = self._collection_payloads(
+            article_items = self._collection_items(
                 target,
                 collection="columns",
                 direct=lambda: self._source.iter_column_article_payloads(
                     target,
                     page_size=self._settings.page_size,
                 ),
-                validate=_validate_article_payload,
+                normalize=_normalize_full_article,
             )
-            for payload in article_payloads:
-                article = normalize_article(payload)
+            for article in article_items:
                 if all(item.token != origin.token for item in article.columns):
                     article = replace(
                         article,
@@ -416,16 +404,15 @@ class ArchiveWorkflow:
             return replace(column_batch, column=column, articles=tuple(articles))
 
         if target.kind is TargetKind.VIDEO:
-            payload = self._single_payload(
+            video = self._single_item(
                 target,
                 direct=lambda: self._source.fetch_video_payload(target),
                 collection="zvideos",
-                validate=lambda candidate: normalize_video(
+                normalize=lambda candidate: normalize_video(
                     candidate,
                     source_url=target.canonical_url,
                 ),
             )
-            video = normalize_video(payload, source_url=target.canonical_url)
             if not self._settings.comments:
                 return video
             thread = self._comments("zvideo", video.id, video.source_url)
@@ -433,26 +420,22 @@ class ArchiveWorkflow:
 
         raise AssertionError(f"unhandled target kind: {target.kind}")
 
-    def _single_payload(
+    def _single_item[T](
         self,
         target: ZhihuTarget,
         *,
         direct: Callable[[], Mapping[str, object]],
         collection: str,
-        validate: Callable[[Mapping[str, object]], object],
-    ) -> Mapping[str, object]:
-        def validated(payload: Mapping[str, object]) -> Mapping[str, object]:
-            validate(payload)
-            return payload
-
+        normalize: Callable[[Mapping[str, object]], T],
+    ) -> T:
         mode = self._settings.browser_fallback
         if mode is BrowserFallbackMode.ALWAYS:
-            return validated(self._browser_payload(target, collection=collection))
+            return normalize(self._browser_payload(target, collection=collection))
         return next(
             self._recover(
-                direct=lambda: iter((validated(direct()),)),
+                direct=lambda: iter((normalize(direct()),)),
                 recovery=lambda: iter(
-                    (validated(self._browser_payload(target, collection=collection)),)
+                    (normalize(self._browser_payload(target, collection=collection)),)
                 ),
             )
         )
@@ -504,27 +487,27 @@ class ArchiveWorkflow:
             entity_id=target.content_id,
         )
 
-    def _collection_payloads(
+    def _collection_items[T: (Article, Answer)](
         self,
         target: ZhihuTarget,
         *,
         collection: str,
         direct: Callable[[], Iterator[Mapping[str, object]]],
-        validate: Callable[[Mapping[str, object]], object],
+        normalize: Callable[[Mapping[str, object]], T],
         saved_ids: frozenset[str] = frozenset(),
-    ) -> Iterator[Mapping[str, object]]:
+    ) -> Iterator[T]:
         seen = set(saved_ids)
 
-        def collect_validated() -> Iterator[Mapping[str, object]]:
+        def collect_validated() -> Iterator[T]:
             for payload in direct():
                 identifier = str(payload.get("id")).strip()
                 if identifier in seen:
                     continue
-                validate(payload)
-                seen.add(identifier)
-                yield payload
+                item = normalize(payload)
+                seen.add(item.id)
+                yield item
 
-        def refresh_and_collect() -> Iterator[Mapping[str, object]]:
+        def refresh_and_collect() -> Iterator[T]:
             self._browser_payload(target, collection=collection)
             yield from collect_validated()
 
@@ -575,21 +558,23 @@ class ArchiveWorkflow:
         return next(self._recover(direct=lambda: iter((fetch(),)), recovery=refresh_and_fetch))
 
 
-def _validate_article_payload(
+def _normalize_full_article(
     payload: Mapping[str, object],
     *,
     source_url: str | None = None,
-) -> None:
+) -> Article:
     article = normalize_article(payload, source_url=source_url)
     if not article.blocks:
         raise NormalizationError("article payload is missing full content")
+    return article
 
 
-def _validate_answer_payload(
+def _normalize_full_answer(
     payload: Mapping[str, object],
     *,
     source_url: str | None = None,
-) -> None:
+) -> Answer:
     answer = normalize_answer(payload, source_url=source_url)
     if not answer.blocks:
         raise NormalizationError("answer payload is missing full content")
+    return answer

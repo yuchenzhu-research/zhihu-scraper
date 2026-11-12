@@ -112,10 +112,17 @@ class _ResponsePlan:
     length: int | None
 
 
-def media_source_identity(source_url: str) -> str:
+def media_source_identity(source_url: str, *, official_only: bool = False) -> str:
     """Identify a resource independently of Zhihu's expiring URL signatures."""
 
     parsed = urlsplit(source_url)
+    if official_only and (
+        parsed.fragment
+        or not _is_official_media_host(
+            parsed.scheme, (parsed.hostname or "").casefold().rstrip(".")
+        )
+    ):
+        return source_url
     query = urlencode(
         [
             (key, value)

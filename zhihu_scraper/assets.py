@@ -108,13 +108,13 @@ def archive_assets(
     Images and animations preserve the normalizer's first (original) rendition.
     Videos select the largest rendition with known dimensions.  Exact ties and
     renditions without dimensions retain source order, keeping selection stable.
+    Signed URLs for the same official CDN resource reuse a compatible download.
     """
 
     media_directory = Path(media_directory)
-    requests = tuple(_unique_requests(_target_requests(target)))
     downloadable = tuple(
         (request, rendition)
-        for request in requests
+        for request in _unique_requests(_target_requests(target))
         if (rendition := _select_rendition(request.asset)) is not None
     )
     if not downloadable:
@@ -124,18 +124,20 @@ def archive_assets(
     source_paths: dict[str, str] = {}
     downloads: list[MediaDownloadReceipt] = []
     failures: list[MediaArchiveFailure] = []
-    selected_sources: dict[str, str] = {}
+    selected_sources: dict[str, tuple[str, int]] = {}
 
     for request, selected in downloadable:
         asset = request.asset
-        existing_path = selected_sources.get(selected.source_url)
-        if existing_path is None:
+        resource = media_source_identity(selected.source_url, official_only=True)
+        existing = selected_sources.get(resource)
+        expected_size = selected.size_bytes if (selected.size_bytes or 0) > 0 else None
+        if existing is None or (expected_size is not None and existing[1] != expected_size):
             filename = _archive_filename(asset, selected)
             destination = media_directory / filename
             try:
-                if selected.size_bytes is not None and selected.size_bytes > 0:
+                if expected_size is not None:
                     receipt = downloader(
-                        selected.source_url, destination, expected_size=selected.size_bytes
+                        selected.source_url, destination, expected_size=expected_size
                     )
                 else:
                     receipt = downloader(selected.source_url, destination)
@@ -154,10 +156,10 @@ def archive_assets(
                 failures.append(failure)
                 continue
             relative_path = PurePosixPath(media_directory.name, filename).as_posix()
-            selected_sources[selected.source_url] = relative_path
+            selected_sources[resource] = (relative_path, receipt.bytes_total)
             downloads.append(receipt)
         else:
-            relative_path = existing_path
+            relative_path, _ = existing
 
         # Every rendition identifies the same logical asset.  Mapping all aliases
         # lets renderers replace whichever rendition appeared in the source.
