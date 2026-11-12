@@ -1,4 +1,4 @@
-# Zhihu-Scraper
+<h1 align="center">Zhihu-Scraper</h1>
 
 <p align="center">
   <a href="README.md">简体中文</a> · <strong>繁體中文</strong> · <a href="README_EN.md">English</a>
