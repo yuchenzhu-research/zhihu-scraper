@@ -1,10 +1,6 @@
 # Zhihu-Scraper
 
-**將知乎內容存到本機，隨時離線閱讀。**
-
-[![CI](https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB)](pyproject.toml)
-[![MIT 授權](https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper)](LICENSE)
+**把值得回看的知乎內容，存進自己的離線檔案。**
 
 [简体中文](README.md) · **繁體中文** · [English](README_EN.md)
 

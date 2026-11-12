@@ -1,10 +1,6 @@
 # Zhihu-Scraper
 
-**Save Zhihu content on your computer and read it offline.**
-
-[![CI](https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/yuchenzhu-research/zhihu-scraper/actions/workflows/ci.yml)
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB)](pyproject.toml)
-[![MIT License](https://img.shields.io/github/license/yuchenzhu-research/zhihu-scraper)](LICENSE)
+**Save the Zhihu content you want to revisit in your own offline archive.**
 
 [简体中文](README.md) · [繁體中文](README_ZH_HANT.md) · **English**
 
